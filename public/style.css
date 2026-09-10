@@ -93,7 +93,8 @@ details.reportform { display: inline; } details.reportform summary { display: in
 /* rail */
 .rail { font-size: 12px; } .rail .box { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }
 .rail h3 { margin: 0 0 6px; font-size: 13px; } .rail ul { padding-left: 18px; margin: 4px 0; } .rail pre { margin: 6px 0; font-size: 11px; }
-.rail .mascot { text-align: center; margin: -4px 0 2px; } .mascot-img { display: inline-block; filter: drop-shadow(0 5px 8px rgba(0,0,0,.18)); }
+.rail .mascot { text-align: center; margin: -4px 0 2px; } .rail figure.mascot { margin: -4px 0 6px; padding: 0; }
+.rail figcaption { font-family: var(--serif); font-style: italic; font-size: 11px; color: var(--muted); margin-top: -6px; } .mascot-img { display: inline-block; filter: drop-shadow(0 5px 8px rgba(0,0,0,.18)); }
 .steps { list-style: none; padding: 0; margin: 6px 0; counter-reset: step; }
 .steps li { display: grid; grid-template-columns: 30px 1fr; gap: 8px; align-items: start; margin: 6px 0; counter-increment: step; }
 .steps li::before { content: none; } .step-icon { width: 28px; height: 28px; color: var(--accent-2); }

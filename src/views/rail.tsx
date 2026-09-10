@@ -11,7 +11,7 @@ export interface RailData {
 export const Rail: FC<{ data: RailData }> = ({ data }) => (
   <aside class="rail">
     <div class="box">
-      <div class="mascot"><Mascot size={180} /></div>
+      <figure class="mascot"><Mascot size={180} /><figcaption>Schnitzel · b. 2026-09-10</figcaption></figure>
       <h3>Three steps to get your slop graded</h3>
       <ol class="steps">
         <li><StepIcon n={1} /><span>Commit a <code>slopscore.md</code> to the root of a public GitHub repo.</span></li>

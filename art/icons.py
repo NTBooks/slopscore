@@ -47,9 +47,9 @@ stamp = svg("stamp", '''
 
 # Wordmark: heavy slab text with a slop drip off the first S. Fill currentColor; the drip uses the accent via CSS var with fallback.
 wordmark = svg("wordmark", '''
-<text x="0" y="46" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="46" font-weight="900" letter-spacing="-1" fill="currentColor" stroke="none">Slop<tspan fill="var(--accent, #e8731a)">Score</tspan></text>
-<path d="M14 48c0 8-2 14-2 20 0 4 4 4 4 0 0-6-2-12-2-20z" fill="var(--accent, #e8731a)" stroke="none"/>
-<path d="M156 48c0 5-1 9-1 13 0 3 3 3 3 0 0-4-2-8-2-13z" fill="var(--accent, #e8731a)" stroke="none"/>
+<text x="0" y="46" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="46" font-weight="900" letter-spacing="-1" fill="currentColor" stroke="none">Slop<tspan fill="var(--accent, #e8669a)">Score</tspan></text>
+<path d="M14 48c0 8-2 14-2 20 0 4 4 4 4 0 0-6-2-12-2-20z" fill="var(--accent, #e8669a)" stroke="none"/>
+<path d="M156 48c0 5-1 9-1 13 0 3 3 3 3 0 0-4-2-8-2-13z" fill="var(--accent, #e8669a)" stroke="none"/>
 ''', vb="0 0 268 72", extra='role="img" aria-label="SlopScore"')
 
 print("\n".join(os.listdir(HERE)))

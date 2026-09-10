@@ -34,7 +34,7 @@ owner.post("/:owner/:name/owner/:action", requireUser, async (c) => {
       if (!(await rateLimit(c.env.DB, `owner-refresh:${repo.id}`, 1, 60))) return c.json({ error: "refresh at most once a minute" }, 429);
       const gh = new GitHub(c.env.GITHUB_CRAWL_TOKEN);
       // A rejected or delisted repo re-enters detection here; a listed one is re-evaluated in place.
-      const res = await scanRepo(c.env.DB, gh, repo.owner, repo.name, { byOwner: true });
+      const res = await scanRepo(c.env.DB, c.env, gh, repo.owner, repo.name, { byOwner: true });
       await logAction(c.env.DB, { actor: user.login, role: "owner", action: "refresh", targetType: "repo", targetId: repo.id, label, note: res.outcome.status });
       return back(`Refreshed. Status: ${res.outcome.status}${"reject_reason" in res.outcome && res.outcome.reject_reason ? ` — ${res.outcome.reject_reason}` : ""}`, { status: res.outcome.status });
     }

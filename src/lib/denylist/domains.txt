@@ -1,0 +1,20 @@
+# link domains that reject (shorteners hide destinations; the rest are known abuse hosts). one per line
+bit.ly
+tinyurl.com
+t.co
+goo.gl
+ow.ly
+is.gd
+buff.ly
+cutt.ly
+rb.gy
+shorturl.at
+tiny.cc
+rebrand.ly
+bl.ink
+t.ly
+v.gd
+qrco.de
+grabify.link
+iplogger.org
+2no.co

@@ -1,0 +1,26 @@
+# spam phrases (flag; +risk). one per line, case-insensitive, matched as phrases
+free nitro
+free robux
+airdrop
+claim your reward
+connect your wallet
+seed phrase
+recovery phrase
+guaranteed profit
+100% profit
+pump signal
+make money fast
+work from home and earn
+onlyfans
+casino bonus
+cracked version
+keygen
+serial key
+license key generator
+undetected cheat
+aimbot
+wallhack
+account generator
+follower bot
+view bot
+mass dm

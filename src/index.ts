@@ -7,6 +7,10 @@ import { api } from "./routes/api";
 import { auth } from "./routes/auth";
 import { owner } from "./routes/owner";
 import { SITE } from "./views/layout";
+import { sweep } from "./jobs/sweep";
+import { scanQueue } from "./jobs/scan";
+import { recrawl } from "./jobs/recrawl";
+import { awards } from "./jobs/awards";
 
 const app = new Hono<AppEnv>();
 
@@ -76,12 +80,29 @@ app.onError((err, c) => {
   return c.text(`500. The trough overflowed: ${err.message}`, 500);
 });
 
+export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<unknown> {
+  const started = Date.now();
+  let result: unknown;
+  try {
+    switch (cron) {
+      case "*/15 * * * *": result = await sweep(env); break;
+      case "*/5 * * * *": result = await scanQueue(env); break;
+      case "*/10 * * * *": result = await recrawl(env); break;
+      case "5 0 * * *": result = await awards(env); break;
+      default: result = { note: `unknown cron ${cron}` };
+    }
+  } catch (e) {
+    result = { error: (e as Error).message };
+  }
+  console.log(JSON.stringify({ cron, ms: Date.now() - started, result }));
+  return result;
+}
+
 export default {
   fetch(request: Request, env: AppEnv["Bindings"], ctx: ExecutionContext) {
     return app.fetch(rewriteFormat(request), env, ctx);
   },
   async scheduled(event: ScheduledEvent, env: AppEnv["Bindings"], ctx: ExecutionContext) {
-    // Phase 3 wires sweep/scan/recrawl/awards here.
-    console.log("cron", event.cron, "not yet implemented", Object.keys(env).length, typeof ctx);
+    ctx.waitUntil(runCron(event.cron, env));
   },
 };

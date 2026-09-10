@@ -18,6 +18,8 @@ import { requireUser, body, wantsJson } from "../middleware";
 import { renderMarkdown, escapeHtml } from "../lib/markdown";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
+import { checkOne } from "../jobs/recrawl";
+import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
 import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
@@ -403,10 +405,11 @@ pages.get("/ping/:owner/:name", async (c) => {
     return c.json({ ok: false, error: "pinged recently; try again in 10 minutes", status: existing?.status ?? null, url: existing ? `/r/${existing.full_name}` : null }, 429);
   }
   const gh = new GitHub(c.env.GITHUB_CRAWL_TOKEN);
-  const res = await scanRepo(c.env.DB, gh, o, n);
+  const res = await scanRepo(c.env.DB, c.env, gh, o, n);
   if (!res.repo) return c.json({ ok: false, error: (res.outcome as { error: string }).error, hint: "Commit a slopscore.md to the root of the default branch. Spec: /spec" }, 404);
   const r = res.repo;
-  return c.json({ ok: r.status === "listed", status: r.status, tier: r.tier, url: `/r/${r.full_name}`, reject_reason: r.reject_reason, scan: parseJson(r.scan, null) }, r.status === "listed" ? 200 : 202);
+  const deferred = !("error" in res.outcome) && res.outcome.deferred;
+  return c.json({ ok: r.status === "listed", status: r.status, tier: r.tier, url: `/r/${r.full_name}`, reject_reason: r.reject_reason, deferred: Boolean(deferred), hint: deferred ? "AI budget for today is spent; queued for the next window (00:00 UTC). See /queue." : undefined, scan: parseJson(r.scan, null) }, r.status === "listed" ? 200 : 202);
 });
 
 // ---- repo page ----
@@ -420,6 +423,7 @@ pages.get("/r/:owner/:name", async (c) => {
       html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>. Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
+  c.executionCtx.waitUntil(freshen(c.env, r));
   const [tags, cs, awards, versions, mine] = await Promise.all([
     repoTags(c.env.DB, r.id), loadComments(c.env.DB, r.id), awardsFor(c.env.DB, r.id),
     c.env.DB.prepare("SELECT md_sha, seen_at, stars FROM repo_versions WHERE repo_id = ? ORDER BY seen_at DESC LIMIT 20").bind(r.id).all<{ md_sha: string | null; seen_at: number; stars: number | null }>().then((x) => x.results ?? []),
@@ -437,6 +441,50 @@ pages.get("/r/:owner/:name", async (c) => {
       </Layout>
     ),
   });
+});
+
+/** On-visit freshness: one conditional GET per repo per hour at most, throttled through the edge cache, never blocks the response. */
+async function freshen(env: AppEnv["Bindings"], r: RepoRow): Promise<void> {
+  try {
+    if (r.status === "discovered") return;
+    const cache = caches.default;
+    const key = new Request(`https://slopscore.internal/check/${r.id}`);
+    if (await cache.match(key)) return;
+    await cache.put(key, new Response("1", { headers: { "cache-control": "max-age=3600" } }));
+    if ((r.last_crawled ?? 0) > Math.floor(Date.now() / 1000) - 3600) return;
+    await checkOne(env, new GitHub(env.GITHUB_CRAWL_TOKEN), r);
+  } catch (e) {
+    console.log("freshen failed", (e as Error).message);
+  }
+}
+
+// ---- badge: embeddable SVG; every README view on GitHub fetches it, which doubles as a visit signal ----
+pages.get("/badge/:owner/:name", async (c) => {
+  const name = c.req.param("name").replace(/\.svg$/, "");
+  const r = await getRepo(c.env.DB, c.req.param("owner"), name);
+  const award = c.req.query("award") && r ? await c.env.DB.prepare("SELECT kind, period, rank FROM awards WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1").bind(r.id).first<{ kind: string; period: string; rank: number }>() : null;
+  if (r) c.executionCtx.waitUntil(freshen(c.env, r));
+  const label = "SlopScore";
+  const value = !r ? "not listed" : r.status !== "listed" ? r.status : award ? `#${award.rank} slop of the ${award.kind} · ${award.period}` : `certified slop · ${r.score}`;
+  const color = !r ? "#9a9a9a" : r.status === "listed" ? "#e8669a" : r.status === "rejected" ? "#c0392b" : "#b8860b";
+  const lw = 8 + label.length * 6.6, vw = 10 + value.length * 6.3;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(lw + vw)}" height="20" role="img" aria-label="${label}: ${value}">
+<linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+<clipPath id="r"><rect width="${Math.round(lw + vw)}" height="20" rx="3" fill="#fff"/></clipPath>
+<g clip-path="url(#r)"><rect width="${lw}" height="20" fill="#3a2a2a"/><rect x="${lw}" width="${vw}" height="20" fill="${color}"/><rect width="${Math.round(lw + vw)}" height="20" fill="url(#s)"/></g>
+<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+<text x="${lw / 2}" y="15" fill="#010101" fill-opacity=".3">🐷 ${label}</text><text x="${lw / 2}" y="14">🐷 ${label}</text>
+<text x="${lw + vw / 2}" y="15" fill="#010101" fill-opacity=".3">${escapeHtml(value)}</text><text x="${lw + vw / 2}" y="14">${escapeHtml(value)}</text></g></svg>`;
+  return c.body(svg, 200, { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=600" });
+});
+
+// Local/manual cron trigger for admins: /__cron?cron=*/5+*+*+*+* (admins only in prod; open on localhost)
+pages.get("/__cron", async (c) => {
+  const host = new URL(c.req.url).hostname;
+  const user = c.get("user");
+  if (host !== "localhost" && host !== "127.0.0.1" && !user?.isAdmin) return c.json({ error: "admins only" }, 403);
+  const cron = c.req.query("cron") ?? "*/5 * * * *";
+  return c.json({ cron, result: await runCron(cron, c.env) });
 });
 
 // ---- writes ----

@@ -8,7 +8,7 @@ import { normalizeValue } from "./vocab";
 import { now } from "./time";
 import { denylistGate, loadDenyRows } from "./denylist";
 import { riskScore } from "./risk";
-import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS } from "./content";
+import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS, VISION_HARD } from "./content";
 import { bump } from "../jobs/stats";
 import type { Env } from "../env";
 
@@ -182,8 +182,10 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
           const v = viaOpenRouter ? await visionCheckOpenRouter(env, bytes, images[0].path.toLowerCase().endsWith(".png") ? "image/png" : images[0].path.toLowerCase().endsWith(".webp") ? "image/webp" : images[0].path.toLowerCase().endsWith(".gif") ? "image/gif" : "image/jpeg") : await visionCheck(env, bytes);
           report.ai.vision = v;
           if (v.neurons) await spendNeurons(db, v.neurons);
-          images[0].checked = v.ran ? (v.safe ? "safe" : "unsafe") : "skipped";
-          if (v.ran && !v.safe) contentReasons.push(`thumbnail failed the vision check: ${v.note ?? ""}`);
+          const hard = v.ran && !v.safe && VISION_HARD.has(v.category ?? "");
+          images[0].checked = v.ran ? (v.safe ? "safe" : hard ? "unsafe" : "flagged") : "skipped";
+          if (hard) contentReasons.push(`thumbnail failed the vision check (${v.category}): ${v.note ?? ""}`);
+          else if (v.ran && !v.safe) contentFlags.push(`thumbnail flagged by the vision check (${v.category}): ${v.note ?? ""}`);
         } else images[0].checked = "unreadable";
         for (const im of images.slice(1)) im.checked = "skipped";
       }

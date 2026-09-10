@@ -96,3 +96,14 @@ describe("recrawl interval + awards week", () => {
     expect(isoWeek(new Date(Date.UTC(2026, 8, 7)))).toBe("2026-W37");
   });
 });
+
+describe("vision verdict parsing", async () => {
+  const { parseVision, VISION_HARD } = await import("../src/lib/content");
+  it("only hard categories reject; gross cartoons flag", () => {
+    expect(parseVision("SAFE, a cartoon pig")).toEqual({ safe: true });
+    expect(parseVision("UNSAFE other: looks like vomit")).toEqual({ safe: false, category: "other" });
+    expect(parseVision("UNSAFE nudity, explicit")).toEqual({ safe: false, category: "nudity" });
+    expect(VISION_HARD.has("other")).toBe(false);
+    expect(VISION_HARD.has("gore")).toBe(true);
+  });
+});

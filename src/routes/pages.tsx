@@ -504,6 +504,19 @@ pages.get("/__cron", async (c) => {
   return c.json({ cron, result: await runCron(cron, c.env) });
 });
 
+// Admin/localhost: accept the Workers AI vision model license and show the raw result.
+pages.get("/__ai-agree", async (c) => {
+  const host = new URL(c.req.url).hostname;
+  if (host !== "localhost" && host !== "127.0.0.1" && !c.get("user")?.isAdmin) return c.json({ error: "admins only" }, 403);
+  if (!c.env.AI) return c.json({ error: "no AI binding" });
+  const model = "@cf/meta/llama-3.2-11b-vision-instruct";
+  const tries: unknown[] = [];
+  for (const input of [{ prompt: "agree" }, { messages: [{ role: "user", content: "agree" }] }]) {
+    try { tries.push({ input, ok: await c.env.AI.run(model as never, input as never) }); } catch (e) { tries.push({ input, error: (e as Error).message }); }
+  }
+  return c.json({ tries });
+});
+
 // ---- writes ----
 pages.post("/r/:owner/:name/vote", requireUser, async (c) => {
   const user = c.get("user")!;

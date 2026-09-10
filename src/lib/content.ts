@@ -148,7 +148,15 @@ export function judgeGuard(g: GuardResult, contains: string[]): { reject: string
 }
 
 // ---- Vision check on the thumbnail ----
-export interface VisionResult { ran: boolean; safe: boolean; note?: string; neurons: number; provider?: "workers-ai" | "openrouter" }
+export interface VisionResult { ran: boolean; safe: boolean; note?: string; neurons: number; provider?: "workers-ai" | "openrouter"; category?: string }
+
+export const VISION_HARD = new Set(["nudity", "sexual", "gore", "hate"]);
+export function parseVision(raw: string): { safe: boolean; category?: string } {
+  const t = raw.trim();
+  if (!/^\W*unsafe/i.test(t)) return { safe: true };
+  const m = /unsafe\W*(nudity|sexual|gore|violence|hate|other)/i.exec(t);
+  return { safe: false, category: (m?.[1] ?? "other").toLowerCase() };
+}
 
 export async function visionCheckOpenRouter(env: Env, bytes: Uint8Array, mime = "image/png"): Promise<VisionResult> {
   if (!env.OPENROUTER_API_KEY) return { ran: false, safe: true, neurons: 0, note: "no OPENROUTER_API_KEY", provider: "openrouter" };
@@ -156,11 +164,12 @@ export async function visionCheckOpenRouter(env: Env, bytes: Uint8Array, mime = 
   for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   const dataUrl = `data:${mime};base64,${btoa(b64)}`;
   const r = await openrouter(env, env.OPENROUTER_VISION_MODEL || OPENROUTER_VISION_DEFAULT, [{ role: "user", content: [
-    { type: "text", text: "You are a content moderator. Is this image safe to show to a general audience of all ages (no nudity, sexual content, gore, hate symbols, or graphic violence)? Answer with exactly one word, SAFE or UNSAFE, then a short reason." },
+    { type: "text", text: "You are a content moderator for a software directory. Cartoons, mascots, logos, screenshots, food, mud, and messy or gross illustrations are SAFE. Reply UNSAFE only for real nudity, sexual content, gore or graphic real-world violence, or hate symbols. Answer on one line: SAFE, or UNSAFE <nudity|sexual|gore|violence|hate|other> followed by a short reason." },
     { type: "image_url", image_url: { url: dataUrl } },
   ] }], 40);
   if ("error" in r) return { ran: false, safe: true, neurons: 0, note: r.error, provider: "openrouter" };
-  return { ran: true, safe: !/^unsafe/i.test(r.text), note: r.text.slice(0, 160), neurons: 0, provider: "openrouter" };
+  const pv = parseVision(r.text);
+  return { ran: true, safe: pv.safe, category: pv.category, note: r.text.slice(0, 160), neurons: 0, provider: "openrouter" };
 }
 const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 
@@ -170,7 +179,10 @@ async function acceptVisionLicense(env: Env): Promise<boolean> {
     await env.AI!.run(VISION_MODEL as never, { prompt: "agree" } as never);
     return true;
   } catch (e) {
-    console.log("vision license acceptance failed", (e as Error).message);
+    // Cloudflare answers the acceptance itself with an "error" that says thank you.
+    const msg = (e as Error).message;
+    if (/thank you for agreeing/i.test(msg)) return true;
+    console.log("vision license acceptance failed", msg);
     return false;
   }
 }
@@ -179,12 +191,13 @@ export async function visionCheck(env: Env, bytes: Uint8Array, retried = false):
   if (!env.AI) return { ran: false, safe: true, neurons: 0, note: "no AI binding" };
   try {
     const out = (await env.AI.run(VISION_MODEL as never, {
-      prompt: "You are a content moderator. Is this image safe to show to a general audience of all ages (no nudity, sexual content, gore, hate symbols, or graphic violence)? Answer with exactly one word, SAFE or UNSAFE, then a short reason.",
+      prompt: "You are a content moderator for a software directory. Cartoons, mascots, logos, screenshots, food, mud, and messy or gross illustrations are SAFE. Reply UNSAFE only for real nudity, sexual content, gore or graphic real-world violence, or hate symbols. Answer on one line: SAFE, or UNSAFE <nudity|sexual|gore|violence|hate|other> followed by a short reason.",
       image: [...bytes],
       max_tokens: 40,
     } as never)) as { response?: string } | string;
     const raw = (typeof out === "string" ? out : out?.response ?? "").trim();
-    return { ran: true, safe: !/unsafe/i.test(raw.split(/\s/)[0] ?? "") && !/^unsafe/i.test(raw), note: raw.slice(0, 160), neurons: VISION_NEURONS, provider: "workers-ai" };
+    const pv = parseVision(raw);
+    return { ran: true, safe: pv.safe, category: pv.category, note: raw.slice(0, 160), neurons: VISION_NEURONS, provider: "workers-ai" };
   } catch (e) {
     const msg = (e as Error).message;
     if (!retried && /submit the prompt 'agree'/i.test(msg) && (await acceptVisionLicense(env))) return visionCheck(env, bytes, true);

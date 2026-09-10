@@ -3,7 +3,7 @@ import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
-  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, type Sort, SORTS, type RepoRow,
+  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, SORTS, type RepoRow,
 } from "../lib/db";
 import { ipHash } from "../lib/trust";
 import { respond } from "../lib/negotiate";
@@ -11,6 +11,7 @@ import { parseQuery } from "../lib/searchquery";
 import { Layout, SITE } from "../views/layout";
 import { FeedList, ogImage } from "../views/feed";
 import { Rail, type RailData } from "../views/rail";
+import { Mascot, Stamp } from "../views/art";
 import { RepoPage, type RepoPageData } from "../views/repo";
 import { feedMd, repoMd } from "../views/md";
 import { requireUser, body, wantsJson } from "../middleware";
@@ -76,12 +77,12 @@ async function feedPage(c: Context<AppEnv>, opts: {
           {opts.showHero ? (
             <>
               <div class="hero">
-                <div style="font-size:48px" aria-hidden="true">🐷</div>
+                <Mascot size={150} class="hero-pig" />
                 <div><h1>SlopScore — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
               </div>
               <div class="manifesto"><strong>Why public?</strong> {SITE.manifesto}</div>
               {d.winner ? (
-                <div class="strip"><span class="stamp">Certified Slop of the Day · {d.winner.period}</span> <a href={`/r/${d.winner.full_name}`}><strong>{d.winner.title ?? d.winner.name}</strong></a> <span class="muted">— {d.winner.tagline}</span> <span class="muted">· score {d.winner.score}</span></div>
+                <div class="strip"><Stamp class="strip-stamp" title={`Certified Slop of the Day ${d.winner.period}`} /><span class="stamp">Slop of the Day · {d.winner.period}</span> <a href={`/r/${d.winner.full_name}`}><strong>{d.winner.title ?? d.winner.name}</strong></a> <span class="muted">— {d.winner.tagline}</span> <span class="muted">· score {d.winner.score}</span></div>
               ) : null}
             </>
           ) : <h2 style="margin:8px 0">{opts.heading}</h2>}
@@ -181,13 +182,58 @@ pages.get("/u/:login", async (c) => {
   });
 });
 
-pages.get("/queue", (c) => {
+pages.get("/queue", async (c) => {
   const st = c.req.query("status");
-  const statuses: RepoRow["status"][] = st === "rejected" ? ["rejected"] : st === "hidden" ? ["hidden"] : st === "quarantined" ? ["quarantined"] : st === "delisted" ? ["delisted"] : st === "discovered" ? ["discovered"] : ["discovered", "quarantined", "rejected"];
-  return feedPage(c, {
-    title: "The trough — moderation queue", heading: "In the trough", sort: "new", page: Number(c.req.query("page") ?? 1), status: statuses, baseUrl: `/queue${st ? `?status=${st}` : ""}`, showStatus: true,
-    intro: "Everything the crawler found that isn't listed yet, and why: awaiting scan, AI budget spent, awaiting human review, or rejected under a policy. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix. Filter: ?status=discovered|quarantined|rejected|hidden|delisted",
-    empty: "The trough is empty. The inspector is bored.",
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const page = Number(c.req.query("page") ?? 1);
+  const cap = await capacity(c.env.DB, c.env);
+  // Three lines: paid jumpers (FIFO), the free line (FIFO), then everything else by filter.
+  const [paid, free, other, rail] = await Promise.all([
+    st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: true, page: 1 }),
+    st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: false, page }),
+    feed(c.env.DB, { sort: "new", page: st ? page : 1, status: st === "rejected" ? ["rejected"] : st === "hidden" ? ["hidden"] : st === "quarantined" ? ["quarantined"] : st === "delisted" ? ["delisted"] : st === "discovered" ? ["discovered"] : ["quarantined", "rejected"], queue: st === "discovered" }),
+    railData(c.env.DB),
+  ]);
+  const ids = [...paid.rows, ...free.rows, ...other.rows].map((r) => r.id);
+  const votes = user ? await userVotesFor(c.env.DB, user.id, ids) : new Map<number, number>();
+  const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix.";
+  return respond(c, { cap, paid: paid.rows, free: free.rows, other: other.rows, freeMore: free.hasMore, otherMore: other.hasMore, page }, {
+    json: (d) => ({ capacity: d.cap, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
+    md: (d) => [
+      "# In the trough", "", intro, "",
+      `**Mode: ${d.cap.mode}.** AI budget today ${d.cap.neurons_used}/${d.cap.budget} neurons ≈ ${d.cap.scans_left_today} of ${d.cap.scans_per_day} free scans left. Paid scans: ${d.cap.paid_scans_unlimited ? "unlimited (metered)" : "priority only; same daily ceiling until the site moves to a paid plan"}.`, "",
+      "## Jumpers (paid, FIFO)", "", ...(d.paid.length ? d.paid.map((r, i) => `${i + 1}. [${r.full_name}](/r/${r.full_name}) — paid ${isoDate(r.priority_at)}`) : ["_nobody has paid to jump. The line is honest today._"]), "",
+      "## Free line (FIFO)", "", ...(d.free.length ? d.free.map((r, i) => `${(d.page - 1) * 25 + i + 1}. [${r.full_name}](/r/${r.full_name}) — ${r.queue_reason ?? "awaiting-scan"} · found ${ago(r.first_seen)}`) : ["_empty. The inspector is bored._"]), "",
+      "## Needs a human or was rejected", "", ...d.other.map((r) => `- [${r.full_name}](/r/${r.full_name}) — **${r.status}**${r.reject_reason ? `: ${r.reject_reason}` : r.queue_reason ? ` (${r.queue_reason})` : ""}`),
+    ].join("\n"),
+    html: (d) => (
+      <Layout meta={{ title: "The trough — moderation queue", description: intro }} user={user} url={url} tags={rail.tags}>
+        <section>
+          <h2 style="margin:8px 0">In the trough</h2>
+          <p class="muted">{intro}</p>
+          <div class={`capacity ${d.cap.mode}`}>
+            <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
+            <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons</div>
+            <div><span class="label">free scans left today</span><strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day}</div>
+            <div><span class="label">paid scans</span><strong>{d.cap.paid_scans_unlimited ? "unlimited, metered" : "front of the line, same ceiling"}</strong></div>
+            <div><span class="label">daily limits</span><span>{d.cap.limits.workers_requests_per_day ? `${(d.cap.limits.workers_requests_per_day / 1000).toFixed(0)}k requests · ` : "unlimited requests · "}{d.cap.limits.ai_neurons_per_day ? `${(d.cap.limits.ai_neurons_per_day / 1000).toFixed(0)}k neurons · ` : "metered AI · "}{(d.cap.limits.d1_writes_per_day / 1000).toFixed(0)}k D1 writes</span></div>
+            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
+            <p class="muted small">Budget resets at 00:00 UTC. When "waiting on budget" grows day over day, the free tier is the bottleneck and it's time to pay for a bigger trough. <a href="/stats">History</a>.</p>
+          </div>
+          {!st ? (
+            <>
+              <h3>Jumpers <span class="muted">· paid, first come first served</span></h3>
+              <FeedList rows={d.paid} page={1} hasMore={false} votes={votes} user={user} baseUrl="/queue" empty="Nobody has paid to jump. The line is honest today." showStatus />
+              <h3>Free line <span class="muted">· first come first served, after the jumpers</span></h3>
+              <FeedList rows={d.free} page={d.page} hasMore={d.freeMore} votes={votes} user={user} baseUrl="/queue" empty="The free line is empty. The inspector is bored." showStatus />
+              <h3>Needs a human, or rejected <span class="muted">· <a href="/queue?status=quarantined">quarantined</a> · <a href="/queue?status=rejected">rejected</a> · <a href="/queue?status=hidden">hidden</a> · <a href="/queue?status=delisted">delisted</a></span></h3>
+            </>
+          ) : <h3>{st}</h3>}
+          <FeedList rows={d.other} page={st ? d.page : 1} hasMore={d.otherMore} votes={votes} user={user} baseUrl={`/queue${st ? `?status=${st}` : ""}`} empty="Nothing here. Suspicious." showStatus />
+        </section>
+        <Rail data={rail} />
+      </Layout>
+    ),
   });
 });
 
@@ -275,13 +321,20 @@ pages.get("/stats", async (c) => {
     c.env.DB.prepare("SELECT status, count(*) AS n FROM repos GROUP BY status").all<{ status: string; n: number }>().then((r) => r.results ?? []),
   ]);
   const budget = Number(c.env.AI_NEURON_BUDGET || 9000);
-  return respond(c, { stats, daily, byStatus, budget }, {
-    md: (d) => ["# Stats", "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
+  const cap = await capacity(c.env.DB, c.env);
+  return respond(c, { stats, daily, byStatus, budget, cap }, {
+    json: (d) => ({ capacity: d.cap, by_status: d.byStatus, stats: d.stats, daily: d.daily }),
+    md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
     html: (d) => (
       <Layout meta={{ title: "Stats — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Stats</h2>
           <p class="muted">This site runs on Cloudflare's free tier on purpose. When the "deferred" column grows day over day, the AI budget is the bottleneck and it's time to pay.</p>
+          <div class={`capacity ${d.cap.mode}`}>
+            <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
+            <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons · <strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day} free scans left</div>
+            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
+          </div>
           <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>slopsmiths</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
           <h3>Last 30 days</h3>
           <table class="list"><tr><th>date</th><th>AI neurons</th><th>scans</th><th>deferred</th><th>found</th><th>listed</th><th>rejected</th><th>quarantined</th></tr>

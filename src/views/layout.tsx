@@ -2,6 +2,7 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import type { SessionUser } from "../env";
 import { SORTS, type Sort } from "../lib/db";
+import { Wordmark } from "./art";
 
 export interface PageMeta {
   title: string;
@@ -54,7 +55,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         ) : null}
         <header class="top">
           <a class="wordmark" href="/" title={`${SITE.tagline} ${SITE.description}`}>
-            <span class="mark">🐷</span> SlopScore
+            <img src="/favicon.svg" alt="" class="mark" width="28" height="28" /> <Wordmark />
           </a>
           <nav class="tabs">
             {SORTS.map((s) => (

@@ -1,5 +1,6 @@
 import type { FC } from "hono/jsx";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
+import { Mascot, StepIcon } from "./art";
 
 export interface RailData {
   stats: { listed: number; queued: number; users: number; votes: number; comments: number };
@@ -10,12 +11,12 @@ export interface RailData {
 export const Rail: FC<{ data: RailData }> = ({ data }) => (
   <aside class="rail">
     <div class="box">
-      <div class="mascot" aria-hidden="true">🐷</div>
+      <div class="mascot"><Mascot size={180} /></div>
       <h3>Three steps to get your slop graded</h3>
-      <ol>
-        <li>Commit a <code>slopscore.md</code> to the root of a public GitHub repo.</li>
-        <li>Get sniffed out. The crawler finds it, checks the paperwork, and lists it. Votes count from day one.</li>
-        <li><em>Optional.</em> Log in and press <strong>Submit</strong> on your repo page to launch it and compete for Slop of the Day.</li>
+      <ol class="steps">
+        <li><StepIcon n={1} /><span>Commit a <code>slopscore.md</code> to the root of a public GitHub repo.</span></li>
+        <li><StepIcon n={2} /><span>Get sniffed out. The crawler finds it, checks the paperwork, and lists it. Votes count from day one.</span></li>
+        <li><StepIcon n={3} /><span><em>Optional.</em> Log in and press <strong>Submit</strong> on your repo page to launch it and compete for Slop of the Day.</span></li>
       </ol>
       <pre>{MINIMAL_EXAMPLE.trim()}</pre>
       <p class="muted">That's the whole file. Everything else comes from GitHub. <a href="/spec">Full spec</a> · impatient? <code>curl /ping/you/repo</code></p>

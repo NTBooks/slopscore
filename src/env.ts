@@ -4,6 +4,7 @@ export interface Env {
   ASSETS: Fetcher;
   SITE_NAME: string;
   SITE_URL?: string;
+  PLAN_MODE?: string; // free | paid
   ADMIN_LOGINS: string;
   MIN_ACCOUNT_AGE_DAYS: string;
   AUTO_HIDE_REPORTS: string;

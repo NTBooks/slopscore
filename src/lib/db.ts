@@ -20,7 +20,7 @@ export interface RepoRow {
   removed_at: number | null; removed_reason: string | null; queue_reason: string | null; risk: number;
   reject_reason: string | null; scan: string | null;
   up: number; down: number; score: number; hot: number; controversy: number; comment_count: number; report_count: number;
-  first_seen: number; listed_at: number | null; last_crawled: number | null; next_crawl: number | null;
+  first_seen: number; listed_at: number | null; last_crawled: number | null; next_crawl: number | null; priority_at: number | null;
 }
 
 export interface UserRow {
@@ -49,6 +49,9 @@ export interface FeedOpts {
   tier?: "found" | "submitted";
   /** subreddit-style tag: matches category, tags, domain, or topic */
   tag?: string;
+  /** queue view: FIFO ordering; true = paid jumpers only, false = free line only */
+  queue?: boolean;
+  priority?: boolean;
 }
 
 export function feedOrder(sort: Sort): string {
@@ -72,6 +75,8 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   params.push(...statuses);
   if (o.owner) { where.push("lower(r.owner) = ?"); params.push(o.owner.toLowerCase()); }
   if (o.tier) { where.push("r.tier = ?"); params.push(o.tier); }
+  if (o.priority === true) where.push("r.priority_at IS NOT NULL");
+  if (o.priority === false) where.push("r.priority_at IS NULL");
   if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
   const win = SORT_WINDOWS[o.t ?? "all"] ?? 0;
   if (win && (o.sort === "top" || o.sort === "controversial" || o.sort === "new")) {
@@ -88,7 +93,8 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
     from = "repos_fts f JOIN repos r ON r.id = f.rowid";
     where.push("repos_fts MATCH ?"); params.push(o.match);
   }
-  const sql = `SELECT r.* FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${feedOrder(o.sort)} LIMIT ? OFFSET ?`;
+  const order = o.queue ? "r.priority_at IS NULL, r.priority_at ASC, r.first_seen ASC" : feedOrder(o.sort);
+  const sql = `SELECT r.* FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ? OFFSET ?`;
   params.push(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
   const res = await db.prepare(sql).bind(...params).all<RepoRow>();
   const rows = res.results ?? [];
@@ -267,4 +273,26 @@ export async function awardsFor(db: D1Database, repoId: number): Promise<{ kind:
 export function parseJson<T>(s: string | null | undefined, fallback: T): T {
   if (!s) return fallback;
   try { return JSON.parse(s) as T; } catch { return fallback; }
+}
+
+/** Scan capacity for the public queue + stats pages. Free mode: Workers AI's 10k neurons/day is the ceiling. */
+export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEURON_BUDGET: string }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [used, depth] = await Promise.all([
+    db.prepare("SELECT value FROM crawl_state WHERE key = ?").bind(`ai_neurons:${today}`).first<{ value: string }>(),
+    db.prepare("SELECT sum(CASE WHEN priority_at IS NOT NULL THEN 1 ELSE 0 END) AS paid, sum(CASE WHEN priority_at IS NULL THEN 1 ELSE 0 END) AS free, sum(CASE WHEN queue_reason = 'ai-budget' THEN 1 ELSE 0 END) AS deferred FROM repos WHERE status = 'discovered'").first<{ paid: number | null; free: number | null; deferred: number | null }>(),
+  ]);
+  const mode = env.PLAN_MODE === "paid" ? "paid" : "free";
+  const budget = Number(env.AI_NEURON_BUDGET || 9000);
+  const perScan = 240; // ~230 Llama Guard + ~10 vision
+  const neuronsUsed = Number(used?.value ?? 0);
+  return {
+    mode, date: today, budget, neurons_used: neuronsUsed, neurons_left: Math.max(0, budget - neuronsUsed),
+    scans_per_day: Math.floor(budget / perScan), scans_left_today: Math.floor(Math.max(0, budget - neuronsUsed) / perScan),
+    paid_scans_unlimited: mode === "paid",
+    queue: { paid: depth?.paid ?? 0, free: depth?.free ?? 0, deferred: depth?.deferred ?? 0 },
+    limits: mode === "free"
+      ? { workers_requests_per_day: 100_000, d1_reads_per_day: 5_000_000, d1_writes_per_day: 100_000, ai_neurons_per_day: 10_000, crons: 5 }
+      : { workers_requests_per_day: null, d1_reads_per_day: 25_000_000_000, d1_writes_per_day: 50_000_000, ai_neurons_per_day: null, crons: 250 },
+  };
 }

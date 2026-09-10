@@ -108,9 +108,11 @@ document.addEventListener('submit',async function(e){
   var fd=new FormData(f); if(btn&&btn.name) fd.set(btn.name,btn.value);
   var r=await fetch(f.action,{method:'POST',body:fd,headers:{'accept':'application/json'}});
   if(r.status===401){location.href='/auth/github?next='+encodeURIComponent(location.pathname);return;}
+  if(r.status===429){var jj=await r.json().catch(function(){return {}}); alert(jj.error||'slow down'); return;}
   if(!r.ok){var j=await r.json().catch(function(){return {}}); alert(j.error||('vote failed ('+r.status+')')); return;}
   var d=await r.json(); var box=f.closest('.votebox'); if(!box) return;
-  box.querySelector('.score').textContent=d.score;
+  if(d.crowd){ var cr=box.querySelector('.crowd'); if(cr){ var n=(d.crowd_up||0)-(d.crowd_down||0); cr.textContent=(n>0?'+'+n:n)+' crowd'; } }
+  else box.querySelector('.score').textContent=d.score;
   box.querySelectorAll('button').forEach(function(b){b.classList.toggle('on', Number(b.value)===d.mine)});
 });
 </script>`;

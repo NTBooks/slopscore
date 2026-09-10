@@ -25,13 +25,15 @@ export function ogImage(r: RepoRow): string {
 
 export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null }> = ({ repo, mine, user }) => {
   const votable = repo.status === "listed";
-  const title = !votable ? "not yet graded" : !user ? "log in to vote" : "";
+  const title = !votable ? "not yet graded" : !user ? "anonymous votes count with the crowd, not the score; log in to vote for real" : "";
+  const crowd = (repo.crowd_up ?? 0) - (repo.crowd_down ?? 0);
   return (
-    <form class={`vote votebox${votable ? "" : " off"}`} method="post" action={`${repoUrl(repo)}/vote`} title={title}>
+    <form class={`vote votebox${votable ? "" : " off"}${user ? "" : " anon"}`} method="post" action={`${repoUrl(repo)}/vote`} title={title}>
       {user ? <input type="hidden" name="csrf" value={user.csrf} /> : null}
       <button name="value" value={mine === 1 ? "0" : "1"} class={`up${mine === 1 ? " on" : ""}`} disabled={!votable} aria-label="upvote">▲</button>
       <span class="score" title="weighted, lightly fuzzed">{fuzz(repo.score, repo.id)}</span>
       <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote">▼</button>
+      {crowd !== 0 || !user ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
     </form>
   );
 };

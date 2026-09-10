@@ -6,6 +6,9 @@ import {
   getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, SORTS, type RepoRow,
 } from "../lib/db";
 import { ipHash } from "../lib/trust";
+import { recordView } from "../lib/views";
+import { anonId, castAnonVote } from "../lib/anon";
+import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { Layout, SITE } from "../views/layout";
@@ -441,6 +444,7 @@ pages.get("/r/:owner/:name", async (c) => {
     }, 404);
   }
   c.executionCtx.waitUntil(freshen(c.env, r));
+  c.executionCtx.waitUntil(recordView(c.env.DB, r.id, Number(c.env.VIEW_SAMPLE || 1)).catch(() => {}));
   const [tags, cs, awards, versions, mine] = await Promise.all([
     repoTags(c.env.DB, r.id), loadComments(c.env.DB, r.id), awardsFor(c.env.DB, r.id),
     c.env.DB.prepare("SELECT md_sha, seen_at, stars FROM repo_versions WHERE repo_id = ? ORDER BY seen_at DESC LIMIT 20").bind(r.id).all<{ md_sha: string | null; seen_at: number; stars: number | null }>().then((x) => x.results ?? []),
@@ -463,7 +467,7 @@ pages.get("/r/:owner/:name", async (c) => {
 /** On-visit freshness: one conditional GET per repo per hour at most, throttled through the edge cache, never blocks the response. */
 async function freshen(env: AppEnv["Bindings"], r: RepoRow): Promise<void> {
   try {
-    if (r.status === "discovered") return;
+    if (r.status === "discovered" || env.FRESHNESS === "off") return;   // FRESHNESS=off for local dev with fake seed repos
     const cache = caches.default;
     const key = new Request(`https://slopscore.internal/check/${r.id}`);
     if (await cache.match(key)) return;
@@ -518,6 +522,22 @@ pages.get("/__ai-agree", async (c) => {
 });
 
 // ---- writes ----
+// Anonymous "crowd" vote: shown separately, never ranking. Logged-in users fall through to the real vote.
+pages.post("/r/:owner/:name/vote", async (c, next) => {
+  if (c.get("user")) return next();
+  const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
+  if (!r) return c.json({ error: "unknown repo" }, 404);
+  if (r.status !== "listed") return c.json({ error: "not yet graded", status: r.status }, 409);
+  const v = Number((await body(c)).value);
+  if (![1, -1, 0].includes(v)) return c.json({ error: "value must be 1, -1, or 0" }, 400);
+  const aid = await anonId(c, c.env.SESSION_SECRET);
+  const res = await castAnonVote(c.env.DB, r.id, aid, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET), v as -1 | 0 | 1, {
+    perAnonDay: Number(c.env.ANON_PER_ID_DAY || 30), perIpDay: Number(c.env.ANON_PER_IP_DAY || 60), perIpNewIds: Number(c.env.ANON_NEW_IDS_PER_IP || 5),
+  });
+  if (wantsJson(c)) return c.json({ ok: res.ok, crowd: true, error: res.ok ? undefined : res.reason, crowd_up: res.crowd_up, crowd_down: res.crowd_down, score: r.score, mine: res.mine, login: res.ok ? undefined : "/auth/github" }, res.ok ? 200 : 429);
+  return c.redirect(`/r/${r.full_name}?flash=${encodeURIComponent(res.ok ? "Counted with the crowd. Log in to vote for real." : res.reason ?? "")}`);
+});
+
 pages.post("/r/:owner/:name/vote", requireUser, async (c) => {
   const user = c.get("user")!;
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
@@ -546,7 +566,20 @@ pages.post("/r/:owner/:name/comments", requireUser, async (c) => {
   if ((text.match(/https?:\/\//g) ?? []).length > 2) return c.json({ error: "at most 2 links per comment" }, 400);
   if (!(await rateLimit(c.env.DB, `comment:${user.id}`, 10, 600))) return c.json({ error: "slow down" }, 429);
   const parent = b.parent_id ? Number(b.parent_id) : null;
-  const id = await addComment(c.env.DB, r.id, user.id, parent, text, renderMarkdown(text));
+  // Llama Guard on the comment (≈2 neurons) when the budget allows; flagged comments are held for a human, never dropped.
+  let hold: { reason: string; guard: string } | undefined;
+  const budget = await budgetAllows(c.env.DB, c.env, 5);
+  if (budget.ok) {
+    const g = await llamaGuard(c.env, text);
+    if (g.neurons) await spendNeurons(c.env.DB, g.neurons);
+    if (g.ran && !g.safe) hold = { reason: `Llama Guard: ${g.categories.join(",") || "unsafe"}`, guard: JSON.stringify(g) };
+  }
+  const id = await addComment(c.env.DB, r.id, user.id, parent, text, renderMarkdown(text), hold);
+  if (hold) {
+    await c.env.DB.prepare("INSERT OR IGNORE INTO reports (target_type, target_id, user_id, reason, note) VALUES ('comment', ?, ?, 'objectionable', ?)").bind(id, user.id, `auto: ${hold.reason}`).run();
+    if (wantsJson(c)) return c.json({ ok: true, id, held: true, message: "Held for a moderator: the content check flagged it." }, 202);
+    return c.redirect(`/r/${r.full_name}?flash=${encodeURIComponent("Held for a moderator: the content check flagged it. It will appear if approved.")}#comments`);
+  }
   if (wantsJson(c)) return c.json({ ok: true, id, url: `/r/${r.full_name}#c${id}` }, 201);
   return c.redirect(`/r/${r.full_name}#c${id}`);
 });

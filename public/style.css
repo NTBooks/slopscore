@@ -70,6 +70,8 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .votebox button { background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 14px; padding: 0 4px; line-height: 1; }
 .votebox button.on.up, .votebox button.up:hover { color: var(--up); } .votebox button.on.down, .votebox button.down:hover { color: var(--down); }
 .votebox .score { font-weight: bold; font-size: 12px; } .votebox.off button { opacity: .3; cursor: not-allowed; }
+.votebox .crowd { font-size: 9px; color: var(--muted); white-space: nowrap; } .votebox.anon button { opacity: .55; }
+.modcard { border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; margin: 8px 0; background: var(--panel); } .modcard .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; } .modcard blockquote { margin: 4px 0; padding-left: 8px; border-left: 2px solid var(--line); }
 .thumb { width: 70px; height: 70px; object-fit: cover; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); display: block; }
 .thumb.blank { display: grid; place-items: center; color: var(--muted); font-size: 22px; }
 .row .title { font-size: 14px; } .row .title a { color: var(--fg); } .row .title a:visited { color: var(--visited); }

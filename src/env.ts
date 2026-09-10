@@ -10,6 +10,11 @@ export interface Env {
   AUTO_HIDE_REPORTS: string;
   AI_NEURON_BUDGET: string;
   RISK_QUARANTINE: string;
+  VIEW_SAMPLE?: string;
+  FRESHNESS?: string;
+  ANON_PER_ID_DAY?: string;
+  ANON_PER_IP_DAY?: string;
+  ANON_NEW_IDS_PER_IP?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   GITHUB_CRAWL_TOKEN?: string;

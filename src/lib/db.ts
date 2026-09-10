@@ -5,6 +5,7 @@ import { filterSql, type Filter } from "./searchquery";
 import type { TagRow } from "./slopmd";
 import { WIP_STATUSES } from "./vocab";
 import { trustFor, ringCheck } from "./trust";
+import { viewsRecent, burstAllowance } from "./views";
 
 export interface RepoRow {
   id: number; full_name: string; owner: string; name: string; owner_id: number | null; owner_type: string | null;
@@ -21,11 +22,12 @@ export interface RepoRow {
   reject_reason: string | null; scan: string | null;
   up: number; down: number; score: number; hot: number; controversy: number; comment_count: number; report_count: number;
   first_seen: number; listed_at: number | null; last_crawled: number | null; next_crawl: number | null; priority_at: number | null;
+  crowd_up: number; crowd_down: number; locked_by: string | null; mod_note: string | null;
 }
 
 export interface UserRow {
   id: number; login: string; avatar_url: string | null; gh_created_at: number | null; public_repos: number;
-  followers: number; banned_at: number | null; created_at: number; last_seen: number | null; trust: number;
+  followers: number; banned_at: number | null; created_at: number; last_seen: number | null; trust: number; ban_reason?: string | null;
 }
 
 export interface CommentRow {
@@ -182,6 +184,15 @@ export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, val
   if (value !== 0) {
     const rc = await ringCheck(db, repo.id, ipHashValue);
     if (rc.suspicious) { weight = 0; ring = rc.reason; }
+    else {
+      // burst rule: votes in the last hour can't outrun the people who could have cast them
+      const [votesHour, views] = await Promise.all([
+        db.prepare("SELECT count(*) AS n FROM votes WHERE repo_id = ? AND created_at >= unixepoch() - 3600").bind(repo.id).first<{ n: number }>(),
+        viewsRecent(db, repo.id, 1),
+      ]);
+      const allowance = burstAllowance(views);
+      if ((votesHour?.n ?? 0) >= allowance) { weight = 0; ring = `vote burst: ${(votesHour?.n ?? 0) + 1} votes in an hour vs ${views} views (allowance ${allowance})`; }
+    }
   }
   const write = value === 0
     ? db.prepare("DELETE FROM votes WHERE user_id = ? AND repo_id = ?").bind(user.id, repo.id)
@@ -241,11 +252,14 @@ export async function comments(db: D1Database, repoId: number): Promise<CommentR
   return r.results ?? [];
 }
 
-export async function addComment(db: D1Database, repoId: number, userId: number, parentId: number | null, bodyMd: string, bodyHtml: string): Promise<number> {
-  const [ins] = await db.batch([
-    db.prepare("INSERT INTO comments (repo_id, user_id, parent_id, body_md, body_html) VALUES (?,?,?,?,?)").bind(repoId, userId, parentId, bodyMd, bodyHtml),
-    db.prepare("UPDATE repos SET comment_count = comment_count + 1 WHERE id = ?").bind(repoId),
-  ]);
+export async function addComment(db: D1Database, repoId: number, userId: number, parentId: number | null, bodyMd: string, bodyHtml: string, hold?: { reason: string; guard: string }): Promise<number> {
+  const stmts = [
+    hold
+      ? db.prepare("INSERT INTO comments (repo_id, user_id, parent_id, body_md, body_html, hidden_at, held_reason, guard) VALUES (?,?,?,?,?,unixepoch(),?,?)").bind(repoId, userId, parentId, bodyMd, bodyHtml, hold.reason, hold.guard)
+      : db.prepare("INSERT INTO comments (repo_id, user_id, parent_id, body_md, body_html) VALUES (?,?,?,?,?)").bind(repoId, userId, parentId, bodyMd, bodyHtml),
+  ];
+  if (!hold) stmts.push(db.prepare("UPDATE repos SET comment_count = comment_count + 1 WHERE id = ?").bind(repoId));
+  const [ins] = await db.batch(stmts);
   return Number(ins.meta.last_row_id);
 }
 

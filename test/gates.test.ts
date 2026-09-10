@@ -107,3 +107,13 @@ describe("vision verdict parsing", async () => {
     expect(VISION_HARD.has("gore")).toBe(true);
   });
 });
+
+describe("vote burst allowance", async () => {
+  const { burstAllowance } = await import("../src/lib/views");
+  it("never below the floor, half the visitors above it", () => {
+    expect(burstAllowance(0)).toBe(10);
+    expect(burstAllowance(18)).toBe(10);
+    expect(burstAllowance(100)).toBe(50);
+    expect(burstAllowance(1001)).toBe(500);
+  });
+});

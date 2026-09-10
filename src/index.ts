@@ -57,7 +57,7 @@ Requires a GitHub identity. Agents: POST ${origin}/auth/device/start to begin th
   POST /r/{owner}/{repo}/vote      {"value": 1 | -1 | 0}
   POST /r/{owner}/{repo}/comments  {"body": "markdown", "parent_id"?: number}
   POST /r/{owner}/{repo}/report    {"reason": "objectionable|undisclosed|malware|spam|not-slop|other", "note"?: string}
-Votes and comments return 409 until a repo is listed. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
+Votes and comments return 409 until a repo is listed. Without a login, POST /vote counts as an anonymous "crowd" vote: shown next to the score, capped by that repo's visitors, never part of ranking or awards. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
 
 ## Owner controls (session login = repo owner, or listed in maintainers: in slopscore.md)
   POST /r/{owner}/{repo}/owner/refresh | submit | remove | restore

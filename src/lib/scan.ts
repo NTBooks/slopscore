@@ -50,6 +50,8 @@ export interface ScanOptions {
   ignoreBudget?: boolean;
   /** A paid scan: AI checks go to OpenRouter when a key is set (no neurons), and the budget is ignored. */
   paid?: boolean;
+  /** An admin-triggered rescan may lift an admin lock. */
+  byAdmin?: boolean;
 }
 
 export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: string, name: string, opts: ScanOptions = {}): Promise<{ repo: RepoRow | null; outcome: ScanOutcome }> {
@@ -217,7 +219,8 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
 
   // owner/admin states stick
   if (existing?.status === "delisted" && existing.removed_reason === "owner-request" && !opts.byOwner) status = "delisted";
-  if (existing?.status === "hidden") status = "hidden";
+  if (existing?.locked_by && !opts.byAdmin) status = existing.status;   // admin hide/delist/reject sticks until an admin lifts it
+  else if (existing?.status === "hidden" && !opts.byAdmin) status = "hidden";
   if (meta?.unlisted) status = "delisted";
   const queueReason = status === "discovered" ? "ai-budget" : status === "quarantined" ? "awaiting-review" : null;
 

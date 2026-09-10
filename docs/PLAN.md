@@ -310,6 +310,16 @@ x402 is for agents with wallets. Logged-in slopsmiths get the same thing with a 
 - **Colour scheme (same day):** switched from orange/paper to the retro pig's **pink + brown** (accent `#e8669a`, brown `#8a5a30`, dark mode deep brown), because the orange read too close to Moltbook.
 - Still needed from the owner: a fine-grained GitHub PAT (`GITHUB_CRAWL_TOKEN`, public repos read-only) on test and production, a Google Safe Browsing API key (free), and the GitHub OAuth app.
 
+## Phase 4 shipped (2026-09-10)
+
+- **Mod console** (`src/routes/mod.tsx`, admins only): reports grouped by target with the reporters and notes inline; actions dismiss / hide / restore / hide images / delist (lock) / ban owner for repos, delete / ban author for comments; quarantine bucket with approve / rescan / reject / delist / ban owner; held comments with release / delete / ban; banned slopsmiths with unban and ban-by-login; buckets and denylist. Every action writes `mod_log` (public at `/log`). A "report to GitHub" link is prefilled per target.
+- **Admin locks.** `repos.locked_by` + `mod_note`: an admin hide/reject/delist sticks through scans and recrawls until an admin restores (only `byAdmin` rescans may lift it). Auto-hide on `AUTO_HIDE_REPORTS` distinct reporters stays; dismissing the reports relists an unlocked repo.
+- **Comment moderation.** Every comment goes through Llama Guard (≈2 neurons) when the budget allows; flagged comments are stored with `hidden_at` + `held_reason` + the guard JSON, an automatic report is filed, and the author is told it is held. Never silently dropped.
+- **Visitor counting** (`src/lib/views.ts`): `repo_views(repo_id, hour, views)`, one sampled UPDATE per repo-page view (`VIEW_SAMPLE`), pruned after 35 days by the awards cron. Chosen over Analytics Engine to keep the whole thing in D1 with no extra API token; switch to AE if writes get tight.
+- **Vote-burst rule** in `castVote`: in a rolling hour, votes beyond `max(10, 0.5 × views)` are stored with weight 0 and a `vote-ring-flag` row in the public log.
+- **Anonymous crowd votes** (`src/lib/anon.ts`): signed `anon` cookie; `POST /vote` without a login lands in `anon_votes`, shown as "+N crowd" next to the score, **never** in score/hot/awards. Caps: per repo per day ≤ max(3, visitors today); per anon id 30/day; per network 60/day; ≤ 5 new anon ids per network per day (all vars). Verified locally: two anonymous browsers voted, the score stayed put, the crowd count moved.
+- `FRESHNESS=off` var for local dev (seed repos don't exist on GitHub and were being delisted on visit).
+
 ## Vote throttling v2: correlate votes with visitors (phase 4)
 
 What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack Overflow allow **no anonymous votes at all**; they lower the friction of logging in instead, then weight, fuzz, rate-limit, and ring-detect logged-in votes (already built, see `src/lib/trust.ts`). The extra layer worth borrowing is **traffic correlation**: votes should never outrun the people who could have cast them.

@@ -2,6 +2,7 @@
 // Only submitted repos compete; the period is the launch (submitted_at) day/week.
 import type { Env } from "../env";
 import { WIP_STATUSES } from "../lib/vocab";
+import { pruneViews } from "../lib/views";
 
 export async function awards(env: Env, today = new Date()): Promise<{ day: number; week: number; upcoming: number; period: string }> {
   const db = env.DB;
@@ -35,6 +36,7 @@ export async function awards(env: Env, today = new Date()): Promise<{ day: numbe
     if (wip.length) await db.batch(wip.map((r, i) => db.prepare("INSERT OR IGNORE INTO awards (repo_id, kind, period, rank, score) VALUES (?, 'upcoming-week', ?, ?, ?)").bind(r.id, wk, i + 1, r.score)));
     upcoming = wip.length;
   }
+  await pruneViews(db);
   return { day: dayRows.length, week, upcoming, period };
 }
 

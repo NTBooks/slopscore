@@ -1,6 +1,6 @@
 # SlopScore — marketing note
 
-> Internal, gitignored. Not part of the product. Scratch space for positioning,
+> Internal working doc. Not part of the product. Scratch space for positioning,
 > messaging, and launch copy.
 
 ## The problem

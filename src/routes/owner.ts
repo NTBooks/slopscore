@@ -1,7 +1,8 @@
 // Owner controls: refresh, submit, remove, restore. Session login must be the repo owner or in the file's maintainers list.
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { getRepo, logAction, parseJson, rateLimit, type RepoRow } from "../lib/db";
+import { getRepo, logAction, rateLimit } from "../lib/db";
+import { isOwnerOf } from "../lib/owner";
 import { requireUser, wantsJson } from "../middleware";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
@@ -9,13 +10,7 @@ import { now } from "../lib/time";
 
 export const owner = new Hono<AppEnv>();
 
-export function isOwnerOf(repo: RepoRow, login: string | undefined, userId: number | undefined): boolean {
-  if (!login) return false;
-  if (repo.owner_id != null && userId === repo.owner_id) return true;
-  if (repo.owner.toLowerCase() === login.toLowerCase() && repo.owner_type !== "Organization") return true;
-  const meta = parseJson<{ maintainers?: string[] }>(repo.meta, {});
-  return (meta.maintainers ?? []).map((m) => m.toLowerCase()).includes(login.toLowerCase());
-}
+export { isOwnerOf };
 
 const RESUBMIT_AFTER = 180 * 86400;
 

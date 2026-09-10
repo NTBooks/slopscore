@@ -82,6 +82,7 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .report { color: var(--muted); opacity: .6; } .report:hover { opacity: 1; } .flag-icon { width: 10px; height: 10px; vertical-align: -1px; }
 details.reportform { display: inline; } details.reportform summary { display: inline; cursor: pointer; list-style: none; } details.reportform form { display: inline-flex; gap: 4px; margin-left: 6px; }
 .pager { padding: 10px 0; display: flex; gap: 12px; }
+.ownerline { margin-top: 4px; display: flex; gap: 8px; align-items: center; font-size: 11px; } .btn.small { padding: 2px 8px; font-size: 11px; }
 .empty { padding: 26px; text-align: center; color: var(--muted); font-style: italic; font-family: var(--serif); font-size: 14px; }
 
 /* capacity box (queue + stats) */

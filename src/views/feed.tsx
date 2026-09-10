@@ -7,6 +7,7 @@ import type { SlopMeta } from "../lib/slopmd";
 import { CONTAINS_LISTED } from "../lib/vocab";
 import { fuzz } from "../lib/trust";
 import { Flag } from "./art";
+import { isOwnerOf } from "../lib/owner";
 
 export const repoUrl = (r: RepoRow) => `/r/${r.full_name}`;
 export const ghUrl = (r: RepoRow) => `https://github.com/${r.full_name}`;
@@ -73,6 +74,15 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
           {repo.status === "listed" ? <>listed {ago(repo.listed_at)}</> : <>found {ago(repo.first_seen)}</>} by <a href={`/u/${repo.owner}`}>{repo.owner}</a>
           {gh.owner_avatar ? null : null} · <a href={repoUrl(repo)}>{repo.comment_count} comments</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
           {repo.status === "rejected" && repo.reject_reason ? <div class="muted">✗ {repo.reject_reason}</div> : null}
+          {user && isOwnerOf(repo, user.login, user.id) ? (
+            <div class="ownerline">
+              <span class="chip tier">yours</span>
+              {repo.status === "listed" && repo.tier === "found" ? (
+                <form method="post" action={`${repoUrl(repo)}/owner/submit`} class="inline"><input type="hidden" name="csrf" value={user.csrf} /><button type="submit" class="btn small">Submit for consideration</button></form>
+              ) : repo.tier === "submitted" ? <span class="muted">submitted {ago(repo.submitted_at)}</span> : <span class="muted">submit opens once listed</span>}
+              {" "}<a href={repoUrl(repo)} class="muted">manage ›</a>
+            </div>
+          ) : null}
         </div>
       </div>
     </li>

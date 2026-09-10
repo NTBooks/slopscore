@@ -1,0 +1,122 @@
+// RSS feeds, sitemap, and the OpenAPI document. All cached at the edge for 10 minutes.
+import { Hono } from "hono";
+import type { AppEnv } from "../env";
+import { feed, type RepoRow, type Sort } from "../lib/db";
+import { escapeHtml } from "../lib/markdown";
+import { isoDateTime } from "../lib/time";
+import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+
+export const feeds = new Hono<AppEnv>();
+
+function rss(origin: string, title: string, link: string, description: string, rows: RepoRow[], updated = false): string {
+  const items = rows.map((r) => `
+  <item>
+    <title>${escapeHtml(r.title ?? r.name)} — ${escapeHtml(r.tagline ?? "")}</title>
+    <link>${origin}/r/${r.full_name}</link>
+    <guid isPermaLink="true">${origin}/r/${r.full_name}${updated ? `#v${r.md_updated_at ?? ""}` : ""}</guid>
+    <pubDate>${new Date(((updated ? r.md_updated_at : r.listed_at) ?? r.first_seen) * 1000).toUTCString()}</pubDate>
+    <author>${escapeHtml(r.owner)}</author>
+    <description>${escapeHtml(`${r.tagline ?? ""} · score ${r.score} · ★${r.stars}${r.language ? ` · ${r.language}` : ""} · github.com/${r.full_name}`)}</description>
+  </item>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>${escapeHtml(title)}</title>
+  <link>${origin}${link}</link>
+  <atom:link href="${origin}${link}.xml" rel="self" type="application/rss+xml"/>
+  <description>${escapeHtml(description)}</description>
+  <language>en</language>${items}
+</channel>
+</rss>`;
+}
+
+const send = (c: { body: (b: string, s: 200, h: Record<string, string>) => Response }, xml: string) =>
+  c.body(xml, 200, { "content-type": "application/rss+xml; charset=utf-8", "cache-control": "public, max-age=600" });
+
+feeds.get("/feed.xml", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const sort = (c.req.query("sort") === "updated" ? "updated" : "new") as Sort;
+  const { rows } = await feed(c.env.DB, { sort, page: 1 });
+  return send(c, rss(origin, sort === "updated" ? "SlopScore — updated slop" : "SlopScore — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
+});
+
+feeds.get("/b/:file", async (c, next) => {
+  if (!c.req.param("file").endsWith(".xml")) return next();
+  const origin = new URL(c.req.url).origin;
+  const slug = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, tag: slug });
+  return send(c, rss(origin, `SlopScore — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
+});
+
+feeds.get("/f/:facet/:file", async (c, next) => {
+  if (!c.req.param("file").endsWith(".xml")) return next();
+  const origin = new URL(c.req.url).origin;
+  const facet = c.req.param("facet"); const value = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
+  if (!([...DECLARED_FACETS, ...DETECTED_FACETS] as readonly string[]).includes(facet)) return c.notFound();
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, filters: [{ facet, value, negate: false }] });
+  return send(c, rss(origin, `SlopScore — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
+});
+
+feeds.get("/u/:file", async (c, next) => {
+  if (!c.req.param("file").endsWith(".xml")) return next();
+  const origin = new URL(c.req.url).origin;
+  const login = c.req.param("file").replace(/\.xml$/, "");
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, owner: login });
+  return send(c, rss(origin, `SlopScore — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
+});
+
+feeds.get("/sitemap.xml", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
+  const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
+  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/spec", "/stats", "/log"];
+  const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${fixed.map((p) => url(p, null, p === "/" ? "1.0" : "0.6")).join("\n")}
+${buckets.map((b) => url(`/b/${b.slug}`, null, "0.5")).join("\n")}
+${repos.map((r) => url(`/r/${r.full_name}`, r.md_updated_at ?? r.listed_at, "0.7")).join("\n")}
+</urlset>`;
+  return c.body(xml, 200, { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" });
+});
+
+feeds.get("/openapi.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  const repo = { type: "object", properties: { full_name: { type: "string" }, url: { type: "string" }, github: { type: "string" }, title: { type: "string" }, tagline: { type: "string", nullable: true }, status: { type: "string", enum: ["discovered", "quarantined", "rejected", "listed", "hidden", "delisted"] }, tier: { type: "string", enum: ["found", "submitted"] }, score: { type: "integer" }, up: { type: "integer" }, down: { type: "integer" }, stars: { type: "integer" }, language: { type: "string", nullable: true }, meta: { type: "object", nullable: true, description: "parsed slopscore.md frontmatter" }, reject_reason: { type: "string", nullable: true } } };
+  const feedResp = { description: "a page of repos", content: { "application/json": { schema: { type: "object", properties: { page: { type: "integer" }, has_more: { type: "boolean" }, next: { type: "string", nullable: true }, repos: { type: "array", items: { $ref: "#/components/schemas/Repo" } } } } } } };
+  const bearer = [{ bearerAuth: [] }];
+  const okJson = (desc: string) => ({ description: desc, content: { "application/json": { schema: { type: "object" } } } });
+  const doc = {
+    openapi: "3.1.0",
+    info: { title: "SlopScore API", version: "1.0.0", description: "Give me your slop! Peer review for code nobody wrote. Every HTML page is also available as .json and .md. Writes need a bearer token from the GitHub device flow (POST /auth/device/start). See /llms.txt." },
+    servers: [{ url: origin }],
+    components: {
+      securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", description: "token from POST /auth/device/poll" } },
+      schemas: { Repo: repo },
+    },
+    paths: {
+      "/api/v1/repos": { get: { summary: "The feed", parameters: [
+        { name: "sort", in: "query", schema: { type: "string", enum: ["hot", "new", "top", "rising", "controversial", "updated", "upcoming"] } },
+        { name: "t", in: "query", schema: { type: "string", enum: ["day", "week", "month", "year", "all"] } },
+        { name: "page", in: "query", schema: { type: "integer" } }, { name: "status", in: "query", schema: { type: "string" } }, { name: "owner", in: "query", schema: { type: "string" } }, { name: "tier", in: "query", schema: { type: "string" } },
+      ], responses: { "200": feedResp } } },
+      "/api/v1/repos/{owner}/{repo}": { get: { summary: "One listing with tags, scan report, body", parameters: [{ name: "owner", in: "path", required: true, schema: { type: "string" } }, { name: "repo", in: "path", required: true, schema: { type: "string" } }], responses: { "200": okJson("the repo"), "404": okJson("not listed; ping it") } } },
+      "/api/v1/repos/{owner}/{repo}/comments": { get: { summary: "Comments", parameters: [{ name: "owner", in: "path", required: true, schema: { type: "string" } }, { name: "repo", in: "path", required: true, schema: { type: "string" } }], responses: { "200": okJson("comments") } } },
+      "/api/v1/search": { get: { summary: "Full-text + operators (category: lang: tool: bucket: owner: …; prefix - to exclude)", parameters: [{ name: "q", in: "query", required: true, schema: { type: "string" } }, { name: "sort", in: "query", schema: { type: "string" } }, { name: "page", in: "query", schema: { type: "integer" } }], responses: { "200": feedResp } } },
+      "/api/v1/facets": { get: { summary: "Value counts for a facet", parameters: [{ name: "facet", in: "query", required: true, schema: { type: "string" } }], responses: { "200": okJson("values") } } },
+      "/api/v1/vocab": { get: { summary: "Controlled vocabularies, aliases, search operators", responses: { "200": okJson("vocab") } } },
+      "/api/v1/leaderboard": { get: { summary: "Mean score by facet value (default built_with)", parameters: [{ name: "facet", in: "query", schema: { type: "string" } }], responses: { "200": okJson("leaderboard") } } },
+      "/api/v1/me": { get: { summary: "Who am I", security: bearer, responses: { "200": okJson("user"), "401": okJson("not logged in") } } },
+      "/b": { get: { summary: "Slopbucket directory (append .json)", responses: { "200": okJson("buckets") } } },
+      "/queue": { get: { summary: "Public moderation queue + capacity (append .json)", responses: { "200": okJson("queue") } } },
+      "/ping/{owner}/{repo}": { get: { summary: "Trigger a scan now (1 per 10 min per repo)", parameters: [{ name: "owner", in: "path", required: true, schema: { type: "string" } }, { name: "repo", in: "path", required: true, schema: { type: "string" } }], responses: { "200": okJson("listed"), "202": okJson("scanned, not listed (see status + reject_reason)"), "429": okJson("pinged recently") } } },
+      "/auth/device/start": { post: { summary: "Begin the GitHub device flow", responses: { "200": okJson("{device_code, user_code, verification_uri, interval}") } } },
+      "/auth/device/poll": { post: { summary: "Poll for the bearer token", requestBody: { content: { "application/json": { schema: { type: "object", properties: { device_code: { type: "string" } }, required: ["device_code"] } } } }, responses: { "200": okJson("{token}"), "202": okJson("pending") } } },
+      "/r/{owner}/{repo}/vote": { post: { summary: "Vote (1, -1, 0). Without a bearer: an anonymous crowd vote, shown but never ranking.", security: bearer, requestBody: { content: { "application/json": { schema: { type: "object", properties: { value: { type: "integer", enum: [1, -1, 0] } } } } } }, responses: { "200": okJson("{score, up, down, mine}"), "409": okJson("not yet listed") } } },
+      "/r/{owner}/{repo}/comments": { post: { summary: "Comment (markdown, ≤ 4000 chars, ≤ 2 links). Flagged comments are held for a moderator.", security: bearer, requestBody: { content: { "application/json": { schema: { type: "object", properties: { body: { type: "string" }, parent_id: { type: "integer" } }, required: ["body"] } } } }, responses: { "201": okJson("{id, url}"), "202": okJson("held") } } },
+      "/r/{owner}/{repo}/report": { post: { summary: "Report a listing", security: bearer, requestBody: { content: { "application/json": { schema: { type: "object", properties: { reason: { type: "string", enum: ["objectionable", "undisclosed", "malware", "spam", "not-slop", "other"] }, note: { type: "string" } } } } } }, responses: { "200": okJson("ok") } } },
+      "/r/{owner}/{repo}/owner/{action}": { post: { summary: "Owner controls: refresh | submit | remove | restore (owner or maintainers: only)", security: bearer, parameters: [{ name: "action", in: "path", required: true, schema: { type: "string", enum: ["refresh", "submit", "remove", "restore"] } }], responses: { "200": okJson("ok"), "403": okJson("not the owner") } } },
+    },
+  };
+  return c.json(doc, 200, { "cache-control": "public, max-age=3600", "access-control-allow-origin": "*" });
+});

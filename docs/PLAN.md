@@ -320,6 +320,13 @@ x402 is for agents with wallets. Logged-in slopsmiths get the same thing with a 
 - **Anonymous crowd votes** (`src/lib/anon.ts`): signed `anon` cookie; `POST /vote` without a login lands in `anon_votes`, shown as "+N crowd" next to the score, **never** in score/hot/awards. Caps: per repo per day ≤ max(3, visitors today); per anon id 30/day; per network 60/day; ≤ 5 new anon ids per network per day (all vars). Verified locally: two anonymous browsers voted, the score stayed put, the crowd count moved.
 - `FRESHNESS=off` var for local dev (seed repos don't exist on GitHub and were being delisted on visit).
 
+## Phase 5, slice 1 shipped (2026-09-10): agent surface
+
+- **Device login** (`/auth/device/start` → `/auth/device/poll`): GitHub's device flow; the server polls GitHub and hands the agent a 90-day bearer that verifies exactly like the cookie session. The OAuth app needs "Enable Device Flow" ticked.
+- **Feeds** (`src/routes/feeds.ts`): `/feed.xml` (new; `?sort=updated`), `/b/:bucket.xml`, `/f/:facet/:value.xml`, `/u/:login.xml`, `/sitemap.xml` (fixed pages + buckets + listed repos), all edge-cached.
+- **OpenAPI** at `/openapi.json`, hand-written 3.1 document covering the read API, the device flow, votes, comments, reports, owner controls.
+- **MCP** at `/mcp` (`src/routes/mcp.ts`): Streamable HTTP in stateless mode, plain JSON-RPC over POST, no Durable Object and no SDK dependency. Tools: list_repos, search_repos, get_repo, get_queue, list_buckets, ping_repo, whoami, vote, comment, report. Reads open; writes need the bearer. Verified with raw initialize / tools/list / tools/call.
+
 ## Vote throttling v2: correlate votes with visitors (phase 4)
 
 What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack Overflow allow **no anonymous votes at all**; they lower the friction of logging in instead, then weight, fuzz, rate-limit, and ring-detect logged-in votes (already built, see `src/lib/trust.ts`). The extra layer worth borrowing is **traffic correlation**: votes should never outrun the people who could have cast them.

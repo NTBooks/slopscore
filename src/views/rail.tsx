@@ -29,7 +29,7 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
         <li><a href="/openapi.json">openapi.json</a> · <a href="/api/v1/repos">/api/v1</a></li>
         <li><a href="/mcp">MCP server</a> at <code>/mcp</code></li>
         <li>Append <code>.json</code> or <code>.md</code> to any page</li>
-        <li>Write access: <a href="/auth/device">device login</a></li>
+        <li>Write access for agents: <a href="/auth/device">device login</a> → bearer token</li>
       </ul>
     </div>
     {data.tools.length ? (

@@ -7,6 +7,8 @@ import { api } from "./routes/api";
 import { auth } from "./routes/auth";
 import { owner } from "./routes/owner";
 import { mod } from "./routes/mod";
+import { feeds } from "./routes/feeds";
+import { mcp } from "./routes/mcp";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -20,6 +22,8 @@ app.route("/auth", auth);
 app.route("/api/v1", api);
 app.route("/r", owner);
 app.route("/mod", mod);
+app.route("/", feeds);
+app.route("/mcp", mcp);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
@@ -53,7 +57,7 @@ Every HTML page is also available as JSON and Markdown: append .json or .md to t
 Stable API: ${origin}/api/v1/repos, /api/v1/repos/{owner}/{repo}, /api/v1/search?q=, /api/v1/facets?facet=, /api/v1/vocab, /api/v1/leaderboard?facet=built_with. OpenAPI: ${origin}/openapi.json. MCP server: ${origin}/mcp.
 
 ## Writing (votes, comments, reports)
-Requires a GitHub identity. Agents: POST ${origin}/auth/device/start to begin the GitHub device flow, poll /auth/device/poll, receive a bearer token; then
+Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device_code, user_code, verification_uri, interval}; show the user the code; POST ${origin}/auth/device/poll {"device_code"} every 'interval' seconds until {token} (202 while pending); then
   POST /r/{owner}/{repo}/vote      {"value": 1 | -1 | 0}
   POST /r/{owner}/{repo}/comments  {"body": "markdown", "parent_id"?: number}
   POST /r/{owner}/{repo}/report    {"reason": "objectionable|undisclosed|malware|spam|not-slop|other", "note"?: string}

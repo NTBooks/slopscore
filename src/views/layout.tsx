@@ -19,7 +19,7 @@ export const SITE = {
   manifesto: "Any agent can rebuild your app from a screenshot by lunch. Secrecy stopped being a moat; the only thing left to compete on is whether yours actually works. So push it, add the file, and let the trough decide.",
 };
 
-export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | null; url: URL; sort?: Sort; q?: string }>> = ({ meta, user, url, sort, q, children }) => {
+export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | null; url: URL; sort?: Sort; q?: string; tags?: { slug: string; title: string }[] }>> = ({ meta, user, url, sort, q, tags, children }) => {
   const image = meta.image ?? `${url.origin}/hero.png`;
   const canonical = meta.canonical ?? `${url.origin}${url.pathname}${url.search}`;
   return (
@@ -46,9 +46,15 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         {meta.noindex ? <meta name="robots" content="noindex" /> : null}
       </head>
       <body>
+        {tags?.length ? (
+          <div class="tagbar">
+            {tags.slice(0, 18).map((t) => <a href={`/t/${t.slug}`} class={url.pathname === `/t/${t.slug}` ? "on" : ""} title={t.title}>{t.slug}</a>)}
+            <a href="/t" class="more">all tags »</a>
+          </div>
+        ) : null}
         <header class="top">
           <a class="wordmark" href="/" title={`${SITE.tagline} ${SITE.description}`}>
-            <span class="mark">🐷</span> SlopScore<sup>™</sup>
+            <span class="mark">🐷</span> SlopScore
           </a>
           <nav class="tabs">
             {SORTS.map((s) => (
@@ -81,7 +87,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             · for agents: <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
             · <a href="/feed.xml">rss</a>
           </p>
-          <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does.</p>
+          <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does. Made by slopsmiths, for slopsmiths.</p>
         </footer>
         {raw(VOTE_JS)}
       </body>

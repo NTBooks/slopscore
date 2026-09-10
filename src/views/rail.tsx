@@ -4,6 +4,7 @@ import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 export interface RailData {
   stats: { listed: number; queued: number; users: number; votes: number; comments: number };
   tools: { value: string; n: number; mean: number }[];
+  tags: { slug: string; title: string; blurb: string | null; n: number }[];
 }
 
 export const Rail: FC<{ data: RailData }> = ({ data }) => (
@@ -44,7 +45,7 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
       <table class="stats">
         <tr><td>listed slop</td><td>{data.stats.listed}</td></tr>
         <tr><td><a href="/queue">in the trough</a></td><td>{data.stats.queued}</td></tr>
-        <tr><td>graders</td><td>{data.stats.users}</td></tr>
+        <tr><td>slopsmiths</td><td>{data.stats.users}</td></tr>
         <tr><td>votes</td><td>{data.stats.votes}</td></tr>
         <tr><td>comments</td><td>{data.stats.comments}</td></tr>
       </table>

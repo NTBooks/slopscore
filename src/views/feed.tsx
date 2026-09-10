@@ -5,6 +5,7 @@ import { ago } from "../lib/time";
 import { parseJson } from "../lib/db";
 import type { SlopMeta } from "../lib/slopmd";
 import { CONTAINS_LISTED } from "../lib/vocab";
+import { fuzz } from "../lib/trust";
 
 export const repoUrl = (r: RepoRow) => `/r/${r.full_name}`;
 export const ghUrl = (r: RepoRow) => `https://github.com/${r.full_name}`;
@@ -27,7 +28,7 @@ export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
     <form class={`vote votebox${votable ? "" : " off"}`} method="post" action={`${repoUrl(repo)}/vote`} title={title}>
       {user ? <input type="hidden" name="csrf" value={user.csrf} /> : null}
       <button name="value" value={mine === 1 ? "0" : "1"} class={`up${mine === 1 ? " on" : ""}`} disabled={!votable} aria-label="upvote">▲</button>
-      <span class="score">{repo.score}</span>
+      <span class="score" title="weighted, lightly fuzzed">{fuzz(repo.score, repo.id)}</span>
       <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote">▼</button>
     </form>
   );

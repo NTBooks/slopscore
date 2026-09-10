@@ -1,4 +1,4 @@
-# SlopScore™
+# SlopScore
 
 **Give me your slop!** Peer review for code nobody wrote.
 

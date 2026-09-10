@@ -26,6 +26,7 @@ export interface SessionUser {
   isAdmin: boolean;
   canWrite: boolean;
   csrf: string;
+  row: import("./lib/db").UserRow;
 }
 
 export type Vars = {

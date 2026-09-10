@@ -3,8 +3,9 @@ import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
-  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, type Sort, SORTS, type RepoRow,
+  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, type Sort, SORTS, type RepoRow,
 } from "../lib/db";
+import { ipHash } from "../lib/trust";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { Layout, SITE } from "../views/layout";
@@ -24,13 +25,14 @@ import { ago, isoDate } from "../lib/time";
 export const pages = new Hono<AppEnv>();
 
 async function railData(db: D1Database): Promise<RailData> {
-  const [stats, tools] = await Promise.all([
+  const [stats, tags, tools] = await Promise.all([
     siteStats(db),
+    curatedTags(db),
     db.prepare(
       "SELECT rt.value, count(*) AS n, avg(r.score) AS mean FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = 'built_with' AND r.status = 'listed' GROUP BY rt.value ORDER BY mean DESC, n DESC LIMIT 8",
     ).all<{ value: string; n: number; mean: number }>().then((r) => r.results ?? []),
   ]);
-  return { stats, tools };
+  return { stats, tools, tags };
 }
 
 function sortParam(s: string | undefined): Sort {
@@ -55,12 +57,12 @@ export function repoJson(r: RepoRow) {
 // ---- generic feed page renderer ----
 async function feedPage(c: Context<AppEnv>, opts: {
   title: string; heading: string; sort: Sort; t?: string; page: number; filters?: ReturnType<typeof parseQuery>["filters"]; match?: string | null;
-  status?: RepoRow["status"] | RepoRow["status"][]; owner?: string; baseUrl: string; intro?: string; empty?: string; showStatus?: boolean; extra?: unknown; description?: string; q?: string; showHero?: boolean;
+  status?: RepoRow["status"] | RepoRow["status"][]; owner?: string; tag?: string; baseUrl: string; intro?: string; empty?: string; showStatus?: boolean; extra?: unknown; description?: string; q?: string; showHero?: boolean;
 }) {
   const user = c.get("user");
   const url = new URL(c.req.url);
   const [{ rows, hasMore, page }, rail] = await Promise.all([
-    feed(c.env.DB, { sort: opts.sort, t: opts.t, page: opts.page, filters: opts.filters, match: opts.match, status: opts.status, owner: opts.owner }),
+    feed(c.env.DB, { sort: opts.sort, t: opts.t, page: opts.page, filters: opts.filters, match: opts.match, status: opts.status, owner: opts.owner, tag: opts.tag }),
     railData(c.env.DB),
   ]);
   const votes = user ? await userVotesFor(c.env.DB, user.id, rows.map((r) => r.id)) : new Map<number, number>();
@@ -69,13 +71,13 @@ async function feedPage(c: Context<AppEnv>, opts: {
     json: (d) => ({ ...feedJson(d.rows, d.page, d.hasMore), title: opts.title, extra: opts.extra }),
     md: (d) => feedMd(opts.heading, d.rows, d.page, d.hasMore, opts.intro),
     html: (d) => (
-      <Layout meta={{ title: opts.title, description: opts.description ?? opts.intro ?? SITE.tagline }} user={user} url={url} sort={opts.showHero ? opts.sort : undefined} q={opts.q}>
+      <Layout meta={{ title: opts.title, description: opts.description ?? opts.intro ?? SITE.tagline }} user={user} url={url} sort={opts.showHero ? opts.sort : undefined} q={opts.q} tags={rail.tags}>
         <section>
           {opts.showHero ? (
             <>
               <div class="hero">
                 <div style="font-size:48px" aria-hidden="true">🐷</div>
-                <div><h1>SlopScore™ — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
+                <div><h1>SlopScore — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
               </div>
               <div class="manifesto"><strong>Why public?</strong> {SITE.manifesto}</div>
               {d.winner ? (
@@ -102,7 +104,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
 pages.get("/", (c) => {
   const sort = sortParam(c.req.query("sort"));
   if (sort === "upcoming") return c.redirect("/upcoming");
-  return feedPage(c, { title: `SlopScore™ — ${SITE.tagline}`, heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
+  return feedPage(c, { title: `SlopScore — ${SITE.tagline}`, heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
 });
 
 pages.get("/upcoming", (c) => feedPage(c, {
@@ -135,7 +137,38 @@ pages.get("/f/:facet/:value", async (c) => {
   });
 });
 
-pages.get("/t/:tag", (c) => c.redirect(`/f/tags/${c.req.param("tag")}`));
+pages.get("/t", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const tags = await curatedTags(c.env.DB);
+  const free = await facetCounts(c.env.DB, "tags", 60);
+  return respond(c, { tags, free }, {
+    json: (d) => ({ curated: d.tags, free: d.free }),
+    md: (d) => ["# Tags", "", "Subreddit-style feeds. A repo lands in s/<tag> when any of its category, tags, domain, or GitHub topics match.", "", ...d.tags.map((t) => `- [s/${t.slug}](/t/${t.slug}) — ${t.title}: ${t.blurb ?? ""} (${t.n})`), "", "## Free tags", "", d.free.map((f) => `[${f.value}](/t/${f.value}) (${f.n})`).join(" · ")].join("\n"),
+    html: (d) => (
+      <Layout meta={{ title: "Tags — SlopScore" }} user={user} url={url} tags={d.tags}>
+        <section class="wrap narrow" style="padding:0">
+          <h2>Tags</h2>
+          <p class="muted">Subreddit-style feeds. A repo lands in <code>s/tag</code> when any of its category, tags, domain, or GitHub topics match. Curated tags are seeded; everything else is whatever slopsmiths wrote in <code>tags:</code>.</p>
+          <table class="list"><tr><th>tag</th><th>what goes here</th><th>slop</th></tr>
+            {d.tags.map((t) => <tr><td><a href={`/t/${t.slug}`}><strong>s/{t.slug}</strong></a></td><td>{t.title} <span class="muted">— {t.blurb}</span></td><td>{t.n}</td></tr>)}
+          </table>
+          <h3>Free tags</h3>
+          <p>{d.free.map((f) => <a class="chip" href={`/t/${f.value}`}>{f.value} ({f.n})</a>)}</p>
+        </section>
+      </Layout>
+    ),
+  });
+});
+
+pages.get("/t/:tag", async (c) => {
+  const slug = c.req.param("tag").toLowerCase();
+  const tag = await getTag(c.env.DB, slug);
+  return feedPage(c, {
+    title: `s/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `s/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: sortParam(c.req.query("sort") ?? "hot"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    tag: slug, baseUrl: `/t/${slug}`, intro: tag?.blurb ?? `Everything tagged ${slug} by category, tag, domain, or GitHub topic.`, extra: { tag: tag ?? { slug, curated: 0 } },
+    empty: `No slop in s/${slug} yet. Be the first slopsmith.`,
+  });
+});
 
 pages.get("/u/:login", async (c) => {
   const login = c.req.param("login");
@@ -143,7 +176,7 @@ pages.get("/u/:login", async (c) => {
   return feedPage(c, {
     title: `${login} — SlopScore`, heading: `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
-    intro: u ? `Grader since ${isoDate(u.created_at)}${u.banned_at ? " · banned" : ""}. github.com/${login}` : `github.com/${login} — not a grader (yet).`, extra: { user: u ? { id: u.id, login: u.login, avatar_url: u.avatar_url } : null },
+    intro: u ? `Slopsmith since ${isoDate(u.created_at)}${u.banned_at ? " · banned" : ""}. github.com/${login}` : `github.com/${login} — not a slopsmith (yet).`, extra: { user: u ? { id: u.id, login: u.login, avatar_url: u.avatar_url } : null },
     empty: "No slop from this account. Yet.",
   });
 });
@@ -249,7 +282,7 @@ pages.get("/stats", async (c) => {
         <section class="wrap narrow" style="padding:0">
           <h2>Stats</h2>
           <p class="muted">This site runs on Cloudflare's free tier on purpose. When the "deferred" column grows day over day, the AI budget is the bottleneck and it's time to pay.</p>
-          <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>graders</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
+          <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>slopsmiths</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
           <h3>Last 30 days</h3>
           <table class="list"><tr><th>date</th><th>AI neurons</th><th>scans</th><th>deferred</th><th>found</th><th>listed</th><th>rejected</th><th>quarantined</th></tr>
             {d.daily.map((r) => <tr><td>{r.date}</td><td>{r.neurons_used} / {r.neurons_budget || d.budget}</td><td>{r.scans}</td><td>{r.deferred}</td><td>{r.found}</td><td>{r.listed}</td><td>{r.rejected}</td><td>{r.quarantined}</td></tr>)}
@@ -293,10 +326,11 @@ pages.get("/about", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const md = [
     "# About SlopScore", "", `**${SITE.tagline}**`, "", SITE.manifesto, "",
-    "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents upvote, downvote, comment, and (quietly) report.", "",
+    "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits. The [source](https://github.com/NTBooks/slopscore) is public.", "",
     "## Tiers", "", "A repo the crawler finds is **found**: listed and votable, with an *unclaimed* chip. When the owner logs in and presses Submit it becomes **submitted**: a launch, eligible for Slop of the Day and the weekly awards. Votes carry over.", "",
+    "## Votes", "", "Only logged-in slopsmiths vote. Votes are weighted by account trust derived from GitHub (age, public repos, followers), rate-limited per account and per network, and bursts from same-week accounts or one network count for nothing. Displayed scores are lightly fuzzed so bots can't tell whether they counted. This is roughly how Reddit does it; the knobs are public in the repo.", "",
     "## Moderation", "", "Cheapest first: GitHub's own enforcement, a denylist, a risk score that quarantines suspicious repos for a human, Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed.", "",
     "## For agents", "", "Append `.json` or `.md` to any page. See [/llms.txt](/llms.txt), [/openapi.json](/openapi.json), and the MCP server at `/mcp`.",
   ].join("\n");
@@ -346,7 +380,7 @@ pages.get("/r/:owner/:name", async (c) => {
     html: (d) => (
       <Layout meta={{ title: `${d.repo.title ?? d.repo.name} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" }} user={user} url={url}>
         <RepoPage d={d} />
-        <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [] }} />
+        <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
       </Layout>
     ),
   });
@@ -363,7 +397,8 @@ pages.post("/r/:owner/:name/vote", requireUser, async (c) => {
   const v = Number(b.value);
   if (![1, -1, 0].includes(v)) return c.json({ error: "value must be 1, -1, or 0" }, 400);
   if (!(await rateLimit(c.env.DB, `vote:${user.id}`, 60, 600))) return c.json({ error: "slow down" }, 429);
-  const updated = await castVote(c.env.DB, user.id, r, v as -1 | 0 | 1);
+  const updated = await castVote(c.env.DB, user.row, r, v as -1 | 0 | 1, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET));
+  if (updated.ring) await logAction(c.env.DB, { actor: "system", role: "system", action: "vote-ring-flag", targetType: "repo", targetId: r.id, label: r.full_name, note: updated.ring });
   if (wantsJson(c)) return c.json({ ok: true, score: updated.score, up: updated.up, down: updated.down, mine: v });
   return c.redirect(c.req.header("referer")?.startsWith(new URL(c.req.url).origin) ? c.req.header("referer")! : `/r/${r.full_name}`);
 });

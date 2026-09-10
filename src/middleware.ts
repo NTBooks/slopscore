@@ -21,6 +21,7 @@ export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
         isAdmin: admins.has(u.login.toLowerCase()),
         canWrite: !u.banned_at && (oldEnough || u.public_repos >= 1),
         csrf: await csrfToken(u.id, c.env.SESSION_SECRET),
+        row: u,
       };
       c.set("user", user);
     }

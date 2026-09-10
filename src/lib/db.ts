@@ -4,6 +4,7 @@ import { now, SORT_WINDOWS } from "./time";
 import { filterSql, type Filter } from "./searchquery";
 import type { TagRow } from "./slopmd";
 import { WIP_STATUSES } from "./vocab";
+import { trustFor, ringCheck } from "./trust";
 
 export interface RepoRow {
   id: number; full_name: string; owner: string; name: string; owner_id: number | null; owner_type: string | null;
@@ -24,7 +25,7 @@ export interface RepoRow {
 
 export interface UserRow {
   id: number; login: string; avatar_url: string | null; gh_created_at: number | null; public_repos: number;
-  followers: number; banned_at: number | null; created_at: number; last_seen: number | null;
+  followers: number; banned_at: number | null; created_at: number; last_seen: number | null; trust: number;
 }
 
 export interface CommentRow {
@@ -46,6 +47,8 @@ export interface FeedOpts {
   status?: RepoRow["status"] | RepoRow["status"][];
   owner?: string;
   tier?: "found" | "submitted";
+  /** subreddit-style tag: matches category, tags, domain, or topic */
+  tag?: string;
 }
 
 export function feedOrder(sort: Sort): string {
@@ -69,6 +72,7 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   params.push(...statuses);
   if (o.owner) { where.push("lower(r.owner) = ?"); params.push(o.owner.toLowerCase()); }
   if (o.tier) { where.push("r.tier = ?"); params.push(o.tier); }
+  if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
   const win = SORT_WINDOWS[o.t ?? "all"] ?? 0;
   if (win && (o.sort === "top" || o.sort === "controversial" || o.sort === "new")) {
     where.push("r.listed_at >= ?"); params.push(now() - win);
@@ -142,11 +146,12 @@ export async function getUserByLogin(db: D1Database, login: string): Promise<Use
   return db.prepare("SELECT * FROM users WHERE lower(login) = lower(?)").bind(login).first<UserRow>();
 }
 export async function upsertUser(db: D1Database, u: { id: number; login: string; avatar_url: string; gh_created_at: number | null; public_repos: number; followers: number }): Promise<void> {
+  const trust = trustFor({ ...u, banned_at: null });
   await db.prepare(
-    `INSERT INTO users (id, login, avatar_url, gh_created_at, public_repos, followers, last_seen) VALUES (?,?,?,?,?,?,unixepoch())
+    `INSERT INTO users (id, login, avatar_url, gh_created_at, public_repos, followers, trust, last_seen) VALUES (?,?,?,?,?,?,?,unixepoch())
      ON CONFLICT(id) DO UPDATE SET login = excluded.login, avatar_url = excluded.avatar_url, gh_created_at = excluded.gh_created_at,
-       public_repos = excluded.public_repos, followers = excluded.followers, last_seen = unixepoch()`,
-  ).bind(u.id, u.login, u.avatar_url, u.gh_created_at, u.public_repos, u.followers).run();
+       public_repos = excluded.public_repos, followers = excluded.followers, trust = excluded.trust, last_seen = unixepoch()`,
+  ).bind(u.id, u.login, u.avatar_url, u.gh_created_at, u.public_repos, u.followers, trust).run();
 }
 
 // ---- votes ----
@@ -163,25 +168,47 @@ export async function userVotesFor(db: D1Database, userId: number, repoIds: numb
   return m;
 }
 
-/** Upsert/remove a vote and recompute the repo's counters. value 0 removes the vote. */
-export async function castVote(db: D1Database, userId: number, repo: RepoRow, value: -1 | 0 | 1): Promise<RepoRow> {
+/** Upsert/remove a vote and recompute the repo's counters. value 0 removes the vote.
+ *  Weighted: score = round(sum(weight * value)); up/down stay raw counts. Suspected vote rings get weight 0. */
+export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, value: -1 | 0 | 1, ipHashValue: string | null = null): Promise<RepoRow & { ring?: string }> {
+  let weight = user.trust ?? trustFor(user);
+  let ring: string | undefined;
+  if (value !== 0) {
+    const rc = await ringCheck(db, repo.id, ipHashValue);
+    if (rc.suspicious) { weight = 0; ring = rc.reason; }
+  }
   const write = value === 0
-    ? db.prepare("DELETE FROM votes WHERE user_id = ? AND repo_id = ?").bind(userId, repo.id)
-    : db.prepare("INSERT INTO votes (user_id, repo_id, value) VALUES (?,?,?) ON CONFLICT(user_id, repo_id) DO UPDATE SET value = excluded.value, created_at = unixepoch()").bind(userId, repo.id, value);
+    ? db.prepare("DELETE FROM votes WHERE user_id = ? AND repo_id = ?").bind(user.id, repo.id)
+    : db.prepare("INSERT INTO votes (user_id, repo_id, value, weight, ip_hash) VALUES (?,?,?,?,?) ON CONFLICT(user_id, repo_id) DO UPDATE SET value = excluded.value, weight = excluded.weight, ip_hash = excluded.ip_hash, created_at = unixepoch()").bind(user.id, repo.id, value, weight, ipHashValue);
   const count = db.prepare(
     `SELECT
       sum(CASE WHEN v.value = 1 THEN 1 ELSE 0 END) AS up,
-      sum(CASE WHEN v.value = -1 THEN 1 ELSE 0 END) AS down
+      sum(CASE WHEN v.value = -1 THEN 1 ELSE 0 END) AS down,
+      sum(v.value * v.weight) AS weighted
      FROM votes v JOIN users u ON u.id = v.user_id WHERE v.repo_id = ? AND u.banned_at IS NULL`,
   ).bind(repo.id);
-  const [, counts] = await db.batch<{ up: number | null; down: number | null }>([write, count]);
+  const [, counts] = await db.batch<{ up: number | null; down: number | null; weighted: number | null }>([write, count]);
   const up = counts.results?.[0]?.up ?? 0;
   const down = counts.results?.[0]?.down ?? 0;
+  const score = Math.round(counts.results?.[0]?.weighted ?? 0);
   const created = repo.submitted_at ?? repo.listed_at ?? repo.first_seen;
-  const h = hotRank(up, down, created);
+  const h = hotRank(Math.max(score, 0), Math.max(-score, 0), created);
   const c = contRank(up, down);
-  await db.prepare("UPDATE repos SET up = ?, down = ?, score = ?, hot = ?, controversy = ? WHERE id = ?").bind(up, down, up - down, h, c, repo.id).run();
-  return { ...repo, up, down, score: up - down, hot: h, controversy: c };
+  await db.prepare("UPDATE repos SET up = ?, down = ?, score = ?, hot = ?, controversy = ? WHERE id = ?").bind(up, down, score, h, c, repo.id).run();
+  return { ...repo, up, down, score, hot: h, controversy: c, ring };
+}
+
+export async function curatedTags(db: D1Database): Promise<{ slug: string; title: string; blurb: string | null; n: number }[]> {
+  const r = await db.prepare(
+    `SELECT t.slug, t.title, t.blurb,
+       (SELECT count(DISTINCT rt.repo_id) FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND rt.facet IN ('category','tags','domain','topic') AND rt.value = t.slug) AS n
+     FROM tags t WHERE t.curated = 1 ORDER BY t.sort, t.slug`,
+  ).all<{ slug: string; title: string; blurb: string | null; n: number }>();
+  return r.results ?? [];
+}
+
+export async function getTag(db: D1Database, slug: string): Promise<{ slug: string; title: string; blurb: string | null; curated: number } | null> {
+  return db.prepare("SELECT slug, title, blurb, curated FROM tags WHERE slug = ?").bind(slug.toLowerCase()).first();
 }
 
 // ---- comments ----

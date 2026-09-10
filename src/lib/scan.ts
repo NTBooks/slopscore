@@ -151,7 +151,7 @@ export function metadataGate(g: GhRepo): GateResult {
   if (g.private) reasons.push("repository is private");
   if (g.archived) reasons.push("repository is archived");
   if (g.disabled) reasons.push("repository was disabled by GitHub");
-  if (g.size === 0) reasons.push("repository is empty");
+  // note: GitHub reports size 0 for freshly pushed repos, so "empty" is never inferred from size; the marker fetch proves content.
   if (g.fork) {
     if (!g.parent || g.stargazers_count <= (g.parent?.stargazers_count ?? 0)) reasons.push("forks are only listed when they out-star their parent");
     else notes.push("fork that out-stars its parent");

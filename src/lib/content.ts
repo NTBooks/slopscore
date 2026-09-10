@@ -162,17 +162,32 @@ export async function visionCheckOpenRouter(env: Env, bytes: Uint8Array, mime = 
   if ("error" in r) return { ran: false, safe: true, neurons: 0, note: r.error, provider: "openrouter" };
   return { ran: true, safe: !/^unsafe/i.test(r.text), note: r.text.slice(0, 160), neurons: 0, provider: "openrouter" };
 }
-export async function visionCheck(env: Env, bytes: Uint8Array): Promise<VisionResult> {
+const VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+
+/** Workers AI gates this model behind a one-time license acceptance per account: the first call must be the prompt "agree". */
+async function acceptVisionLicense(env: Env): Promise<boolean> {
+  try {
+    await env.AI!.run(VISION_MODEL as never, { prompt: "agree" } as never);
+    return true;
+  } catch (e) {
+    console.log("vision license acceptance failed", (e as Error).message);
+    return false;
+  }
+}
+
+export async function visionCheck(env: Env, bytes: Uint8Array, retried = false): Promise<VisionResult> {
   if (!env.AI) return { ran: false, safe: true, neurons: 0, note: "no AI binding" };
   try {
-    const out = (await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct" as never, {
+    const out = (await env.AI.run(VISION_MODEL as never, {
       prompt: "You are a content moderator. Is this image safe to show to a general audience of all ages (no nudity, sexual content, gore, hate symbols, or graphic violence)? Answer with exactly one word, SAFE or UNSAFE, then a short reason.",
       image: [...bytes],
       max_tokens: 40,
     } as never)) as { response?: string } | string;
     const raw = (typeof out === "string" ? out : out?.response ?? "").trim();
-    return { ran: true, safe: !/unsafe/i.test(raw.split(/\s/)[0] ?? "") && !/^unsafe/i.test(raw), note: raw.slice(0, 160), neurons: VISION_NEURONS };
+    return { ran: true, safe: !/unsafe/i.test(raw.split(/\s/)[0] ?? "") && !/^unsafe/i.test(raw), note: raw.slice(0, 160), neurons: VISION_NEURONS, provider: "workers-ai" };
   } catch (e) {
-    return { ran: false, safe: true, neurons: 0, note: (e as Error).message };
+    const msg = (e as Error).message;
+    if (!retried && /submit the prompt 'agree'/i.test(msg) && (await acceptVisionLicense(env))) return visionCheck(env, bytes, true);
+    return { ran: false, safe: true, neurons: 0, note: msg, provider: "workers-ai" };
   }
 }

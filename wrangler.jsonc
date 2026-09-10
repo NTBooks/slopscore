@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "slopscore",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  // Top level = local dev (`wrangler dev`). Deploy with `--env test` or `--env production`.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "slopscore", "database_id": "a93167e0-ce88-4697-b92b-748d39084c70", "migrations_dir": "migrations" }
+  ],
+  "ai": { "binding": "AI", "remote": true },
+  "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
+  "vars": {
+    "SITE_NAME": "SlopScore",
+    "SITE_URL": "http://localhost:8787",
+    "ADMIN_LOGINS": "NTBooks",
+    "MIN_ACCOUNT_AGE_DAYS": "30",
+    "AUTO_HIDE_REPORTS": "3",
+    "AI_NEURON_BUDGET": "9000",
+    "RISK_QUARANTINE": "40"
+  },
+  "env": {
+    "test": {
+      "name": "slopscore-test",
+      "routes": [{ "pattern": "test.slopscore.org", "custom_domain": true }],
+      "d1_databases": [
+        { "binding": "DB", "database_name": "slopscore-test", "database_id": "65264eba-0c77-477d-b4b6-80bff9b6e032", "migrations_dir": "migrations" }
+      ],
+      "ai": { "binding": "AI" },
+      "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
+      "vars": {
+        "SITE_NAME": "SlopScore (test)",
+        "SITE_URL": "https://test.slopscore.org",
+        "ADMIN_LOGINS": "NTBooks",
+        "MIN_ACCOUNT_AGE_DAYS": "30",
+        "AUTO_HIDE_REPORTS": "3",
+        "AI_NEURON_BUDGET": "2000",
+        "RISK_QUARANTINE": "40"
+      }
+    },
+    "production": {
+      "name": "slopscore",
+      "routes": [
+        { "pattern": "slopscore.org", "custom_domain": true },
+        { "pattern": "www.slopscore.org", "custom_domain": true }
+      ],
+      "d1_databases": [
+        { "binding": "DB", "database_name": "slopscore", "database_id": "a93167e0-ce88-4697-b92b-748d39084c70", "migrations_dir": "migrations" }
+      ],
+      "ai": { "binding": "AI" },
+      "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
+      "vars": {
+        "SITE_NAME": "SlopScore",
+        "SITE_URL": "https://slopscore.org",
+        "ADMIN_LOGINS": "NTBooks",
+        "MIN_ACCOUNT_AGE_DAYS": "30",
+        "AUTO_HIDE_REPORTS": "3",
+        "AI_NEURON_BUDGET": "9000",
+        "RISK_QUARANTINE": "40"
+      }
+    }
+  }
+}

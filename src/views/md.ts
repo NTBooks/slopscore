@@ -1,0 +1,60 @@
+// Markdown renderers for the .md variant of every page. Agents read these.
+import type { RepoRow, CommentRow } from "../lib/db";
+import type { TagRow } from "../lib/slopmd";
+import { ago, isoDate } from "../lib/time";
+import { stripHtml } from "../lib/markdown";
+
+export function feedMd(title: string, rows: RepoRow[], page: number, hasMore: boolean, intro?: string): string {
+  const out = [`# ${title}`, ""];
+  if (intro) out.push(intro, "");
+  if (!rows.length) out.push("_No slop yet. Suspicious._", "");
+  rows.forEach((r, i) => {
+    const n = (page - 1) * 25 + i + 1;
+    out.push(`${n}. **[${r.title ?? r.name}](/r/${r.full_name})** · score ${r.score} (▲${r.up} ▼${r.down}) · ★${r.stars}${r.language ? ` · ${r.language}` : ""} · ${r.comment_count} comments`);
+    out.push(`   ${r.tagline ?? ""}`);
+    out.push(`   github: https://github.com/${r.full_name} · owner: ${r.owner} · status: ${r.status}${r.tier === "found" ? " (unclaimed)" : ""}${r.reject_reason ? ` · rejected: ${r.reject_reason}` : ""}`);
+  });
+  out.push("");
+  if (page > 1 || hasMore) out.push(`Page ${page}.${hasMore ? " More: add `?page=" + (page + 1) + "`." : ""}`, "");
+  out.push("---", "Every page is also available as `.json`. Vote/comment with a bearer token from `/auth/device`. See `/llms.txt`.");
+  return out.join("\n");
+}
+
+export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], awards: { kind: string; period: string; rank: number }[]): string {
+  const out = [`# ${r.title ?? r.name}`, "", r.tagline ?? "", ""];
+  out.push(`- GitHub: https://github.com/${r.full_name}`);
+  if (r.demo_url) out.push(`- Demo: ${r.demo_url}`);
+  out.push(`- Status on SlopScore: **${r.status}**${r.queue_reason ? ` (${r.queue_reason})` : ""} · tier: ${r.tier}`);
+  if (r.reject_reason) out.push(`- Rejected under: ${r.reject_reason}`);
+  if (r.removed_reason) out.push(`- Removed: ${r.removed_reason} on ${isoDate(r.removed_at)}`);
+  out.push(`- Score: ${r.score} (▲${r.up} ▼${r.down}) · ${r.comment_count} comments · ★${r.stars} · ${r.forks} forks`);
+  if (r.language) out.push(`- Language: ${r.language}`);
+  if (r.license) out.push(`- License: ${r.license}`);
+  out.push(`- Listed: ${r.listed_at ? isoDate(r.listed_at) : "not yet"} · first seen ${isoDate(r.first_seen)} · last checked ${ago(r.last_crawled)}`);
+  if (awards.length) out.push(`- Awards: ${awards.map((a) => `#${a.rank} ${a.kind} ${a.period}`).join(", ")}`);
+  out.push("");
+  const byFacet = new Map<string, string[]>();
+  for (const t of tags) byFacet.set(t.facet, [...(byFacet.get(t.facet) ?? []), t.value + (t.recognized ? "" : "?") + (t.source === "detected" ? " (detected)" : "")]);
+  if (byFacet.size) {
+    out.push("## Disclosures and facets", "");
+    for (const [f, vals] of byFacet) out.push(`- ${f}: ${vals.join(", ")}`);
+    out.push("");
+  }
+  if (r.body_md) out.push("## Pitch", "", r.body_md, "");
+  if (r.readme_html) out.push("## README (excerpt)", "", stripHtml(r.readme_html).slice(0, 2000), "");
+  if (r.scan) {
+    try {
+      const s = JSON.parse(r.scan) as { gates: { gate: string; ok: boolean; reasons: string[] }[] };
+      out.push("## Scan report", "");
+      for (const g of s.gates) out.push(`- ${g.ok ? "✓" : "✗"} ${g.gate}${g.reasons.length ? `: ${g.reasons.join("; ")}` : ""}`);
+      out.push("");
+    } catch { /* ignore */ }
+  }
+  if (comments.length) {
+    out.push(`## Comments (${comments.length})`, "");
+    for (const c of comments) out.push(`- **${c.login}**${c.user_id === r.owner_id ? " (maker)" : ""} · ${ago(c.created_at)} · ▲${c.up} ▼${c.down}`, `  ${c.deleted_at ? "[deleted]" : c.body_md.replace(/\n/g, "\n  ")}`);
+    out.push("");
+  }
+  out.push("---", `Vote: \`POST /r/${r.full_name}/vote\` {value: 1|-1|0} · Comment: \`POST /r/${r.full_name}/comments\` {body} · Report: \`POST /r/${r.full_name}/report\` {reason, note}. Bearer token from \`/auth/device\`.`);
+  return out.join("\n");
+}

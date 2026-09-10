@@ -45,7 +45,10 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .btn.secondary, form.owner button.secondary { background: var(--panel); color: var(--fg); border-color: var(--line); font-weight: normal; }
 .btn[disabled], form.owner button[disabled] { opacity: .5; cursor: not-allowed; }
 .who { display: flex; gap: 10px; align-items: center; margin-left: auto; } .avatar { width: 18px; height: 18px; border-radius: 3px; vertical-align: middle; }
-.who .mod { color: var(--accent); font-weight: bold; } .login { font-weight: bold; }
+.who .mod { color: var(--accent); font-weight: bold; }
+.login { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--fg); color: var(--bg) !important; border-radius: 5px; font-weight: bold; border: 1px solid var(--fg); white-space: nowrap; }
+.login:hover { text-decoration: none; background: var(--accent); border-color: var(--accent-2); color: #fff !important; }
+.login svg { width: 16px; height: 16px; fill: currentColor; }
 
 /* hero + strip */
 .hero { display: flex; gap: 18px; align-items: center; padding: 10px 0 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }

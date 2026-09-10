@@ -150,3 +150,52 @@ if __name__ == "__main__":
     p = mascot()
     print(p)
     sheet([p], os.path.join(HERE, "mascot-sheet.png"), cell=560, scale=1.0)
+
+
+# ---- Head-only mascot (the one used on the site): first-pass face, a small slop smear at the mouth corner, one drip.
+def head():
+    hd = blob(300, 300, 118, 106, .03, 10, seed=7)
+    snout = "M 260 332 C 260 304 380 304 380 332 C 380 364 260 364 260 332 Z"
+    earL = taper(226, 226, 176, 178, 168, 138, 48, 0)
+    earR = taper(374, 226, 424, 178, 432, 138, 48, 0)
+    smear = "M 322 372 C 318 386 330 394 340 392 C 350 394 356 382 350 370 C 340 378 330 378 322 372 Z"
+    drip = taper(342, 392, 343, 404, 341, 420, 7, 0)
+    collar = "M 196 392 C 230 372 270 366 300 400 C 330 366 370 372 404 392 L 420 470 L 180 470 Z"
+    d = "\n".join([
+        ramp("pigH", 0, 0, 0, 0, PIG, "radial", 'cx="300" cy="300" r="160" fx="244" fy="240"'),
+        ramp("pigE", 0, 0, 0, 0, PIG, "radial", 'cx="300" cy="180" r="190" fx="230" fy="150"'),
+        ramp("snt", 0, 0, 0, 0, SNOUT, "radial", 'cx="320" cy="332" r="74" fx="292" fy="316"'),
+        ramp("goo", 0, 0, 0, 0, GOO, "radial", 'cx="336" cy="380" r="40" fx="328" fy="372"'),
+        ramp("coat", 0, 0, 0, 0, COAT, "radial", 'cx="300" cy="430" r="160" fx="240" fy="390"'),
+        shape("p-head", hd), shape("p-snout", snout), shape("p-slop", smear), shape("p-coat", collar),
+        masks("H", 182, 194, 418, 406), masks("S", 260, 304, 380, 364), masks("G", 318, 368, 358, 396), masks("C", 180, 366, 420, 470),
+    ])
+    b = f'''
+  {ground(300, 484, 150, 16, .35)}
+  {part("p-coat", "url(#coat)")}
+  {shade("c-coat", "p-coat", 300, 430, 120, 40, "#4a5566", "m-litC", "m-rimC", "#e8f0ff", (236, 412, 30, 14, -20), None, sheen_op=.3, core_op=.3)}
+  <g clip-path="url(#c-coat)"><path d="M 262 404 L 300 444 L 338 404 L 326 394 L 300 424 L 274 394 Z" fill="#c9cfd8" opacity=".9"/></g>
+  {tp(earL, "url(#pigE)")}{tp(earR, "url(#pigE)")}
+  <path d="{taper(226, 226, 184, 186, 180, 156, 24, 0)}" fill="#c25f6d" opacity=".8"/>
+  <path d="{taper(374, 226, 416, 186, 420, 156, 24, 0)}" fill="#c25f6d" opacity=".8"/>
+  {part("p-head", "url(#pigH)")}
+  {shade("c-head", "p-head", 300, 300, 118, 106, "#5a1a2a", "m-litH", "m-rimH", "#ffd0d8", (244, 244, 56, 36, -30), (230, 232, 15, 8), sheen_op=.45)}
+  <g clip-path="url(#c-head)">
+    <ellipse cx="224" cy="334" rx="28" ry="17" fill="#ff7a8a" opacity=".45" filter="url(#b12)"/>
+    <ellipse cx="376" cy="334" rx="28" ry="17" fill="#ff7a8a" opacity=".45" filter="url(#b12)"/>
+  </g>
+  {occ("p-snout", "c-head", 4, 10, "#5a1a2a", .5)}
+  {part("p-snout", "url(#snt)")}
+  {shade("c-snout", "p-snout", 320, 332, 60, 32, "#5a1a2a", "m-litS", "m-rimS", "#ffd0d8", (290, 320, 26, 12, -20), (282, 316, 8, 4), sheen_op=.5)}
+  <ellipse cx="300" cy="336" rx="9" ry="12" fill="#6a1f2c"/><ellipse cx="340" cy="336" rx="9" ry="12" fill="#6a1f2c"/>
+  <ellipse cx="297" cy="332" rx="3" ry="4" fill="#ffb3bd" opacity=".6"/><ellipse cx="337" cy="332" rx="3" ry="4" fill="#ffb3bd" opacity=".6"/>
+  {eye_droop(256, 268, 23, iris="#4a2a1a", side=-1, look=(.22, .18))}{eye_droop(346, 268, 23, iris="#4a2a1a", side=1, look=(.22, .18))}
+  {brow(252, 232, 56, angle=8, thick=10)}{brow(352, 222, 58, angle=-18, thick=10)}
+  <path d="M 258 370 Q 302 398 358 362" fill="none" stroke="{OL}" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 258 370 Q 302 398 358 362 Q 306 386 258 370 Z" fill="#3a0a14"/>
+  {tp(drip, "url(#goo)")}
+  {part("p-slop", "url(#goo)")}
+  {shade("c-slop", "p-slop", 336, 382, 18, 12, "#1e3008", "m-litG", "m-rimG", "#e6ffb0", (328, 376, 8, 4, -20), (326, 374, 3, 2), sheen_op=.6, core_op=.5)}
+  <ellipse cx="341" cy="416" rx="3" ry="2" fill="#e6ffb0" opacity=".8"/>
+'''
+    return write("mascot-head", canvas(d, finish(b, sw=13, color="#2a0c12"), vignette=False, grain=0), outdir=HERE)

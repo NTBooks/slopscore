@@ -55,11 +55,11 @@ export const CONTROLLED: Record<string, readonly string[]> = {
 };
 
 /** Free-vocabulary facets. */
-export const FREE_FACETS = ["models", "frameworks", "needs", "domain", "tags"] as const;
+export const FREE_FACETS = ["slopbucket", "models", "frameworks", "needs", "domain", "tags"] as const;
 
 /** All facets that land in repo_tags from the marker file, in display order. */
 export const DECLARED_FACETS = [
-  "category", "ai_generated", "human_touch", "status", "contains", "built_with", "models",
+  "slopbucket", "category", "ai_generated", "human_touch", "status", "contains", "built_with", "models",
   "interface", "frameworks", "platforms", "audience", "data", "needs", "domain", "tags",
 ] as const;
 
@@ -123,7 +123,6 @@ export const ALIASES: Record<string, string> = {
   "webapp": "web-app",
   "command-line": "cli",
   "terminal": "cli",
-  "mcp-server": "mcp",
   "everybody": "everyone",
   "general": "everyone",
   "g": "everyone",
@@ -151,6 +150,8 @@ export const SEARCH_OPERATORS: Record<string, { facet?: string; column?: string 
   needs: { facet: "needs" },
   domain: { facet: "domain" },
   tag: { facet: "tags" },
+  bucket: { facet: "slopbucket" },
+  slopbucket: { facet: "slopbucket" },
   topic: { facet: "topic" },
   license: { facet: "license" },
   owner: { column: "owner" },

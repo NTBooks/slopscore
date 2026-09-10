@@ -85,7 +85,36 @@ export const GUARD_MAP: Record<string, { label: string; disclose: string[]; seve
   S14: { label: "code interpreter abuse", disclose: ["security-research"], severity: "reject" },
 };
 
-export interface GuardResult { ran: boolean; safe: boolean; categories: string[]; raw?: string; neurons: number; error?: string }
+export interface GuardResult { ran: boolean; safe: boolean; categories: string[]; raw?: string; neurons: number; error?: string; provider?: "workers-ai" | "openrouter"; tokens?: number }
+
+export const OPENROUTER_GUARD_DEFAULT = "meta-llama/llama-guard-4-12b";
+export const OPENROUTER_VISION_DEFAULT = "meta-llama/llama-3.2-11b-vision-instruct";
+
+async function openrouter(env: Env, model: string, messages: unknown[], maxTokens = 60): Promise<{ text: string; tokens: number } | { error: string }> {
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "content-type": "application/json", "http-referer": env.SITE_URL ?? "https://slopscore.org", "x-title": "SlopScore" },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0 }),
+    });
+    if (!res.ok) return { error: `openrouter ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
+    return { text: j.choices?.[0]?.message?.content?.trim() ?? "", tokens: j.usage?.total_tokens ?? 0 };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+/** Llama Guard through OpenRouter (paid scans). Same output contract as the Workers AI path; costs dollars, not neurons. */
+export async function llamaGuardOpenRouter(env: Env, text: string): Promise<GuardResult> {
+  if (!env.OPENROUTER_API_KEY) return { ran: false, safe: true, categories: [], neurons: 0, error: "no OPENROUTER_API_KEY", provider: "openrouter" };
+  const input = text.slice(0, GUARD_TEXT_CAP);
+  const r = await openrouter(env, env.OPENROUTER_GUARD_MODEL || OPENROUTER_GUARD_DEFAULT, [{ role: "user", content: input }], 30);
+  if ("error" in r) return { ran: false, safe: true, categories: [], neurons: 0, error: r.error, provider: "openrouter" };
+  const safe = /^safe/i.test(r.text);
+  const categories = safe ? [] : (r.text.match(/S\d{1,2}/g) ?? []);
+  return { ran: true, safe, categories: [...new Set(categories)], raw: r.text, neurons: 0, provider: "openrouter", tokens: r.tokens };
+}
 
 export async function llamaGuard(env: Env, text: string): Promise<GuardResult> {
   if (!env.AI) return { ran: false, safe: true, categories: [], neurons: 0, error: "no AI binding" };
@@ -98,9 +127,9 @@ export async function llamaGuard(env: Env, text: string): Promise<GuardResult> {
     const raw = (typeof out === "string" ? out : out?.response ?? "").trim();
     const safe = /^safe/i.test(raw);
     const categories = safe ? [] : (raw.match(/S\d{1,2}/g) ?? []);
-    return { ran: true, safe, categories: [...new Set(categories)], raw, neurons };
+    return { ran: true, safe, categories: [...new Set(categories)], raw, neurons, provider: "workers-ai" };
   } catch (e) {
-    return { ran: false, safe: true, categories: [], neurons: 0, error: (e as Error).message };
+    return { ran: false, safe: true, categories: [], neurons: 0, error: (e as Error).message, provider: "workers-ai" };
   }
 }
 
@@ -119,7 +148,20 @@ export function judgeGuard(g: GuardResult, contains: string[]): { reject: string
 }
 
 // ---- Vision check on the thumbnail ----
-export interface VisionResult { ran: boolean; safe: boolean; note?: string; neurons: number }
+export interface VisionResult { ran: boolean; safe: boolean; note?: string; neurons: number; provider?: "workers-ai" | "openrouter" }
+
+export async function visionCheckOpenRouter(env: Env, bytes: Uint8Array, mime = "image/png"): Promise<VisionResult> {
+  if (!env.OPENROUTER_API_KEY) return { ran: false, safe: true, neurons: 0, note: "no OPENROUTER_API_KEY", provider: "openrouter" };
+  let b64 = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const dataUrl = `data:${mime};base64,${btoa(b64)}`;
+  const r = await openrouter(env, env.OPENROUTER_VISION_MODEL || OPENROUTER_VISION_DEFAULT, [{ role: "user", content: [
+    { type: "text", text: "You are a content moderator. Is this image safe to show to a general audience of all ages (no nudity, sexual content, gore, hate symbols, or graphic violence)? Answer with exactly one word, SAFE or UNSAFE, then a short reason." },
+    { type: "image_url", image_url: { url: dataUrl } },
+  ] }], 40);
+  if ("error" in r) return { ran: false, safe: true, neurons: 0, note: r.error, provider: "openrouter" };
+  return { ran: true, safe: !/^unsafe/i.test(r.text), note: r.text.slice(0, 160), neurons: 0, provider: "openrouter" };
+}
 export async function visionCheck(env: Env, bytes: Uint8Array): Promise<VisionResult> {
   if (!env.AI) return { ran: false, safe: true, neurons: 0, note: "no AI binding" };
   try {

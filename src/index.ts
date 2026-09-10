@@ -6,6 +6,7 @@ import { pages } from "./routes/pages";
 import { api } from "./routes/api";
 import { auth } from "./routes/auth";
 import { owner } from "./routes/owner";
+import { mod } from "./routes/mod";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -18,6 +19,7 @@ app.use("*", loadUser);
 app.route("/auth", auth);
 app.route("/api/v1", api);
 app.route("/r", owner);
+app.route("/mod", mod);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
@@ -40,6 +42,7 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 - ${origin}/tools       which AI tool produces the best slop (mean score by built_with)
 - ${origin}/r/{owner}/{repo}   a listing: disclosures, scan report, comments, awards
 - ${origin}/u/{login}   a user's repos
+- ${origin}/b            slopbucket directory (subreddit-style); ${origin}/b/{bucket} a bucket feed. Declare up to 3 with slopbucket: [...] in slopscore.md; unknown buckets are created
 - ${origin}/f/{facet}/{value}  facet feeds, e.g. /f/built_with/claude-code, /f/language/python
 - ${origin}/search?q=   full-text + operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner:  (prefix - to exclude)
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)

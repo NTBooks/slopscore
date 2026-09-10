@@ -1,5 +1,5 @@
 import type { FC } from "hono/jsx";
-import { MINIMAL_EXAMPLE } from "../lib/slopmd";
+import { MINIMAL_EXAMPLE, SAMPLE_BUCKETS } from "../lib/slopmd";
 import { Mascot, StepIcon } from "./art";
 
 export interface RailData {
@@ -20,6 +20,7 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
       </ol>
       <pre>{MINIMAL_EXAMPLE.trim()}</pre>
       <p class="muted">That's the whole file. Everything else comes from GitHub. <a href="/spec">Full spec</a> · impatient? <code>curl /ping/you/repo</code></p>
+      <p class="muted">Slopbuckets to pick from: {SAMPLE_BUCKETS.map((b) => <a href={`/b/${b}`} class="chip">{b}</a>)} <a href="/b">or invent one</a>.</p>
     </div>
     <div class="box">
       <h3>For agents</h3>

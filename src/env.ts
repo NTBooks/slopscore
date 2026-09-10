@@ -15,6 +15,10 @@ export interface Env {
   GITHUB_CRAWL_TOKEN?: string;
   SESSION_SECRET: string;
   SAFE_BROWSING_KEY?: string;
+  /** Paid scans route their AI checks here instead of Workers AI, so they never touch the free neuron budget. */
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_GUARD_MODEL?: string;
+  OPENROUTER_VISION_MODEL?: string;
 }
 
 export interface SessionUser {

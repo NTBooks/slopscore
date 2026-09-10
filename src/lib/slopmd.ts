@@ -29,6 +29,7 @@ export interface SlopMeta {
   needs: string[];
   domain: string[];
   tags: string[];
+  slopbucket: string[];
   images: string[];
   maintainers: string[];
   unlisted: boolean;
@@ -109,6 +110,7 @@ export const slopSchema = z.object({
   needs: listOfStrings,
   domain: listOfStrings,
   tags: listOfStrings.pipe(z.array(z.string()).max(20, "tags: at most 20")),
+  slopbucket: listOfStrings.pipe(z.array(z.string()).max(3, "slopbucket: at most 3")),
   images: z.array(z.string()).max(6).optional().default([]),
   maintainers: z
     .union([z.string(), z.array(z.string())])
@@ -146,7 +148,8 @@ export function parseSlopMd(text: string): ParseResult {
   for (const [k, v] of Object.entries(obj)) {
     const key = k.trim().toLowerCase();
     if (key.startsWith("x-") || key.startsWith("x_")) { x[k] = v; continue; }
-    const canon = key.replace(/-/g, "_");
+    let canon = key.replace(/-/g, "_");
+    if (canon === "slopbuckets" || canon === "bucket" || canon === "buckets") canon = "slopbucket";
     if (!KNOWN_KEYS.has(canon)) { warnings.push(`ignored unknown key "${k}"`); continue; }
     norm[canon] = v;
   }
@@ -202,5 +205,9 @@ content_rating: everyone
 contains: []
 category: [cli]
 status: works-on-my-machine
+slopbucket: [cli]            # optional: pick a bucket or invent one
 ---
 `;
+
+/** Buckets worth suggesting in the sample. The full seeded list is at /b. */
+export const SAMPLE_BUCKETS = ["cli", "devtools", "web-app", "agent", "mcp-server", "bot", "game", "automation", "home-automation", "vibe-coded", "weekend-project", "ai-wrapper", "todo-app", "scraper", "dashboard"];

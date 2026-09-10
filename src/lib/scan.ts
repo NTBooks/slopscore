@@ -2,13 +2,13 @@
 // Order: fetch GitHub → gate 0 denylist → gate 1 metadata → gate 2 contract → gate 3 content (budgeted AI) → gate 2b risk → status.
 import { GitHub, parseGhDate, fullNameFromRedirect, type GhRepo, type GhContentsEntry, type GhRelease, type GhCommunity, type GhUser } from "./github";
 import { parseSlopMd, type TagRow, type SlopMeta } from "./slopmd";
-import { replaceTags, type RepoRow } from "./db";
+import { replaceTags, registerBuckets, type RepoRow } from "./db";
 import { renderMarkdown, sanitizeReadmeHtml, stripHtml } from "./markdown";
 import { normalizeValue } from "./vocab";
 import { now } from "./time";
 import { denylistGate, loadDenyRows } from "./denylist";
 import { riskScore } from "./risk";
-import { findSecrets, safeBrowsing, llamaGuard, judgeGuard, visionCheck, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS } from "./content";
+import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS } from "./content";
 import { bump } from "../jobs/stats";
 import type { Env } from "../env";
 
@@ -22,7 +22,7 @@ export interface ScanReport {
   warnings: string[];
   risk?: { score: number; reasons: string[] };
   images?: { path: string; size: number; checked: string }[];
-  ai?: { guard?: { ran: boolean; categories: string[]; neurons: number; error?: string }; vision?: { ran: boolean; safe: boolean; note?: string; neurons: number }; deferred?: boolean };
+  ai?: { guard?: { ran: boolean; categories: string[]; neurons: number; error?: string; provider?: string }; vision?: { ran: boolean; safe: boolean; note?: string; neurons: number; provider?: string }; deferred?: boolean; provider?: string };
   links?: number;
   calls?: number;
 }
@@ -48,6 +48,8 @@ export interface ScanOptions {
   byOwner?: boolean;
   /** Skip the AI budget check (paid plan / rushed scan when PLAN_MODE=paid). */
   ignoreBudget?: boolean;
+  /** A paid scan: AI checks go to OpenRouter when a key is set (no neurons), and the budget is ignored. */
+  paid?: boolean;
 }
 
 export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: string, name: string, opts: ScanOptions = {}): Promise<{ repo: RepoRow | null; outcome: ScanOutcome }> {
@@ -157,16 +159,17 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const guardText = `${g.description ?? ""}\n\n${parsed.body}\n\n${readmeText}`;
   const needNeurons = estimateGuardNeurons(guardText) + (images.length ? VISION_NEURONS : 0);
   let deferred = false;
-  report.ai = {};
+  const viaOpenRouter = Boolean(opts.paid && env.OPENROUTER_API_KEY);
+  report.ai = { provider: viaOpenRouter ? "openrouter" : "workers-ai" };
   if (!preFail) {
-    const budget = opts.ignoreBudget ? { ok: true } : await budgetAllows(db, env, needNeurons);
+    const budget = opts.ignoreBudget || viaOpenRouter ? { ok: true } : await budgetAllows(db, env, needNeurons);
     if (!budget.ok) {
       deferred = true;
       report.ai.deferred = true;
       report.warnings.push(`AI content check deferred: today's neuron budget is spent (${needNeurons} needed)`);
     } else {
-      const guard = await llamaGuard(env, guardText);
-      report.ai.guard = { ran: guard.ran, categories: guard.categories, neurons: guard.neurons, error: guard.error };
+      const guard = viaOpenRouter ? await llamaGuardOpenRouter(env, guardText) : await llamaGuard(env, guardText);
+      report.ai.guard = { ran: guard.ran, categories: guard.categories, neurons: guard.neurons, error: guard.error, provider: guard.provider };
       if (guard.neurons) await spendNeurons(db, guard.neurons);
       if (guard.ran) {
         const j = judgeGuard(guard, meta?.contains ?? []);
@@ -176,7 +179,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
       if (images.length) {
         const bytes = await gh.rawBytes(g.owner.login, g.name, g.default_branch, images[0].path);
         if (bytes) {
-          const v = await visionCheck(env, bytes);
+          const v = viaOpenRouter ? await visionCheckOpenRouter(env, bytes, images[0].path.toLowerCase().endsWith(".png") ? "image/png" : images[0].path.toLowerCase().endsWith(".webp") ? "image/webp" : images[0].path.toLowerCase().endsWith(".gif") ? "image/gif" : "image/jpeg") : await visionCheck(env, bytes);
           report.ai.vision = v;
           if (v.neurons) await spendNeurons(db, v.neurons);
           images[0].checked = v.ran ? (v.safe ? "safe" : "unsafe") : "skipped";
@@ -261,8 +264,13 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     listedAt, t, nextCrawl, removed.at, removed.reason,
   ).run();
 
-  // tags: declared + detected
-  const tags: TagRow[] = [...parsed.tags];
+  // tags: declared + detected; community slopbuckets are registered, banned ones stripped
+  let tags: TagRow[] = [...parsed.tags];
+  const declaredBuckets = tags.filter((x) => x.facet === "slopbucket").map((x) => x.value);
+  if (declaredBuckets.length) {
+    const banned = await registerBuckets(db, declaredBuckets, g.full_name);
+    if (banned.length) { report.warnings.push(`slopbucket ${banned.join(", ")} is banned; stripped`); tags = tags.filter((x) => !(x.facet === "slopbucket" && banned.includes(x.value))); }
+  }
   const langNames = languages ? Object.keys(languages) : g.language ? [g.language] : [];
   for (const l of langNames.slice(0, 8)) tags.push({ facet: "language", value: normalizeValue(l), source: "detected", recognized: true });
   for (const topic of g.topics ?? []) tags.push({ facet: "topic", value: normalizeValue(topic), source: "detected", recognized: true });

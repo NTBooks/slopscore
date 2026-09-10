@@ -100,3 +100,23 @@ describe("parseSlopMd", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("slopbucket", () => {
+  it("parses up to three buckets, normalized, with aliases for the key", () => {
+    const r = parseSlopMd(`---
+slopscore: 1
+ai_generated: entirely
+human_touch: light
+content_rating: everyone
+contains: []
+category: [mcp-server]
+status: alpha
+buckets: [CLI, "Weekend Project", vibe-coded]
+---
+`);
+    expect(r.ok).toBe(true);
+    expect(r.meta?.slopbucket).toEqual(["cli", "weekend-project", "vibe-coded"]);
+    expect(r.meta?.category).toEqual(["mcp-server"]);
+    expect(r.tags.filter((t) => t.facet === "slopbucket").length).toBe(3);
+  });
+});

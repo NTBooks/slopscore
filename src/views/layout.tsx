@@ -49,8 +49,8 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
       <body>
         {tags?.length ? (
           <div class="tagbar">
-            {tags.slice(0, 18).map((t) => <a href={`/t/${t.slug}`} class={url.pathname === `/t/${t.slug}` ? "on" : ""} title={t.title}>{t.slug}</a>)}
-            <a href="/t" class="more">all tags »</a>
+            <span class="muted">b/</span>{tags.slice(0, 18).map((t) => <a href={`/b/${t.slug}`} class={url.pathname === `/b/${t.slug}` ? "on" : ""} title={t.title}>{t.slug}</a>)}
+            <a href="/b" class="more">all slopbuckets »</a>
           </div>
         ) : null}
         <header class="top">

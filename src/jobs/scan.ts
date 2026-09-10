@@ -24,8 +24,9 @@ export async function scanQueue(env: Env, limit = PER_RUN): Promise<{ scanned: n
     if (scanned >= limit) break;
     if (gh.throttled()) { await setState(env.DB, "scan:last_note", "github rate limit; waiting"); break; }
     const paid = r.priority_at != null;
-    const budget = await budgetAllows(env.DB, env, MIN_NEURONS);
-    if (!budget.ok && !(paid && env.PLAN_MODE === "paid")) {
+    const paidPath = paid && (env.PLAN_MODE === "paid" || Boolean(env.OPENROUTER_API_KEY));
+    const budget = paidPath ? { ok: true } : await budgetAllows(env.DB, env, MIN_NEURONS);
+    if (!budget.ok) {
       // mark the free line as waiting (once), keep the rows for tomorrow
       if (r.queue_reason !== "ai-budget") {
         await env.DB.prepare("UPDATE repos SET queue_reason = 'ai-budget' WHERE id = ?").bind(r.id).run();
@@ -33,7 +34,7 @@ export async function scanQueue(env: Env, limit = PER_RUN): Promise<{ scanned: n
       }
       continue;
     }
-    const res = await scanRepo(env.DB, env, gh, r.owner, r.name, { ignoreBudget: paid && env.PLAN_MODE === "paid" });
+    const res = await scanRepo(env.DB, env, gh, r.owner, r.name, { ignoreBudget: paid && env.PLAN_MODE === "paid", paid: paidPath });
     scanned++;
     const status = "error" in res.outcome ? `missing: ${res.outcome.error}` : res.outcome.status;
     if (!("error" in res.outcome) && res.outcome.deferred) deferred++;

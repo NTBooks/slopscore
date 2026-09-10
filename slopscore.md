@@ -17,6 +17,7 @@ data: [local-only]
 needs: [github-oauth-app]
 domain: [leaderboards, ai-slop]
 tags: [dogfood, cloudflare-workers, d1]
+slopbucket: [web-app, devtools, vibe-coded]
 maintainers: [NTBooks]
 ---
 ## The site lists itself

@@ -77,7 +77,7 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   if (o.tier) { where.push("r.tier = ?"); params.push(o.tier); }
   if (o.priority === true) where.push("r.priority_at IS NOT NULL");
   if (o.priority === false) where.push("r.priority_at IS NULL");
-  if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
+  if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('slopbucket','category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
   const win = SORT_WINDOWS[o.t ?? "all"] ?? 0;
   if (win && (o.sort === "top" || o.sort === "controversial" || o.sort === "new")) {
     where.push("r.listed_at >= ?"); params.push(now() - win);
@@ -204,17 +204,32 @@ export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, val
   return { ...repo, up, down, score, hot: h, controversy: c, ring };
 }
 
-export async function curatedTags(db: D1Database): Promise<{ slug: string; title: string; blurb: string | null; n: number }[]> {
-  const r = await db.prepare(
-    `SELECT t.slug, t.title, t.blurb,
-       (SELECT count(DISTINCT rt.repo_id) FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND rt.facet IN ('category','tags','domain','topic') AND rt.value = t.slug) AS n
-     FROM tags t WHERE t.curated = 1 ORDER BY t.sort, t.slug`,
-  ).all<{ slug: string; title: string; blurb: string | null; n: number }>();
+export interface Bucket { slug: string; title: string; blurb: string | null; curated: number; banned: number; banned_reason: string | null; created_by: string | null; n: number }
+
+const BUCKET_COUNT = "(SELECT count(DISTINCT rt.repo_id) FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND rt.facet IN ('slopbucket','category','tags','domain','topic') AND rt.value = t.slug)";
+
+/** Curated, unbanned buckets for the bucket bar and the rail. */
+export async function curatedTags(db: D1Database): Promise<Bucket[]> {
+  const r = await db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t WHERE t.curated = 1 AND t.banned = 0 ORDER BY t.sort, t.slug`).all<Bucket>();
   return r.results ?? [];
 }
 
-export async function getTag(db: D1Database, slug: string): Promise<{ slug: string; title: string; blurb: string | null; curated: number } | null> {
-  return db.prepare("SELECT slug, title, blurb, curated FROM tags WHERE slug = ?").bind(slug.toLowerCase()).first();
+/** Every bucket (for /b and /mod): curated first, then community buckets by size, banned last. */
+export async function allBuckets(db: D1Database): Promise<Bucket[]> {
+  const r = await db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t ORDER BY t.banned ASC, t.curated DESC, n DESC, t.sort, t.slug`).all<Bucket>();
+  return r.results ?? [];
+}
+
+export async function getTag(db: D1Database, slug: string): Promise<Bucket | null> {
+  return db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t WHERE t.slug = ?`).bind(slug.toLowerCase()).first<Bucket>();
+}
+
+/** Registers buckets a repo declared (community buckets are uncurated); returns the banned ones so the caller can strip them. */
+export async function registerBuckets(db: D1Database, slugs: string[], createdBy: string): Promise<string[]> {
+  if (!slugs.length) return [];
+  await db.batch(slugs.map((s) => db.prepare("INSERT OR IGNORE INTO tags (slug, title, blurb, curated, sort, created_by) VALUES (?, ?, NULL, 0, 500, ?)").bind(s, s.replace(/-/g, " "), createdBy)));
+  const banned = await db.prepare(`SELECT slug FROM tags WHERE banned = 1 AND slug IN (${slugs.map(() => "?").join(",")})`).bind(...slugs).all<{ slug: string }>();
+  return (banned.results ?? []).map((b) => b.slug);
 }
 
 // ---- comments ----
@@ -276,7 +291,7 @@ export function parseJson<T>(s: string | null | undefined, fallback: T): T {
 }
 
 /** Scan capacity for the public queue + stats pages. Free mode: Workers AI's 10k neurons/day is the ceiling. */
-export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEURON_BUDGET: string }) {
+export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEURON_BUDGET: string; OPENROUTER_API_KEY?: string }) {
   const today = new Date().toISOString().slice(0, 10);
   const [used, depth] = await Promise.all([
     db.prepare("SELECT value FROM crawl_state WHERE key = ?").bind(`ai_neurons:${today}`).first<{ value: string }>(),
@@ -289,7 +304,8 @@ export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEU
   return {
     mode, date: today, budget, neurons_used: neuronsUsed, neurons_left: Math.max(0, budget - neuronsUsed),
     scans_per_day: Math.floor(budget / perScan), scans_left_today: Math.floor(Math.max(0, budget - neuronsUsed) / perScan),
-    paid_scans_unlimited: mode === "paid",
+    paid_scans_unlimited: mode === "paid" || Boolean(env.OPENROUTER_API_KEY),
+    paid_scan_provider: env.OPENROUTER_API_KEY ? "openrouter" : mode === "paid" ? "workers-ai (metered)" : "workers-ai (same free ceiling)",
     queue: { paid: depth?.paid ?? 0, free: depth?.free ?? 0, deferred: depth?.deferred ?? 0 },
     limits: mode === "free"
       ? { workers_requests_per_day: 100_000, d1_reads_per_day: 5_000_000, d1_writes_per_day: 100_000, ai_neurons_per_day: 10_000, crons: 5 }

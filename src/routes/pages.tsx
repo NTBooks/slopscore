@@ -16,6 +16,7 @@ import { RepoPage, type RepoPageData } from "../views/repo";
 import { feedMd, repoMd } from "../views/md";
 import { requireUser, body, wantsJson } from "../middleware";
 import { renderMarkdown, escapeHtml } from "../lib/markdown";
+import { allBuckets } from "../lib/db";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
 import { checkOne } from "../jobs/recrawl";
@@ -140,36 +141,46 @@ pages.get("/f/:facet/:value", async (c) => {
   });
 });
 
-pages.get("/t", async (c) => {
+pages.get("/t", (c) => c.redirect("/b"));
+pages.get("/t/:tag", (c) => c.redirect(`/b/${c.req.param("tag")}`));
+
+pages.get("/b", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
-  const tags = await curatedTags(c.env.DB);
+  const all = await allBuckets(c.env.DB);
+  const tags = all.filter((b) => b.curated && !b.banned);
+  const community = all.filter((b) => !b.curated && !b.banned);
+  const banned = all.filter((b) => b.banned);
   const free = await facetCounts(c.env.DB, "tags", 60);
-  return respond(c, { tags, free }, {
-    json: (d) => ({ curated: d.tags, free: d.free }),
-    md: (d) => ["# Tags", "", "Subreddit-style feeds. A repo lands in s/<tag> when any of its category, tags, domain, or GitHub topics match.", "", ...d.tags.map((t) => `- [s/${t.slug}](/t/${t.slug}) — ${t.title}: ${t.blurb ?? ""} (${t.n})`), "", "## Free tags", "", d.free.map((f) => `[${f.value}](/t/${f.value}) (${f.n})`).join(" · ")].join("\n"),
+  return respond(c, { tags, community, banned, free }, {
+    json: (d) => ({ curated: d.tags, community: d.community, banned: d.banned.map((b) => ({ slug: b.slug, reason: b.banned_reason })), free_tags: d.free, declare: "slopbucket: [cli, devtools]  # up to 3; unknown buckets are created" }),
+    md: (d) => ["# Slopbuckets", "", "Subreddit-style feeds. Declare up to three in slopscore.md with `slopbucket: [cli, devtools]`; unknown buckets are created on the spot. A repo also lands in a bucket when its category, tags, domain, or GitHub topics match.", "", "## Curated", "", ...d.tags.map((t) => `- [b/${t.slug}](/b/${t.slug}) — ${t.title}: ${t.blurb ?? ""} (${t.n})`), "", "## Community", "", d.community.map((t) => `[b/${t.slug}](/b/${t.slug}) (${t.n})`).join(" · ") || "_none yet_", "", "## Banned", "", d.banned.map((t) => `${t.slug} — ${t.banned_reason}`).join("; ") || "_none_", "", "## Free tags", "", d.free.map((f) => `[${f.value}](/b/${f.value}) (${f.n})`).join(" · ")].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "Tags — SlopScore" }} user={user} url={url} tags={d.tags}>
+      <Layout meta={{ title: "Slopbuckets — SlopScore" }} user={user} url={url} tags={d.tags}>
         <section class="wrap narrow" style="padding:0">
-          <h2>Tags</h2>
-          <p class="muted">Subreddit-style feeds. A repo lands in <code>s/tag</code> when any of its category, tags, domain, or GitHub topics match. Curated tags are seeded; everything else is whatever slopsmiths wrote in <code>tags:</code>.</p>
-          <table class="list"><tr><th>tag</th><th>what goes here</th><th>slop</th></tr>
-            {d.tags.map((t) => <tr><td><a href={`/t/${t.slug}`}><strong>s/{t.slug}</strong></a></td><td>{t.title} <span class="muted">— {t.blurb}</span></td><td>{t.n}</td></tr>)}
+          <h2>Slopbuckets</h2>
+          <p class="muted">Subreddit-style feeds. Pick up to three in your <code>slopscore.md</code> with <code>slopbucket: [cli, devtools]</code>, or invent one and it is created on the spot. A repo also lands in a bucket when its category, tags, domain, or GitHub topics match. Buckets that get out of control get banned by a mod, in public.</p>
+          <table class="list"><tr><th>bucket</th><th>what goes here</th><th>slop</th></tr>
+            {d.tags.map((t) => <tr><td><a href={`/b/${t.slug}`}><strong>b/{t.slug}</strong></a></td><td>{t.title} <span class="muted">— {t.blurb}</span></td><td>{t.n}</td></tr>)}
           </table>
+          <h3>Community buckets</h3>
+          <p>{d.community.length ? d.community.map((t) => <a class="chip" href={`/b/${t.slug}`}>{t.slug} ({t.n})</a>) : <span class="muted">None yet. Declare one and it appears here.</span>}</p>
+          {d.banned.length ? <><h3>Banned</h3><p>{d.banned.map((t) => <span class="chip bad" title={t.banned_reason ?? ""}>{t.slug}</span>)}</p></> : null}
           <h3>Free tags</h3>
-          <p>{d.free.map((f) => <a class="chip" href={`/t/${f.value}`}>{f.value} ({f.n})</a>)}</p>
+          <p>{d.free.map((f) => <a class="chip" href={`/b/${f.value}`}>{f.value} ({f.n})</a>)}</p>
         </section>
       </Layout>
     ),
   });
 });
 
-pages.get("/t/:tag", async (c) => {
+pages.get("/b/:tag", async (c) => {
   const slug = c.req.param("tag").toLowerCase();
   const tag = await getTag(c.env.DB, slug);
+  if (tag?.banned) return c.text(`b/${slug} is banned: ${tag.banned_reason ?? "out of control"}. See /log.`, 404);
   return feedPage(c, {
-    title: `s/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `s/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: sortParam(c.req.query("sort") ?? "hot"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
-    tag: slug, baseUrl: `/t/${slug}`, intro: tag?.blurb ?? `Everything tagged ${slug} by category, tag, domain, or GitHub topic.`, extra: { tag: tag ?? { slug, curated: 0 } },
-    empty: `No slop in s/${slug} yet. Be the first slopsmith.`,
+    title: `b/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: sortParam(c.req.query("sort") ?? "hot"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    tag: slug, baseUrl: `/b/${slug}`, intro: tag?.blurb ?? `Everything in the ${slug} bucket, by declared slopbucket, category, tag, domain, or GitHub topic.`, extra: { bucket: tag ?? { slug, curated: 0 } },
+    empty: `No slop in b/${slug} yet. Be the first slopsmith: slopbucket: [${slug}]`,
   });
 });
 
@@ -203,7 +214,7 @@ pages.get("/queue", async (c) => {
     json: (d) => ({ capacity: d.cap, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
     md: (d) => [
       "# In the trough", "", intro, "",
-      `**Mode: ${d.cap.mode}.** AI budget today ${d.cap.neurons_used}/${d.cap.budget} neurons ≈ ${d.cap.scans_left_today} of ${d.cap.scans_per_day} free scans left. Paid scans: ${d.cap.paid_scans_unlimited ? "unlimited (metered)" : "priority only; same daily ceiling until the site moves to a paid plan"}.`, "",
+      `**Mode: ${d.cap.mode}.** AI budget today ${d.cap.neurons_used}/${d.cap.budget} neurons ≈ ${d.cap.scans_left_today} of ${d.cap.scans_per_day} free scans left. Paid scans: ${d.cap.paid_scans_unlimited ? `unlimited via ${d.cap.paid_scan_provider}` : "priority only; same daily ceiling until the site moves to a paid plan"}.`, "",
       "## Jumpers (paid, FIFO)", "", ...(d.paid.length ? d.paid.map((r, i) => `${i + 1}. [${r.full_name}](/r/${r.full_name}) — paid ${isoDate(r.priority_at)}`) : ["_nobody has paid to jump. The line is honest today._"]), "",
       "## Free line (FIFO)", "", ...(d.free.length ? d.free.map((r, i) => `${(d.page - 1) * 25 + i + 1}. [${r.full_name}](/r/${r.full_name}) — ${r.queue_reason ?? "awaiting-scan"} · found ${ago(r.first_seen)}`) : ["_empty. The inspector is bored._"]), "",
       "## Needs a human or was rejected", "", ...d.other.map((r) => `- [${r.full_name}](/r/${r.full_name}) — **${r.status}**${r.reject_reason ? `: ${r.reject_reason}` : r.queue_reason ? ` (${r.queue_reason})` : ""}`),
@@ -217,7 +228,7 @@ pages.get("/queue", async (c) => {
             <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
             <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons</div>
             <div><span class="label">free scans left today</span><strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day}</div>
-            <div><span class="label">paid scans</span><strong>{d.cap.paid_scans_unlimited ? "unlimited, metered" : "front of the line, same ceiling"}</strong></div>
+            <div><span class="label">paid scans</span><strong>{d.cap.paid_scans_unlimited ? "unlimited" : "front of the line, same ceiling"}</strong> <span class="muted">via {d.cap.paid_scan_provider}</span></div>
             <div><span class="label">daily limits</span><span>{d.cap.limits.workers_requests_per_day ? `${(d.cap.limits.workers_requests_per_day / 1000).toFixed(0)}k requests · ` : "unlimited requests · "}{d.cap.limits.ai_neurons_per_day ? `${(d.cap.limits.ai_neurons_per_day / 1000).toFixed(0)}k neurons · ` : "metered AI · "}{(d.cap.limits.d1_writes_per_day / 1000).toFixed(0)}k D1 writes</span></div>
             <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
             <p class="muted small">Budget resets at 00:00 UTC. When "waiting on budget" grows day over day, the free tier is the bottleneck and it's time to pay for a bigger trough. <a href="/stats">History</a>.</p>
@@ -364,7 +375,7 @@ pages.get("/spec", (c) => {
     "## Optional facets (unknown values never reject; they're kept as free tags marked unrecognized)", "",
     ...["title, tagline, demo_url — override GitHub", `built_with: ${v.controlled.built_with.join(", ")}`, "models: free", `interface: ${v.controlled.interface.join(", ")}`, "frameworks: free (aliases normalized: next.js→nextjs)", `platforms: ${v.controlled.platforms.join(", ")}`,
       `audience: ${v.controlled.audience.join(", ")}`, `data: ${v.controlled.data.join(", ")}`, "needs: free (external accounts/keys)", "domain: free (subject matter)", "tags: free, ≤ 20; GitHub topics are merged in as detected",
-      "images: explicit repo-relative image paths (else slopscore-1.png … slopscore-6.png at the root are auto-discovered)", "maintainers: GitHub logins who get owner controls on the site (the only way for an org-owned repo)", "unlisted: true — delist on next check without logging in", "x-anything: preserved verbatim, never validated"].map((x) => `- ${x}`), "",
+      "slopbucket: up to 3 buckets (subreddit-style feeds at /b); unknown ones are created, banned ones stripped", "images: explicit repo-relative image paths (else slopscore-1.png … slopscore-6.png at the root are auto-discovered)", "maintainers: GitHub logins who get owner controls on the site (the only way for an org-owned repo)", "unlisted: true — delist on next check without logging in", "x-anything: preserved verbatim, never validated"].map((x) => `- ${x}`), "",
     "## Body", "", "Optional markdown after the frontmatter, ≤ 4000 chars: the pitch. If empty, the README is the pitch.", "",
     "## Aliases", "", ...Object.entries(v.aliases).map(([k, val]) => `- ${k} → ${val}`), "",
     "## Search operators", "", Object.keys(v.search_operators).map((k) => `${k}:`).join(" "), " — prefix with `-` to exclude. Quotes for phrases.", "",
@@ -381,6 +392,12 @@ pages.get("/about", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const md = [
     "# About SlopScore", "", `**${SITE.tagline}**`, "", SITE.manifesto, "",
+    "## The problem", "",
+    "Anyone can now generate a working-looking repo in an afternoon. Most of it is never run by anyone but its author, and the places that used to sort software (stars, Hacker News, Product Hunt) either ignore it or drown in it. Nobody wants to admit their project was generated, so the disclosures that would let you judge it are missing, and the good stuff is indistinguishable from the pile.", "",
+    "SlopScore flips the incentive. You *brag* that it's slop. You disclose how much was generated, how much a human touched, and what's inside, in a six-line file. Then graders, human and otherwise, tell you whether it actually works. The disclosures are the price of admission; the leaderboard is the reward.", "",
+    "## Meet Schnitzel", "",
+    "The pig is Schnitzel. He runs the trough. He is not disgusted by slop; he is a connoisseur of it, and he has opinions. The slop on his chin is from lunch. He grades with a clipboard, sniffs out every `slopscore.md` on GitHub, and stamps the winners *Certified Slop*. If your repo is rejected, it's because Schnitzel found the paperwork lacking, never because he found the slop lacking. He has never found the slop lacking.", "",
+    "## What it is", "",
     "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits. The [source](https://github.com/NTBooks/slopscore) is public.", "",

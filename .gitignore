@@ -4,4 +4,3 @@ node_modules/
 .seed.sql
 dist/
 *.log
-MARKETING.md

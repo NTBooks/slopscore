@@ -72,7 +72,7 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
         <div class="meta">
           {showStatus ? <span class={`chip ${repo.status === "rejected" ? "bad" : "warn"}`}>{repo.status}{repo.queue_reason ? ` · ${repo.queue_reason}` : ""}</span> : null}{" "}
           {repo.status === "listed" ? <>listed {ago(repo.listed_at)}</> : <>found {ago(repo.first_seen)}</>} by <a href={`/u/${repo.owner}`}>{repo.owner}</a>
-          {gh.owner_avatar ? null : null} · <a href={repoUrl(repo)}>{repo.comment_count} comments</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
+          {gh.owner_avatar ? null : null} · <a href={`${repoUrl(repo)}#comments`}>{repo.comment_count} comments</a> · <a href={repoUrl(repo)}>details</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
           {repo.status === "rejected" && repo.reject_reason ? <div class="muted">✗ {repo.reject_reason}</div> : null}
           {user && isOwnerOf(repo, user.login, user.id) ? (
             <div class="ownerline">

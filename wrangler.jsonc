@@ -31,7 +31,8 @@
         { "binding": "DB", "database_name": "slopscore-test", "database_id": "65264eba-0c77-477d-b4b6-80bff9b6e032", "migrations_dir": "migrations" }
       ],
       "ai": { "binding": "AI" },
-      "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
+      // The free plan allows 5 cron triggers per account: production takes 4, test gets one combined tick.
+      "triggers": { "crons": ["*/30 * * * *"] },
       "vars": {
         "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",

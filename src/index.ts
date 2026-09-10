@@ -92,6 +92,11 @@ export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<un
       case "*/5 * * * *": result = await scanQueue(env); break;
       case "*/10 * * * *": result = await recrawl(env); break;
       case "5 0 * * *": result = await awards(env); break;
+      case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
+        const d = new Date();
+        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: d.getUTCHours() === 0 && d.getUTCMinutes() < 30 ? await awards(env) : "skipped" };
+        break;
+      }
       default: result = { note: `unknown cron ${cron}` };
     }
   } catch (e) {

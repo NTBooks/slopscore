@@ -4,3 +4,4 @@ node_modules/
 .seed.sql
 dist/
 *.log
+scripts/secrets.bat

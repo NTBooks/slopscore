@@ -8,18 +8,44 @@
 // Falls back to running the query when the cache is unavailable (tests, local dev without a cache).
 
 const VERSION_KEY = "data_version";
+const NAMESPACE_KEY = "cache_namespace";
 const VERSION_MEMO_MS = 5000;
 const ORIGIN = "https://cache.slopscore.internal";
 
 let memo: { v: string; at: number } | null = null;
 
+/**
+ * The data version, prefixed by a per-database random namespace.
+ *
+ * The Workers Cache API is shared by every Worker on the account in a data centre, so a key must never
+ * collide across environments: without the namespace, production once served test's cached feed.
+ * The namespace is minted once per database (INSERT OR IGNORE) and lives in crawl_state with the version.
+ */
 export async function dataVersion(db: D1Database): Promise<string> {
   if (memo && Date.now() - memo.at < VERSION_MEMO_MS) return memo.v;
-  const r = await db.prepare("SELECT value FROM crawl_state WHERE key = ?").bind(VERSION_KEY).first<{ value: string }>();
-  const v = r?.value ?? "0";
+  let rows = await readState(db);
+  if (!rows.ns) {
+    await db.prepare("INSERT OR IGNORE INTO crawl_state (key, value) VALUES (?, ?)").bind(NAMESPACE_KEY, crypto.randomUUID().slice(0, 12)).run();
+    rows = await readState(db);
+  }
+  const v = `${rows.ns}/${rows.version}`;
   memo = { v, at: Date.now() };
   return v;
 }
+
+async function readState(db: D1Database): Promise<{ ns: string | null; version: string }> {
+  const r = await db.prepare("SELECT key, value FROM crawl_state WHERE key IN (?, ?)").bind(VERSION_KEY, NAMESPACE_KEY).all<{ key: string; value: string }>();
+  let ns: string | null = null;
+  let version = "0";
+  for (const row of r.results ?? []) {
+    if (row.key === NAMESPACE_KEY) ns = row.value;
+    if (row.key === VERSION_KEY) version = row.value;
+  }
+  return { ns, version };
+}
+
+/** Forget the memoised version (tests, which swap databases faster than the memo expires). */
+export function resetVersionMemo(): void { memo = null; }
 
 /** Call after any write a reader could notice. Cheap: one upsert. */
 export async function markDirty(db: D1Database): Promise<void> {

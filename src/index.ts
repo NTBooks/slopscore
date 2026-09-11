@@ -11,6 +11,7 @@ import { feeds } from "./routes/feeds";
 import { mcp } from "./routes/mcp";
 import { pay } from "./routes/pay";
 import { contact } from "./routes/contact";
+import { takedown } from "./routes/takedown";
 import { scan } from "./routes/scan";
 import { orphanage } from "./routes/orphanage";
 import { setFlags } from "./lib/flags";
@@ -19,14 +20,27 @@ import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
 import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
+import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl } from "./jobs/trawl";
+import { runCritics } from "./jobs/critics";
 import { recordCron } from "./lib/crawlclock";
+import { indexNowKey } from "./lib/indexnow";
 
 const app = new Hono<AppEnv>();
+
+// One host, one copy. www and the apex both resolve to this worker; letting both answer splits every
+// link and every crawl budget in two, so www redirects permanently to the canonical apex.
+app.use("*", async (c, next) => {
+  const url = new URL(c.req.url);
+  if (!url.hostname.startsWith("www.")) return next();
+  url.hostname = url.hostname.slice(4);
+  return c.redirect(url.toString(), 301);
+});
 
 app.use("*", loadUser);
 app.route("/auth", auth);
 app.route("/api/v1", api);
 app.route("/r", owner);
+app.route("/r", takedown);
 app.route("/mod", mod);
 app.route("/", feeds);
 app.route("/mcp", mcp);
@@ -37,7 +51,40 @@ app.route("/orphanage", orphanage);
 app.route("/home", orphanage);
 app.route("/", pages);
 
-app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
+app.get("/robots.txt", (c) => {
+  const origin = new URL(c.req.url).origin;
+  // Disallowed paths are either side-effecting (/ping runs a scan), private (/mod, /auth, /me),
+  // or an endless duplicate of the feed (/search). Everything a reader would want stays open.
+  const rules = [
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /mod",
+    "Disallow: /auth",
+    "Disallow: /me",
+    "Disallow: /ping/",
+    "Disallow: /search",
+    "Disallow: /badge/",
+    "",
+    "# Agents: read /llms.txt and /api/v1/digest instead of crawling page by page.",
+    "User-agent: GPTBot",
+    "User-agent: ClaudeBot",
+    "User-agent: Claude-Web",
+    "User-agent: PerplexityBot",
+    "User-agent: Google-Extended",
+    "User-agent: CCBot",
+    "User-agent: Applebot-Extended",
+    "Allow: /",
+    "",
+    `Sitemap: ${origin}/sitemap.xml`,
+  ];
+  return c.text(rules.join("\n") + "\n", 200, { "cache-control": "public, max-age=3600" });
+});
+
+// IndexNow ownership proof: the engines fetch /{key}.txt and expect the key back as the whole body.
+app.get("/:file{[A-Za-z0-9-]{8,128}\\.txt}", (c, next) => {
+  const key = indexNowKey(c.env);
+  return key && c.req.param("file") === `${key}.txt` ? c.text(key) : next();
+});
 
 app.get("/llms.txt", (c) => {
   const origin = new URL(c.req.url).origin;
@@ -57,6 +104,7 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 - ${origin}/tools       which AI tool produces the best slop (mean score by built_with)
 - ${origin}/r/{owner}/{repo}   a listing: disclosures, scan report, comments, awards
 - ${origin}/u/{login}   a user's repos
+- ${origin}/me          my repos (login): everything you own or maintain, in any status
 - ${origin}/b            slopbucket directory (subreddit-style); ${origin}/b/{bucket} a bucket feed. Declare up to 3 with slopbucket: [...] in slopscore.md; unknown buckets are created
 - ${origin}/f/{facet}/{value}  facet feeds, e.g. /f/built_with/claude-code, /f/language/python
 - ${origin}/search?q=   full-text + operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner:  (prefix - to exclude)
@@ -67,7 +115,7 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 
 ## Formats
 Every HTML page is also available as JSON and Markdown: append .json or .md to the path, or send Accept: application/json / text/markdown.
-Stable API: ${origin}/api/v1/repos, /api/v1/repos/{owner}/{repo}, /api/v1/search?q=, /api/v1/facets?facet=, /api/v1/vocab, /api/v1/leaderboard?facet=built_with. OpenAPI: ${origin}/openapi.json. MCP server: ${origin}/mcp.
+Stable API: ${origin}/api/v1/digest (every listed repo in one cached file; read it instead of crawling), ${origin}/api/v1/repos, /api/v1/repos/{owner}/{repo}, /api/v1/search?q=, /api/v1/facets?facet=, /api/v1/vocab, /api/v1/leaderboard?facet=built_with. OpenAPI: ${origin}/openapi.json. MCP server: ${origin}/mcp.
 
 ## Writing (votes, comments, reports)
 Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device_code, user_code, verification_uri, interval}; show the user the code; POST ${origin}/auth/device/poll {"device_code"} every 'interval' seconds until {token} (202 while pending); then
@@ -75,6 +123,9 @@ Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device
   POST /r/{owner}/{repo}/comments  {"body": "markdown", "parent_id"?: number}
   POST /r/{owner}/{repo}/report    {"reason": "objectionable|undisclosed|malware|spam|not-slop|other", "note"?: string}
 Votes and comments return 409 until a repo is listed. Without a login, POST /vote counts as an anonymous "crowd" vote: shown next to the score, capped by that repo's visitors, never part of ranking or awards. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
+
+## Trawled listings
+Repos with "source": "trawl" never opted in. The Cap'm picked them by reading their READMEs (the owner says it was vibe coded or built with an AI tool; permissive license) and wrote their paperwork from GitHub data. They sort below opted-in repos, stay out of feeds and the sitemap, and never win awards. Owners replace the paperwork by committing slopscore.md and pressing Refresh, or remove the listing. Anyone may POST /r/{owner}/{repo}/takedown {"message"} without a login; the listing comes down right away.
 
 ## Jump the line (paid, optional)
 Agents: POST ${origin}/r/{owner}/{repo}/rush returns 402 with an x402 'accepts' block (USDC on Base); pay and retry with X-PAYMENT. Humans: log in as the owner and press "Jump the line · $5" (Stripe). Both buy the wait only, never a gate, vote, or award; every payment is in the public log and the ledger on /stats.
@@ -104,7 +155,7 @@ app.onError((err, c) => {
   return c.text(`500. The trough overflowed: ${err.message}`, 500);
 });
 
-export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<unknown> {
+export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?: number; repo?: string; reason?: string; release?: number; dry?: boolean; auto?: number } = {}): Promise<unknown> {
   setFlags(env.MOD_FLAGS);
   const started = Date.now();
   let result: unknown;
@@ -112,12 +163,17 @@ export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<un
     await recordCron(env.DB, cron).catch(() => {}); // lets /queue show when each job runs next
     switch (cron) {
       case "*/15 * * * *": result = await sweep(env); break;
-      case "*/5 * * * *": result = await scanQueue(env); break;
+      case "*/5 * * * *": result = await scanQueue(env, opts.n ?? undefined); break;
       case "*/10 * * * *": result = await recrawl(env); break;
-      case "5 0 * * *": result = await awards(env); break;
+      case "5 0 * * *": result = { awards: await awards(env), trawl: await trawlDaily(env), critics: await runCritics(env) }; break;
+      // manual only: &release=N moves N backlog picks into the queue; &repo=owner/name[&reason=...] hand-picks one; &n=N runs the keyword search
+      case "trawl": result = opts.release ? await releaseBacklog(env, opts.release) : opts.auto ? await autoTrawl(env, opts.auto) : opts.repo ? await trawlOne(env, opts.repo, opts.reason) : await trawl(env, opts.n); break;
+      // manual: &n=N repos per critic this run, &dry=1 to read and score without voting or recording
+      case "critics": result = await runCritics(env, { n: opts.n, dry: opts.dry }); break;
       case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
         const d = new Date();
-        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: d.getUTCHours() === 0 && d.getUTCMinutes() < 30 ? await awards(env) : "skipped" };
+        const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;
+        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: daily ? await awards(env) : "skipped", trawl: daily ? await trawlDaily(env) : "skipped", critics: daily ? await runCritics(env) : "skipped" };
         break;
       }
       default: result = { note: `unknown cron ${cron}` };

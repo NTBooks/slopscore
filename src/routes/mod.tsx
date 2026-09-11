@@ -14,6 +14,8 @@ import { sweep } from "../jobs/sweep";
 import { scanQueue } from "../jobs/scan";
 import { recrawl } from "../jobs/recrawl";
 import { getState, setState } from "../jobs/stats";
+import { retireTrawled } from "../lib/virtual";
+import { addToBacklog, releaseBacklog, type CuratedInput } from "../jobs/trawl";
 
 export const mod = new Hono<AppEnv>();
 
@@ -42,6 +44,8 @@ mod.get("/", async (c) => {
   const flash = c.req.query("flash");
   const clock = await crawlClock(db);
   const messages = await db.prepare("SELECT id, login, subject, body, repo_full_name, created_at, read_at, reply FROM messages WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all<{ id: number; login: string; subject: string; body: string; repo_full_name: string | null; created_at: number; read_at: number | null; reply: string | null }>().then((r) => r.results ?? []);
+  const backlog = await db.prepare("SELECT sum(CASE WHEN released_at IS NULL THEN 1 ELSE 0 END) AS waiting, sum(CASE WHEN outcome = 'queued' THEN 1 ELSE 0 END) AS released, sum(CASE WHEN outcome LIKE 'skipped:%' THEN 1 ELSE 0 END) AS refused FROM trawl_backlog").first<{ waiting: number | null; released: number | null; refused: number | null }>();
+  const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; created_at: number; status: string | null }>().then((r) => r.results ?? []);
   const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
       `SELECT rp.id, rp.target_type, rp.target_id, rp.reason, rp.note, rp.created_at, u.login AS reporter,
@@ -127,6 +131,27 @@ mod.get("/", async (c) => {
               <form method="post" action={`/mod/message/${m.id}`} class="inline">{csrf}<input type="text" name="note" placeholder="private note (optional)" maxlength={300} /> <button class="btn secondary" name="action" value="resolve">resolve</button></form>
               {act("ban", "ban sender", `/mod/message/${m.id}`, "btn secondary", "Ban this account?")}
               <a class="muted" href={`https://github.com/${m.login}`} target="_blank" rel="noopener">reply on GitHub ↗</a>
+            </div>
+          </div>
+        ))}
+
+        <h3 id="backlog">Truffle backlog <span class="muted">· hand-vetted picks · {backlog?.waiting ?? 0} waiting, {backlog?.released ?? 0} released, {backlog?.refused ?? 0} refused</span></h3>
+        <p class="muted small">The 00:05 UTC tick releases TRAWL_PER_DAY of these into the scan queue. Agents POST the same JSON to <code>/mod/trawl/import</code> with an admin bearer token.</p>
+        <form method="post" action="/mod/trawl/import" class="commentform">{csrf}
+          <textarea name="picks" placeholder='[{"repo": "owner/name", "reason": "its README says it was vibe coded with Claude Code"}]'></textarea>
+          <div><label>release now <input type="number" name="release_now" value="0" min="0" max="50" style="width:5em" /></label> <button class="btn secondary">add to backlog</button></div>
+        </form>
+        <form method="post" action="/mod/trawl/release" class="inline">{csrf}<input type="number" name="n" value="10" min="1" max="50" style="width:5em" /> <button class="btn secondary">release from backlog now</button></form>
+
+        <h3 id="takedowns">Takedowns <span class="muted">· trawled listings · {takedowns.length} open</span></h3>
+        {takedowns.length === 0 ? <div class="empty">No takedown requests.</div> : null}
+        {takedowns.map((t) => (
+          <div class="modcard" id={`td${t.id}`}>
+            <div><a href={`/r/${t.full_name}`}>{t.full_name}</a> · {t.outcome === "delisted" ? <span class="chip ok">removed automatically</span> : <span class="chip warn">queued: daily limit hit</span>} · from {t.login ? <a href={`/u/${t.login}`}>{t.login}</a> : "someone not logged in"}{t.contact ? <> · contact: {t.contact}</> : null} · {ago(t.created_at)}</div>
+            <blockquote>{t.message}</blockquote>
+            <div class="actions">
+              {t.outcome === "queued" && t.status !== "delisted" ? act("apply", "remove the listing", `/mod/takedown/${t.id}`, "btn") : null}
+              {act("resolve", "resolve", `/mod/takedown/${t.id}`)}
             </div>
           </div>
         ))}
@@ -319,6 +344,58 @@ mod.post("/message/:id", requireUser, async (c) => {
   // messages are private; the public log only records that one was handled, never the content
   await logAction(db, { actor: admin, role: "admin", action: "message-resolved", targetType: "message", targetId: id });
   return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod");
+});
+
+// ---- truffle backlog: hand-vetted picks, posted as JSON by an agent holding an admin bearer, or pasted in the form above ----
+mod.post("/trawl/import", requireUser, async (c) => {
+  const admin = c.get("user")!.login;
+  let picks: unknown;
+  let releaseNow = 0;
+  if ((c.req.header("content-type") ?? "").includes("application/json")) {
+    const j = (await c.req.json().catch(() => ({}))) as { picks?: unknown; release_now?: unknown };
+    picks = j.picks; releaseNow = Number(j.release_now ?? 0);
+  } else {
+    const b = await body(c);
+    try { picks = JSON.parse(b.picks || "[]"); } catch { return c.json({ error: "picks must be a JSON array of {repo, reason}" }, 400); }
+    releaseNow = Number(b.release_now || 0);
+  }
+  if (!Array.isArray(picks)) return c.json({ error: "picks must be an array of {repo, reason}" }, 400);
+  const added = await addToBacklog(c.env, picks as CuratedInput[], admin);
+  const released = releaseNow > 0 ? await releaseBacklog(c.env, releaseNow) : null;
+  const msg = `Backlog: ${added.added.length} added, ${added.duplicate.length} already known, ${added.invalid.length} invalid.${released ? ` Released ${released.queued.length} into the queue, refused ${released.skipped.length}; ${released.left} waiting.` : ""}`;
+  await logAction(c.env.DB, { actor: admin, role: "admin", action: "trawl-import", targetType: "crawler", targetId: 0, label: "backlog", note: msg });
+  return wantsJson(c) ? c.json({ ...added, released }) : c.redirect(`/mod?flash=${encodeURIComponent(msg)}#backlog`);
+});
+
+mod.post("/trawl/release", requireUser, async (c) => {
+  const admin = c.get("user")!.login;
+  const ct = c.req.header("content-type") ?? "";
+  const n = ct.includes("application/json") ? Number(((await c.req.json().catch(() => ({}))) as { n?: unknown }).n ?? 10) : Number((await body(c)).n || 10);
+  const res = await releaseBacklog(c.env, n);
+  const msg = `Released ${res.queued.length} into the queue, refused ${res.skipped.length}; ${res.left} waiting.${res.note ? ` ${res.note}.` : ""}`;
+  await logAction(c.env.DB, { actor: admin, role: "admin", action: "trawl-release", targetType: "crawler", targetId: 0, label: "backlog", note: msg });
+  return wantsJson(c) ? c.json(res) : c.redirect(`/mod?flash=${encodeURIComponent(msg)}#backlog`);
+});
+
+mod.get("/trawl/backlog", async (c) => {
+  const rows = await c.env.DB.prepare("SELECT display_name AS repo, reason, added_by, added_at, released_at, outcome FROM trawl_backlog ORDER BY added_at DESC LIMIT 1000").all();
+  return c.json({ backlog: rows.results ?? [] });
+});
+
+mod.post("/takedown/:id", requireUser, async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await body(c);
+  const admin = c.get("user")!.login;
+  const db = c.env.DB;
+  const t = await db.prepare("SELECT id, repo_id, full_name FROM takedowns WHERE id = ?").bind(id).first<{ id: number; repo_id: number | null; full_name: string }>();
+  if (!t) return c.json({ error: "unknown takedown" }, 404);
+  if (b.action === "apply" && t.repo_id != null) {
+    await retireTrawled(db, t.repo_id, "takedown");
+    await logAction(db, { actor: admin, role: "admin", action: "takedown", targetType: "repo", targetId: t.repo_id, label: t.full_name, note: "trawled listing removed on request" });
+  }
+  // the message stays private; the log only records that the request was handled
+  await db.prepare("UPDATE takedowns SET resolved_at = unixepoch(), resolved_by = ?, note = ? WHERE id = ?").bind(admin, (b.note ?? "").slice(0, 300) || null, id).run();
+  return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod#takedowns");
 });
 
 mod.post("/user/:id", requireUser, async (c) => {

@@ -7,6 +7,7 @@ import { requireUser, wantsJson } from "../middleware";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
 import { now } from "../lib/time";
+import { retireTrawled } from "../lib/virtual";
 
 export const owner = new Hono<AppEnv>();
 
@@ -34,6 +35,7 @@ owner.post("/:owner/:name/owner/:action", requireUser, async (c) => {
       return back(`Refreshed. Status: ${res.outcome.status}${"reject_reason" in res.outcome && res.outcome.reject_reason ? ` — ${res.outcome.reject_reason}` : ""}`, { status: res.outcome.status });
     }
     case "submit": {
+      if (repo.source === "trawl") return c.json({ error: "this listing still runs on the Cap'm's paperwork: commit your own slopscore.md and press Refresh first" }, 409);
       if (repo.status !== "listed") return c.json({ error: "submit is available once the repo is listed" }, 409);
       if (repo.tier === "submitted" && (repo.submitted_at ?? 0) > now() - RESUBMIT_AFTER) return c.json({ error: "already submitted in the last 180 days" }, 409);
       await c.env.DB.prepare("UPDATE repos SET tier = 'submitted', submitted_by = ?, submitted_at = unixepoch() WHERE id = ?").bind(user.id, repo.id).run();
@@ -42,11 +44,13 @@ owner.post("/:owner/:name/owner/:action", requireUser, async (c) => {
     }
     case "remove": {
       if (repo.status === "delisted") return c.json({ error: "already removed" }, 409);
-      await c.env.DB.prepare("UPDATE repos SET status = 'delisted', removed_at = unixepoch(), removed_reason = 'owner-request' WHERE id = ?").bind(repo.id).run();
+      if (repo.source === "trawl") await retireTrawled(c.env.DB, repo.id, "owner-request"); // never opted in: forget everything but the name
+      else await c.env.DB.prepare("UPDATE repos SET status = 'delisted', removed_at = unixepoch(), removed_reason = 'owner-request' WHERE id = ?").bind(repo.id).run();
       await logAction(c.env.DB, { actor: user.login, role: "owner", action: "remove", targetType: "repo", targetId: repo.id, label, note: "owner request" });
-      return back("Removed. The page stays as a tombstone; you can restore it any time.");
+      return back(repo.source === "trawl" ? "Removed for good. We kept only the repo's name so the trawl never brings it back." : "Removed. The page stays as a tombstone; you can restore it any time.");
     }
     case "restore": {
+      if (repo.source === "trawl") return c.json({ error: "to come back, commit your own slopscore.md and press Refresh" }, 409);
       if (repo.status !== "delisted" || repo.removed_reason !== "owner-request") return c.json({ error: "only owner-removed listings can be restored here" }, 409);
       await c.env.DB.prepare("UPDATE repos SET status = 'discovered', queue_reason = 'awaiting-scan', removed_at = NULL, removed_reason = NULL WHERE id = ?").bind(repo.id).run();
       await logAction(c.env.DB, { actor: user.login, role: "owner", action: "restore", targetType: "repo", targetId: repo.id, label });

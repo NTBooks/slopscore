@@ -31,7 +31,8 @@ contact.get("/", (c) => {
           </form>
         ) : <p class="notice"><a href="/auth/github?next=/contact">Log in with GitHub</a> to send a message.</p>}
         <h3>Legal and abuse</h3>
-        <p>DMCA notices, takedown requests, and anything a lawyer wrote: <a href={`mailto:${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}`}>{c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}</a>. Everything else: <a href={`mailto:${c.env.CONTACT_EMAIL ?? "hello@slopscore.org"}`}>{c.env.CONTACT_EMAIL ?? "hello@slopscore.org"}</a>. Both are aliases that can be rotated, so the form above is the reliable path.</p>
+        <p>Is your repo on SlopScore with a "paperwork by the Cap'm" chip, and you can't log in as its owner? Use the <em>request a takedown</em> link on its page. No login is needed and it comes down right away.</p>
+        <p>DMCA notices, other takedown requests, and anything a lawyer wrote: <a href={`mailto:${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}`}>{c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}</a>. Everything else: <a href={`mailto:${c.env.CONTACT_EMAIL ?? "hello@slopscore.org"}`}>{c.env.CONTACT_EMAIL ?? "hello@slopscore.org"}</a>. Both are aliases that can be rotated, so the form above is the reliable path.</p>
         <p class="muted">Reporting a specific listing or comment? Use the muted <em>report</em> link next to it instead; that goes straight to the queue.</p>
       </section>
     </Layout>,
@@ -55,12 +56,12 @@ contact.post("/", requireUser, async (c) => {
 });
 
 /** Optional email ping via Cloudflare's send-email binding. Needs the MAIL binding + CONTACT_NOTIFY (a verified Email Routing destination). */
-async function notify(env: AppEnv["Bindings"], m: { id: number; login: string; subject: string; body: string; repo: string | null }): Promise<void> {
+export async function notify(env: AppEnv["Bindings"], m: { id: number; login: string; subject: string; body: string; repo: string | null; anchor?: string }): Promise<void> {
   if (!env.MAIL || !env.CONTACT_NOTIFY) return;
   const from = env.CONTACT_FROM ?? "schnitzel@slopscore.org";
   const site = env.SITE_URL ?? "https://slopscore.org";
   const subject = `[SlopScore] ${m.subject} from ${m.login}${m.repo ? ` about ${m.repo}` : ""}`;
-  const text = `${m.body}\n\n---\nFrom: github.com/${m.login}${m.repo ? `\nRepo: ${site}/r/${m.repo}` : ""}\nMessage #${m.id}: ${site}/mod#msg${m.id}\nReplying to this email goes nowhere; answer on GitHub or by the address they gave.`;
+  const text = `${m.body}\n\n---\nFrom: ${m.anchor ? m.login : `github.com/${m.login}`}${m.repo ? `\nRepo: ${site}/r/${m.repo}` : ""}\n${m.anchor ? "Takedown" : "Message"} #${m.id}: ${site}/mod#${m.anchor ?? "msg"}${m.id}\nReplying to this email goes nowhere; answer on GitHub or by the address they gave.`;
   const raw = [
     `From: Schnitzel <${from}>`,
     `To: ${env.CONTACT_NOTIFY}`,

@@ -12,7 +12,7 @@ export function feedMd(title: string, rows: RepoRow[], page: number, hasMore: bo
     const n = (page - 1) * 25 + i + 1;
     out.push(`${n}. **[${r.title ?? r.name}](/r/${r.full_name})** · score ${r.score} (▲${r.up} ▼${r.down}) · ★${r.stars}${r.language ? ` · ${r.language}` : ""} · ${r.comment_count} comments`);
     out.push(`   ${r.tagline ?? ""}`);
-    out.push(`   github: https://github.com/${r.full_name} · owner: ${r.owner} · status: ${r.status}${r.tier === "found" ? " (unclaimed)" : ""}${r.reject_reason ? ` · rejected: ${r.reject_reason}` : ""}`);
+    out.push(`   github: https://github.com/${r.full_name} · owner: ${r.owner} · status: ${r.status}${r.source === "trawl" ? " (trawled: the owner didn't submit this; paperwork by the Cap'm)" : r.tier === "found" ? " (unclaimed)" : ""}${r.reject_reason ? ` · rejected: ${r.reject_reason}` : ""}`);
   });
   out.push("");
   if (page > 1 || hasMore) out.push(`Page ${page}.${hasMore ? " More: add `?page=" + (page + 1) + "`." : ""}`, "");
@@ -25,6 +25,7 @@ export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], award
   out.push(`- GitHub: https://github.com/${r.full_name}`);
   if (r.demo_url) out.push(`- Demo: ${r.demo_url}`);
   out.push(`- Status on SlopScore: **${r.status}**${r.queue_reason ? ` (${r.queue_reason})` : ""} · tier: ${r.tier}`);
+  if (r.source === "trawl") out.push(`- Trawled: the owner didn't submit this; the Cap'm wrote the paperwork. ${r.virtual_reason ?? ""}`);
   if (r.reject_reason) out.push(`- Rejected under: ${r.reject_reason}`);
   if (r.removed_reason) out.push(`- Removed: ${r.removed_reason} on ${isoDate(r.removed_at)}`);
   out.push(`- Score: ${r.score} (▲${r.up} ▼${r.down}) · ${r.comment_count} comments · ★${r.stars} · ${r.forks} forks`);

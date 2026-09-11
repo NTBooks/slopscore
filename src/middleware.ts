@@ -21,6 +21,7 @@ export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
         id: u.id, login: u.login, avatar_url: u.avatar_url, gh_created_at: u.gh_created_at, public_repos: u.public_repos,
         banned_at: u.banned_at,
         isAdmin: admins.has(u.login.toLowerCase()),
+        isCritic: u.bot === 1,
         canWrite: !u.banned_at && (oldEnough || u.public_repos >= 1),
         csrf: await csrfToken(u.id, c.env.SESSION_SECRET),
         row: u,

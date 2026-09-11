@@ -8,6 +8,7 @@ import { WIP_STATUSES } from "./vocab";
 import { trustFor, ringCheck } from "./trust";
 import { viewsRecent, burstAllowance } from "./views";
 import { flagOn } from "./flags";
+import { CRITIC_WEIGHT } from "./trust";
 
 export interface RepoRow {
   id: number; full_name: string; owner: string; name: string; owner_id: number | null; owner_type: string | null;
@@ -25,11 +26,15 @@ export interface RepoRow {
   up: number; down: number; score: number; hot: number; controversy: number; comment_count: number; report_count: number;
   first_seen: number; listed_at: number | null; last_crawled: number | null; next_crawl: number | null; priority_at: number | null;
   crowd_up: number; crowd_down: number; locked_by: string | null; mod_note: string | null;
+  /** 'trawl' = never opted in; virtual_md stands in for slopscore.md (src/lib/virtual.ts). */
+  source: "marker" | "trawl"; virtual_md: string | null; virtual_reason: string | null; critic_up: number;
 }
 
 export interface UserRow {
   id: number; login: string; avatar_url: string | null; gh_created_at: number | null; public_repos: number;
   followers: number; banned_at: number | null; created_at: number; last_seen: number | null; trust: number; ban_reason?: string | null;
+  /** 1 = a site account with no GitHub account behind it (the disclosed critics; src/lib/critics.ts). */
+  bot: number; bio: string | null;
 }
 
 export interface CommentRow {
@@ -51,6 +56,8 @@ export interface FeedOpts {
   status?: RepoRow["status"] | RepoRow["status"][];
   owner?: string;
   tier?: "found" | "submitted";
+  /** marker = opted in only (RSS); trawl = the Cap'm's finds only */
+  source?: "marker" | "trawl";
   /** subreddit-style tag: matches category, tags, domain, or topic */
   tag?: string;
   /** queue view: FIFO ordering; true = paid jumpers only, false = free line only */
@@ -58,7 +65,12 @@ export interface FeedOpts {
   priority?: boolean;
 }
 
+/** Every sort puts opted-in repos above trawled ones ('marker' < 'trawl'); indexes (status, source, …) keep it cheap. */
 export function feedOrder(sort: Sort): string {
+  return `r.source ASC, ${sortKey(sort)}`;
+}
+
+function sortKey(sort: Sort): string {
   switch (sort) {
     case "new": return "r.listed_at DESC, r.id DESC";
     case "top": return "r.score DESC, r.up DESC, r.id DESC";
@@ -79,6 +91,7 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   params.push(...statuses);
   if (o.owner) { where.push("lower(r.owner) = ?"); params.push(o.owner.toLowerCase()); }
   if (o.tier) { where.push("r.tier = ?"); params.push(o.tier); }
+  if (o.source) { where.push("r.source = ?"); params.push(o.source); }
   if (o.priority === true) where.push("r.priority_at IS NOT NULL");
   if (o.priority === false) where.push("r.priority_at IS NULL");
   if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('slopbucket','category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
@@ -98,7 +111,7 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
     from = "repos_fts f JOIN repos r ON r.id = f.rowid";
     where.push("repos_fts MATCH ?"); params.push(o.match);
   }
-  const order = o.queue ? "r.priority_at IS NULL, r.priority_at ASC, r.first_seen ASC" : feedOrder(o.sort);
+  const order = o.queue ? "r.priority_at IS NULL, r.priority_at ASC, r.source ASC, r.first_seen ASC" : feedOrder(o.sort);
   const sql = `SELECT r.* FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ? OFFSET ?`;
   params.push(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
   // Served from cache until the data version bumps; the SQL plus its bound params is the key.
@@ -184,17 +197,18 @@ export async function userVotesFor(db: D1Database, userId: number, repoIds: numb
 }
 
 /** Upsert/remove a vote and recompute the repo's counters. value 0 removes the vote.
- *  Weighted: score = round(sum(weight * value)); up/down stay raw counts. Suspected vote rings get weight 0. */
-export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, value: -1 | 0 | 1, ipHashValue: string | null = null): Promise<RepoRow & { ring?: string }> {
-  let weight = flagOn("weight") ? (user.trust ?? trustFor(user)) : 1;
+ *  Weighted: score = round(sum(weight * value)); up/down stay raw counts. Suspected vote rings get weight 0.
+ *  Critics (disclosed site accounts, users.bot = 1) vote at a fixed CRITIC_WEIGHT and skip ring/burst checks; callers enforce criticVoteRefusal. */
+export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, value: -1 | 0 | 1, ipHashValue: string | null = null, critic = false): Promise<RepoRow & { ring?: string }> {
+  let weight = critic ? CRITIC_WEIGHT : flagOn("weight") ? (user.trust ?? trustFor(user)) : 1;
   let ring: string | undefined;
-  if (value !== 0) {
+  if (value !== 0 && !critic) {
     const rc = flagOn("ring") ? await ringCheck(db, repo.id, ipHashValue) : { suspicious: false as const };
     if (rc.suspicious) { weight = 0; ring = rc.reason; }
     else if (flagOn("burst")) {
       // burst rule: votes in the last hour can't outrun the people who could have cast them
       const [votesHour, views] = await Promise.all([
-        db.prepare("SELECT count(*) AS n FROM votes WHERE repo_id = ? AND created_at >= unixepoch() - 3600").bind(repo.id).first<{ n: number }>(),
+        db.prepare("SELECT count(*) AS n FROM votes WHERE repo_id = ? AND created_at >= unixepoch() - 3600 AND critic = 0").bind(repo.id).first<{ n: number }>(),
         viewsRecent(db, repo.id, 1),
       ]);
       const allowance = burstAllowance(views);
@@ -203,24 +217,26 @@ export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, val
   }
   const write = value === 0
     ? db.prepare("DELETE FROM votes WHERE user_id = ? AND repo_id = ?").bind(user.id, repo.id)
-    : db.prepare("INSERT INTO votes (user_id, repo_id, value, weight, ip_hash) VALUES (?,?,?,?,?) ON CONFLICT(user_id, repo_id) DO UPDATE SET value = excluded.value, weight = excluded.weight, ip_hash = excluded.ip_hash, created_at = unixepoch()").bind(user.id, repo.id, value, weight, ipHashValue);
+    : db.prepare("INSERT INTO votes (user_id, repo_id, value, weight, ip_hash, critic) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id, repo_id) DO UPDATE SET value = excluded.value, weight = excluded.weight, ip_hash = excluded.ip_hash, critic = excluded.critic, created_at = unixepoch()").bind(user.id, repo.id, value, weight, ipHashValue, critic ? 1 : 0);
   const count = db.prepare(
     `SELECT
       sum(CASE WHEN v.value = 1 THEN 1 ELSE 0 END) AS up,
       sum(CASE WHEN v.value = -1 THEN 1 ELSE 0 END) AS down,
-      sum(v.value * v.weight) AS weighted
+      sum(v.value * v.weight) AS weighted,
+      sum(CASE WHEN v.value = 1 AND v.critic = 1 THEN 1 ELSE 0 END) AS critic_up
      FROM votes v JOIN users u ON u.id = v.user_id WHERE v.repo_id = ? AND u.banned_at IS NULL`,
   ).bind(repo.id);
-  const [, counts] = await db.batch<{ up: number | null; down: number | null; weighted: number | null }>([write, count]);
+  const [, counts] = await db.batch<{ up: number | null; down: number | null; weighted: number | null; critic_up: number | null }>([write, count]);
+  const criticUp = counts.results?.[0]?.critic_up ?? 0;
   const up = counts.results?.[0]?.up ?? 0;
   const down = counts.results?.[0]?.down ?? 0;
   const score = Math.round(counts.results?.[0]?.weighted ?? 0);
   const created = repo.submitted_at ?? repo.listed_at ?? repo.first_seen;
   const h = hotRank(Math.max(score, 0), Math.max(-score, 0), created);
   const c = contRank(up, down);
-  await db.prepare("UPDATE repos SET up = ?, down = ?, score = ?, hot = ?, controversy = ? WHERE id = ?").bind(up, down, score, h, c, repo.id).run();
+  await db.prepare("UPDATE repos SET up = ?, down = ?, score = ?, hot = ?, controversy = ?, critic_up = ? WHERE id = ?").bind(up, down, score, h, c, criticUp, repo.id).run();
   await markDirty(db);
-  return { ...repo, up, down, score, hot: h, controversy: c, ring };
+  return { ...repo, up, down, score, hot: h, controversy: c, critic_up: criticUp, ring };
 }
 
 export interface Bucket { slug: string; title: string; blurb: string | null; curated: number; banned: number; banned_reason: string | null; created_by: string | null; n: number }

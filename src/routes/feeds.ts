@@ -36,7 +36,7 @@ const send = (c: { body: (b: string, s: 200, h: Record<string, string>) => Respo
 feeds.get("/feed.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
   const sort = (c.req.query("sort") === "updated" ? "updated" : "new") as Sort;
-  const { rows } = await feed(c.env.DB, { sort, page: 1 });
+  const { rows } = await feed(c.env.DB, { sort, page: 1, source: "marker" }); // trawled listings never go out in feeds
   return send(c, rss(origin, sort === "updated" ? "SlopScore — updated slop" : "SlopScore — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
 });
 
@@ -44,7 +44,7 @@ feeds.get("/b/:file", async (c, next) => {
   if (!c.req.param("file").endsWith(".xml")) return next();
   const origin = new URL(c.req.url).origin;
   const slug = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
-  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, tag: slug });
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, tag: slug, source: "marker" });
   return send(c, rss(origin, `SlopScore — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
 });
 
@@ -53,7 +53,7 @@ feeds.get("/f/:facet/:file", async (c, next) => {
   const origin = new URL(c.req.url).origin;
   const facet = c.req.param("facet"); const value = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
   if (!([...DECLARED_FACETS, ...DETECTED_FACETS] as readonly string[]).includes(facet)) return c.notFound();
-  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, filters: [{ facet, value, negate: false }] });
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, filters: [{ facet, value, negate: false }], source: "marker" });
   return send(c, rss(origin, `SlopScore — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
 });
 
@@ -61,20 +61,26 @@ feeds.get("/u/:file", async (c, next) => {
   if (!c.req.param("file").endsWith(".xml")) return next();
   const origin = new URL(c.req.url).origin;
   const login = c.req.param("file").replace(/\.xml$/, "");
-  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, owner: login });
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, owner: login, source: "marker" });
   return send(c, rss(origin, `SlopScore — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
 });
 
 feeds.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
-  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
+  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/stats", "/log"];
+  // Facet feeds are the long tail: "claude code slop", "python slop" and the like are what people actually
+  // type, and each one is a real page with its own rows. Only facets with enough repos to be worth a visit.
+  const facets = await c.env.DB.prepare(
+    "SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND r.source = 'marker' AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200",
+  ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
+  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/stats", "/log", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${fixed.map((p) => url(p, null, p === "/" ? "1.0" : "0.6")).join("\n")}
 ${buckets.map((b) => url(`/b/${b.slug}`, null, "0.5")).join("\n")}
+${facets.map((f) => url(`/f/${f.facet}/${encodeURIComponent(f.value)}`, null, "0.4")).join("\n")}
 ${repos.map((r) => url(`/r/${r.full_name}`, r.md_updated_at ?? r.listed_at, "0.7")).join("\n")}
 </urlset>`;
   return c.body(xml, 200, { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" });
@@ -82,7 +88,7 @@ ${repos.map((r) => url(`/r/${r.full_name}`, r.md_updated_at ?? r.listed_at, "0.7
 
 feeds.get("/openapi.json", (c) => {
   const origin = new URL(c.req.url).origin;
-  const repo = { type: "object", properties: { full_name: { type: "string" }, url: { type: "string" }, github: { type: "string" }, title: { type: "string" }, tagline: { type: "string", nullable: true }, status: { type: "string", enum: ["discovered", "quarantined", "rejected", "listed", "hidden", "delisted"] }, tier: { type: "string", enum: ["found", "submitted"] }, score: { type: "integer" }, up: { type: "integer" }, down: { type: "integer" }, stars: { type: "integer" }, language: { type: "string", nullable: true }, meta: { type: "object", nullable: true, description: "parsed slopscore.md frontmatter" }, reject_reason: { type: "string", nullable: true } } };
+  const repo = { type: "object", properties: { full_name: { type: "string" }, url: { type: "string" }, github: { type: "string" }, title: { type: "string" }, tagline: { type: "string", nullable: true }, status: { type: "string", enum: ["discovered", "quarantined", "rejected", "listed", "hidden", "delisted"] }, tier: { type: "string", enum: ["found", "submitted"] }, score: { type: "integer" }, up: { type: "integer" }, down: { type: "integer" }, stars: { type: "integer" }, language: { type: "string", nullable: true }, meta: { type: "object", nullable: true, description: "parsed slopscore.md frontmatter" }, reject_reason: { type: "string", nullable: true }, source: { type: "string", enum: ["marker", "trawl"], description: "trawl = the owner never opted in; paperwork written by the Cap'm" }, critic_up: { type: "integer", description: "upvotes from disclosed agent critics" } } };
   const feedResp = { description: "a page of repos", content: { "application/json": { schema: { type: "object", properties: { page: { type: "integer" }, has_more: { type: "boolean" }, next: { type: "string", nullable: true }, repos: { type: "array", items: { $ref: "#/components/schemas/Repo" } } } } } } };
   const bearer = [{ bearerAuth: [] }];
   const okJson = (desc: string) => ({ description: desc, content: { "application/json": { schema: { type: "object" } } } });
@@ -106,6 +112,9 @@ feeds.get("/openapi.json", (c) => {
       "/api/v1/facets": { get: { summary: "Value counts for a facet", parameters: [{ name: "facet", in: "query", required: true, schema: { type: "string" } }], responses: { "200": okJson("values") } } },
       "/api/v1/vocab": { get: { summary: "Controlled vocabularies, aliases, search operators", responses: { "200": okJson("vocab") } } },
       "/api/v1/leaderboard": { get: { summary: "Mean score by facet value (default built_with)", parameters: [{ name: "facet", in: "query", schema: { type: "string" } }], responses: { "200": okJson("leaderboard") } } },
+      "/api/v1/digest": { get: { summary: "Every listed repo in one cached file: title, tagline, source, tier, license, stars, tags, trimmed pitch and README. Read this instead of crawling pages.", parameters: [{ name: "since", in: "query", schema: { type: "integer", description: "unix seconds; only repos listed or updated since" } }], responses: { "200": okJson("{generated_at, since, count, repos[]}") } } },
+      "/me": { get: { summary: "My repos: everything the session user owns or maintains, in any status (append .json)", security: bearer, responses: { "200": okJson("{needs_you, listed, submitted}"), "401": okJson("login required") } } },
+      "/r/{owner}/{repo}/takedown": { post: { summary: "Takedown request for a trawled listing (one its owner never submitted). No login needed; the listing comes down right away. Replies are canned.", requestBody: { content: { "application/json": { schema: { type: "object", properties: { message: { type: "string", description: "20 to 2000 chars" }, contact: { type: "string" } }, required: ["message"] } } } }, responses: { "200": okJson("{outcome: removed | queued | opted}"), "400": okJson("invalid"), "429": okJson("too many requests") } } },
       "/api/v1/me": { get: { summary: "Who am I", security: bearer, responses: { "200": okJson("user"), "401": okJson("not logged in") } } },
       "/b": { get: { summary: "Slopbucket directory (append .json)", responses: { "200": okJson("buckets") } } },
       "/queue": { get: { summary: "Public moderation queue + capacity (append .json)", responses: { "200": okJson("queue") } } },

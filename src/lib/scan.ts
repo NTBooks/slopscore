@@ -4,7 +4,9 @@ import { SPEC_VERSION, SPEC_URL } from "./vocab";
 import { markDirty } from "./cache";
 import { GitHub, parseGhDate, fullNameFromRedirect, type GhRepo, type GhContentsEntry, type GhRelease, type GhCommunity, type GhUser } from "./github";
 import { parseSlopMd, type TagRow, type SlopMeta } from "./slopmd";
-import { replaceTags, registerBuckets, type RepoRow } from "./db";
+import { pingIndexNow } from "./indexnow";
+import { replaceTags, registerBuckets, logAction, type RepoRow } from "./db";
+import { dropTrawled } from "./virtual";
 import { renderMarkdown, sanitizeReadmeHtml, stripHtml } from "./markdown";
 import { normalizeValue } from "./vocab";
 import { now } from "./time";
@@ -81,16 +83,19 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const g = metaRes.data as GhRepo;
   const existing = (await db.prepare("SELECT * FROM repos WHERE id = ?").bind(g.id).first<RepoRow>()) ?? existingByName;
 
-  // ---- 2. the marker file ----
+  // ---- 2. the marker file (a trawled repo without one reads the Cap'm's stand-in; see lib/virtual.ts) ----
   const raw = await gh.rawFile(g.owner.login, g.name, g.default_branch, "slopscore.md");
-  if (raw.status !== 200 || !raw.text) {
+  const trawled = existing?.source === "trawl";
+  const virtual = (raw.status !== 200 || !raw.text) && trawled && Boolean(existing?.virtual_md);
+  const mdText = virtual ? existing!.virtual_md! : raw.status === 200 ? raw.text : null;
+  if (!mdText) {
     if (existing && existing.status !== "delisted") {
       await delist(db, existing.id, "marker-removed");
       return { repo: { ...existing, status: "delisted", removed_reason: "marker-removed" }, outcome: { status: "missing", error: "slopscore.md not found on the default branch" } };
     }
     return { repo: null, outcome: { status: "missing", error: `no slopscore.md on ${g.default_branch} (raw fetch returned ${raw.status})` } };
   }
-  const md_sha = await sha1(raw.text);
+  const md_sha = await sha1(mdText);
   const mdChanged = !existing || existing.md_sha !== md_sha;
 
   // ---- 3. everything else GitHub knows (parallel, ETag where we have one) ----
@@ -116,7 +121,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const commitCount = commitsRes.status === 200 && "headers" in commitsRes && commitsRes.data ? linkLast(commitsRes.headers.get("link")) ?? commitsRes.data.length : null;
 
   // ---- gate 2: contract (parse first; gate 0 needs the tags) ----
-  const parsed = parseSlopMd(raw.text);
+  const parsed = parseSlopMd(mdText);
   const meta = parsed.meta;
   const contractGate: GateResult = { gate: "contract", ok: parsed.ok, reasons: [...parsed.errors], notes: parsed.warnings };
   // A v1 file is grandfathered when the repo has ever been listed: it stays listed and the page shows the nudge. A brand-new v1 listing is asked for v2.
@@ -127,6 +132,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const tagline = meta?.tagline || g.description || null;
   if (parsed.ok && !tagline) { contractGate.ok = false; contractGate.reasons.push("no tagline: set `tagline:` in slopscore.md or a description on GitHub"); }
   report.warnings.push(...parsed.warnings);
+  if (virtual) report.warnings.push("virtual paperwork: the Cap'm wrote this slopscore.md from GitHub data; the owner hasn't committed one");
 
   // ---- gate 0: denylist + links ----
   const title = meta?.title || g.name;
@@ -160,7 +166,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   // ---- gate 3: content (secrets + links free; AI budgeted) ----
   const contentReasons: string[] = [];
   const contentFlags: string[] = [];
-  const secrets = findSecrets(`${raw.text}\n${readmeText}`);
+  const secrets = findSecrets(`${mdText}\n${readmeText}`);
   if (secrets.length) contentReasons.push(`secrets in the repo text: ${secrets.join(", ")}`);
   const sb = await safeBrowsing(deny.links, env.SAFE_BROWSING_KEY);
   if (sb.bad.length) contentReasons.push(`unsafe links (Google Safe Browsing): ${sb.bad.slice(0, 3).join(", ")}`);
@@ -234,6 +240,13 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   if (meta?.unlisted) status = "delisted";
   const queueReason = status === "discovered" ? "ai-budget" : status === "quarantined" ? "awaiting-review" : null;
 
+  // A trawled repo that fails a gate, or has no README to show, is dropped rather than shamed: it never asked to be here.
+  if (virtual && existing && !existing.locked_by && (status === "rejected" || status === "quarantined" || !readmeHtml)) {
+    const why = status === "rejected" ? rejectReason ?? "rejected" : status === "quarantined" ? `quarantined (risk ${risk.score})` : "no README";
+    await dropTrawled(db, existing.id, existing.full_name, why);
+    return { repo: null, outcome: { status: "missing", error: `trawled candidate dropped: ${why}` } };
+  }
+
   // ---- body html (GitHub's sanitiser when the file changed; fallback to ours) ----
   let bodyHtml = existing?.body_html ?? null;
   if (parsed.body && (mdChanged || !bodyHtml)) {
@@ -290,7 +303,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   ).run();
 
   // tags: declared + detected; community slopbuckets are registered, banned ones stripped
-  let tags: TagRow[] = [...parsed.tags];
+  let tags: TagRow[] = parsed.tags.map((t) => (virtual ? { ...t, source: "detected" as const } : t)); // the Cap'm's guesses are not the owner's declarations
   const declaredBuckets = tags.filter((x) => x.facet === "slopbucket").map((x) => x.value);
   if (declaredBuckets.length) {
     const banned = await registerBuckets(db, declaredBuckets, g.full_name);
@@ -302,6 +315,12 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   if (g.license?.spdx_id && g.license.spdx_id !== "NOASSERTION") tags.push({ facet: "license", value: normalizeValue(g.license.spdx_id), source: "detected", recognized: true });
   await replaceTags(db, g.id, dedupe(tags));
 
+  if (trawled && !virtual) {
+    // The owner committed a real slopscore.md: it's theirs now, and it joins the opted-in feed as a fresh listing.
+    await db.prepare("UPDATE repos SET source = 'marker', virtual_md = NULL, virtual_reason = NULL, listed_at = CASE WHEN status = 'listed' THEN unixepoch() ELSE listed_at END WHERE id = ?").bind(g.id).run();
+    await logAction(db, { actor: "system", role: "system", action: "adopted", targetType: "repo", targetId: g.id, label: g.full_name, note: "the owner committed slopscore.md; the Cap'm's paperwork is retired" });
+  }
+
   if (mdChanged) {
     await db.prepare("INSERT INTO repo_versions (repo_id, md_sha, meta, body_md, stars) VALUES (?,?,?,?,?)")
       .bind(g.id, md_sha, meta ? JSON.stringify(meta) : null, parsed.body || null, g.stargazers_count).run();
@@ -311,6 +330,12 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     if (status === "listed" && existing?.status !== "listed") await bump(db, "listed");
     if (status === "rejected") await bump(db, "rejected");
     if (status === "quarantined") await bump(db, "quarantined");
+  }
+
+  // A brand-new opted-in listing is a brand-new URL: tell the engines now rather than waiting for a crawl.
+  // Trawled listings are noindex and stay out of the sitemap, so they are not announced either.
+  if (status === "listed" && existing?.status !== "listed" && !virtual) {
+    await pingIndexNow(env, [`/r/${g.full_name}`, "/"]);
   }
 
   await markDirty(db);

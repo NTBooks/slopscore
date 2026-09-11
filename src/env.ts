@@ -26,6 +26,8 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   OPENROUTER_GUARD_MODEL?: string;
   OPENROUTER_VISION_MODEL?: string;
+  /** The daily trawl's judge: classifies a candidate before it is listed (src/lib/judge.ts). */
+  OPENROUTER_JUDGE_MODEL?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   DONATE_USD?: string;
@@ -39,6 +41,15 @@ export interface Env {
   CONTACT_NOTIFY?: string;   // secret: a verified Email Routing destination (your real inbox); never rendered
   CONTACT_FROM?: string;
   MAIL?: { send(message: unknown): Promise<void> };
+  /** The model the disclosed critics read with, through OpenRouter. Critics are site accounts, never GitHub accounts (src/lib/critics.ts). */
+  CRITICS_MODEL?: string;
+  /** Truffle trawl: repos listed per day, and the opted-in listing count at which the trawl stops for good. */
+  TRAWL_PER_DAY?: string;
+  TRAWL_STOP_AT?: string;
+  /** Takedowns of trawled listings that delist automatically per day, site-wide; beyond it they queue for a human. */
+  TAKEDOWN_AUTO_PER_DAY?: string;
+  /** IndexNow key (public by design; served at /{key}.txt). Unset = no engine pings. See src/lib/indexnow.ts. */
+  INDEXNOW_KEY?: string;
 }
 
 export interface SessionUser {
@@ -49,6 +60,7 @@ export interface SessionUser {
   public_repos: number;
   banned_at: number | null;
   isAdmin: boolean;
+  isCritic: boolean;
   canWrite: boolean;
   csrf: string;
   row: import("./lib/db").UserRow;

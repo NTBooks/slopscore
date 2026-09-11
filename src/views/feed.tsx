@@ -35,23 +35,28 @@ export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
       <span class="score" title={flagOn("fuzz") ? "weighted, lightly fuzzed" : "weighted"}>{flagOn("fuzz") ? fuzz(repo.score, repo.id) : repo.score}</span>
       <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote">▼</button>
       {flagOn("crowd") && (crowd !== 0 || !user) ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
+      {repo.critic_up ? <a class="crowd" href="/about#critics" title="upvotes from SlopScore's disclosed agent critics (accounts on this site, not GitHub accounts), at half weight; awards ignore them">incl. {repo.critic_up} critic{repo.critic_up === 1 ? "" : "s"}</a> : null}
     </form>
   );
 };
 
 export const Chips: FC<{ repo: RepoRow; full?: boolean }> = ({ repo, full }) => {
   const m = parseJson<Partial<SlopMeta>>(repo.meta, {});
-  if (!m.ai_generated) return null;
+  const trawled = repo.source === "trawl";
+  const capm = trawled ? <span class="chip warn" title="The owner didn't submit this. The Cap'm found it on a truffle trawl and wrote its paperwork from GitHub data.">paperwork by the Cap'm</span> : null;
+  if (!m.ai_generated) return capm ? <span class="chips">{capm}</span> : null;
+  const inf = trawled ? " (inferred)" : "";
   return (
     <span class="chips">
-      <span class="chip" title="ai_generated">{m.ai_generated} ai</span>
-      <span class="chip" title="human_touch">{m.human_touch} human</span>
-      <span class="chip" title="status">{m.status}</span>
+      {capm}
+      <span class="chip" title={trawled ? "inferred by the Cap'm from the owner's own tags" : "ai_generated"}>{m.ai_generated} ai{inf}</span>
+      <span class="chip" title={trawled ? "inferred by the Cap'm" : "human_touch"}>{m.human_touch} human{inf}</span>
+      <span class="chip" title={trawled ? "the Cap'm's default guess" : "status"}>{m.status}{inf}</span>
       {(m.slopscore ?? 2) < 2 ? <span class="chip warn" title="slopscore.md is on spec v1. Still listed, still votable. Owner: add slopscore: 2 and spec: https://slopscore.org/spec">v1 paperwork</span> : null}
       {(m.category ?? []).slice(0, full ? 99 : 2).map((c) => <a class="chip" href={`/f/category/${c}`}>{c}</a>)}
       {(m.contains ?? []).map((c) => <span class={`chip ${(CONTAINS_LISTED as readonly string[]).includes(c) ? "warn" : "bad"}`} title="disclosed">⚠ {c}</span>)}
       {full ? (m.built_with ?? []).map((c) => <a class="chip" href={`/f/built_with/${c}`}>🤖 {c}</a>) : null}
-      {repo.tier === "found" && repo.status === "listed" ? <span class="chip tier" title="the owner hasn't submitted this yet; votes count, awards don't">unclaimed</span> : null}
+      {repo.tier === "found" && repo.status === "listed" && !trawled ? <span class="chip tier" title="the owner hasn't submitted this yet; votes count, awards don't">unclaimed</span> : null}
     </span>
   );
 };
@@ -81,9 +86,9 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
           {user && isOwnerOf(repo, user.login, user.id) ? (
             <div class="ownerline">
               <span class="chip tier">yours</span>
-              {repo.status === "listed" && repo.tier === "found" ? (
+              {repo.status === "listed" && repo.tier === "found" && repo.source !== "trawl" ? (
                 <form method="post" action={`${repoUrl(repo)}/owner/submit`} class="inline"><input type="hidden" name="csrf" value={user.csrf} /><button type="submit" class="btn small">Submit for consideration</button></form>
-              ) : repo.tier === "submitted" ? <span class="muted">submitted {ago(repo.submitted_at)}</span> : <span class="muted">submit opens once listed</span>}
+              ) : repo.source === "trawl" ? <span class="muted">trawled: commit your own slopscore.md to claim it</span> : repo.tier === "submitted" ? <span class="muted">submitted {ago(repo.submitted_at)}</span> : <span class="muted">submit opens once listed</span>}
               {" "}<a href={repoUrl(repo)} class="muted">manage ›</a>
             </div>
           ) : null}
@@ -105,7 +110,7 @@ export const FeedList: FC<{ rows: RepoRow[]; page: number; hasMore: boolean; vot
       {(page > 1 || hasMore) ? (
         <div class="pager">
           {page > 1 ? <a href={`${baseUrl}${sep}page=${page - 1}`}>‹ prev</a> : null}
-          {hasMore ? <a href={`${baseUrl}${sep}page=${page + 1}`}>next ›</a> : null}
+          {hasMore ? <a href={`${baseUrl}${sep}page=${page + 1}`} rel="next">next ›</a> : null}
         </div>
       ) : null}
     </>

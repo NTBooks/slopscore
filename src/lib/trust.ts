@@ -36,6 +36,16 @@ export async function ipHash(ip: string | undefined, secret: string): Promise<st
   return [...new Uint8Array(buf)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Disclosed critics (site accounts, users.bot = 1; src/lib/critics.ts) vote at a fixed half weight. */
+export const CRITIC_WEIGHT = 0.5;
+
+/** Server-side critic rules: upvotes only, and never on a repo owned by a site admin. Null = allowed. */
+export function criticVoteRefusal(value: number, repoOwner: string, admins: Set<string>): string | null {
+  if (value === -1) return "critics upvote only (for now)";
+  if (admins.has(repoOwner.toLowerCase())) return "critics don't vote on the site owner's repos";
+  return null;
+}
+
 export interface RingCheck { suspicious: boolean; reason?: string }
 
 /**
@@ -48,7 +58,7 @@ export async function ringCheck(db: D1Database, repoId: number, ipHashValue: str
     `SELECT count(*) AS n,
             count(DISTINCT v.ip_hash) AS ips,
             count(DISTINCT (u.gh_created_at / 604800)) AS weeks
-     FROM votes v JOIN users u ON u.id = v.user_id WHERE v.repo_id = ? AND v.created_at >= ?`,
+     FROM votes v JOIN users u ON u.id = v.user_id WHERE v.repo_id = ? AND v.created_at >= ? AND v.critic = 0`,
   ).bind(repoId, hourAgo).first<{ n: number; ips: number; weeks: number }>();
   if (!r) return { suspicious: false };
   if (r.n >= 8 && r.weeks <= 1) return { suspicious: true, reason: `${r.n} votes in an hour from accounts created the same week` };

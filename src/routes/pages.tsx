@@ -2,11 +2,13 @@
 import { cached } from "../lib/cache";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
+import { adminLogins } from "../env";
+import { CRITICS, CRITIC_DAILY_CAP } from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
   getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, SORTS, type RepoRow,
 } from "../lib/db";
-import { ipHash } from "../lib/trust";
+import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { recordView } from "../lib/views";
 import { anonId, castAnonVote } from "../lib/anon";
 import { ledger } from "../lib/rush";
@@ -14,6 +16,7 @@ import { flagOn, flagsSnapshot } from "../lib/flags";
 import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
+import { repoJsonLd } from "../lib/seo";
 import { Layout, SITE } from "../views/layout";
 import { FeedList, ogImage } from "../views/feed";
 import { Rail, type RailData } from "../views/rail";
@@ -65,7 +68,22 @@ export function repoJson(r: RepoRow) {
     title: r.title ?? r.name, tagline: r.tagline, demo_url: r.demo_url, language: r.language, license: r.license, stars: r.stars, forks: r.forks,
     status: r.status, tier: r.tier, queue_reason: r.queue_reason, reject_reason: r.reject_reason, removed_reason: r.removed_reason, risk: r.risk,
     score: r.score, up: r.up, down: r.down, hot: r.hot, controversy: r.controversy, comment_count: r.comment_count,
+    source: r.source, virtual_reason: r.virtual_reason, critic_up: r.critic_up,
     meta: parseJson(r.meta, null), first_seen: r.first_seen, listed_at: r.listed_at, submitted_at: r.submitted_at, md_updated_at: r.md_updated_at, last_crawled: r.last_crawled,
+  };
+}
+
+/** A feed page as an ItemList: the ranking is the content here, so say what is on it and in what order. */
+function feedJsonLd(url: URL, name: string, rows: RepoRow[]) {
+  if (!rows.length) return undefined;
+  return {
+    "@type": "ItemList",
+    name,
+    itemListOrder: "https://schema.org/ItemListOrderDescending",
+    numberOfItems: rows.length,
+    itemListElement: rows.slice(0, 25).map((r, i) => ({
+      "@type": "ListItem", position: i + 1, url: `${url.origin}/r/${r.full_name}`, name: r.title ?? r.name,
+    })),
   };
 }
 
@@ -73,6 +91,8 @@ export function repoJson(r: RepoRow) {
 async function feedPage(c: Context<AppEnv>, opts: {
   title: string; heading: string; sort: Sort; t?: string; page: number; filters?: ReturnType<typeof parseQuery>["filters"]; match?: string | null;
   status?: RepoRow["status"] | RepoRow["status"][]; owner?: string; tag?: string; baseUrl: string; intro?: string; empty?: string; showStatus?: boolean; extra?: unknown; description?: string; q?: string; showHero?: boolean;
+  /** Search results and sort/window variants are the same rows in a different order: one canonical, no index. */
+  noindex?: boolean; canonical?: string;
 }) {
   const user = c.get("user");
   const url = new URL(c.req.url);
@@ -86,7 +106,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
     json: (d) => ({ ...feedJson(d.rows, d.page, d.hasMore), title: opts.title, extra: opts.extra }),
     md: (d) => feedMd(opts.heading, d.rows, d.page, d.hasMore, opts.intro),
     html: (d) => (
-      <Layout meta={{ title: opts.title, description: opts.description ?? opts.intro ?? SITE.tagline }} user={user} url={url} sort={opts.showHero ? opts.sort : undefined} q={opts.q} tags={rail.tags}>
+      <Layout meta={{ title: opts.title, description: opts.description ?? opts.intro ?? SITE.tagline, canonical: opts.canonical, noindex: opts.noindex || d.page > 1, jsonLd: feedJsonLd(url, opts.heading, d.rows) }} user={user} url={url} sort={opts.showHero ? opts.sort : undefined} q={opts.q} tags={rail.tags}>
         <section>
           {opts.showHero ? (
             <>
@@ -134,7 +154,7 @@ pages.get("/search", (c) => {
   const sort = sortParam(c.req.query("sort") ?? "top");
   return feedPage(c, {
     title: `search: ${q} — SlopScore`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
-    filters: parsed.filters, match: parsed.match, baseUrl: `/search?q=${encodeURIComponent(q)}`, q,
+    filters: parsed.filters, match: parsed.match, baseUrl: `/search?q=${encodeURIComponent(q)}`, q, noindex: true,
     intro: parsed.terms.length ? `Parsed as: ${parsed.terms.join(" ")}` : "Operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner: — prefix with - to exclude.",
     empty: "Nothing matches. Either it doesn't exist or nobody admitted to it.", extra: { parsed },
   });
@@ -198,11 +218,56 @@ pages.get("/b/:tag", async (c) => {
 pages.get("/u/:login", async (c) => {
   const login = c.req.param("login");
   const u = await getUserByLogin(c.env.DB, login);
+  const bot = u?.bot === 1;
   return feedPage(c, {
-    title: `${login} — SlopScore`, heading: `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
+    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
-    intro: u ? `Slopsmith since ${isoDate(u.created_at)}${u.banned_at ? " · banned" : ""}. github.com/${login}` : `github.com/${login} — not a slopsmith (yet).`, extra: { user: u ? { id: u.id, login: u.login, avatar_url: u.avatar_url } : null },
-    empty: "No slop from this account. Yet.",
+    intro: bot
+      ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. The rules are on /about.`
+      : u ? `Slopsmith since ${isoDate(u.created_at)}${u.banned_at ? " · banned" : ""}. github.com/${login}` : `github.com/${login} — not a slopsmith (yet).`,
+    extra: { user: u ? { id: u.id, login: u.login, avatar_url: u.avatar_url, bot } : null },
+    empty: bot ? "Critics don't own repos. They read them." : "No slop from this account. Yet.",
+  });
+});
+
+// ---- my repos: everything the logged-in slopsmith owns or maintains, in any status ----
+pages.get("/me", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  if (!user) return wantsJson(c) ? c.json({ error: "login required", login: "/auth/github?next=/me" }, 401) : c.redirect("/auth/github?next=/me");
+  const rows = await c.env.DB.prepare(
+    `SELECT r.* FROM repos r
+     WHERE r.owner_id = ?
+        OR (lower(r.owner) = lower(?) AND (r.owner_type IS NULL OR r.owner_type != 'Organization'))
+        OR EXISTS (SELECT 1 FROM json_each(r.meta, '$.maintainers') j WHERE lower(j.value) = lower(?))
+     ORDER BY r.listed_at DESC, r.first_seen DESC LIMIT 200`,
+  ).bind(user.id, user.login, user.login).all<RepoRow>().then((x) => x.results ?? []);
+  const needs = rows.filter((r) => r.source === "trawl" || r.status !== "listed");
+  const listed = rows.filter((r) => r.source !== "trawl" && r.status === "listed" && r.tier !== "submitted");
+  const launched = rows.filter((r) => r.source !== "trawl" && r.status === "listed" && r.tier === "submitted");
+  const votes = await userVotesFor(c.env.DB, user.id, rows.map((r) => r.id));
+  const groups: [string, string, RepoRow[]][] = [
+    ["Needs you", "trawled by the Cap'm, queued, rejected or removed", needs],
+    ["Listed", "votable; submit one to launch it for Slop of the Day", listed],
+    ["Submitted", "launched", launched],
+  ];
+  return respond(c, { groups }, {
+    json: () => ({ login: user.login, needs_you: needs.map(repoJson), listed: listed.map(repoJson), submitted: launched.map(repoJson) }),
+    md: (d) => [`# My repos (${user.login})`, "", ...d.groups.filter(([, , g]) => g.length).map(([t, , g]) => feedMd(t, g, 1, false))].join("\n\n"),
+    html: (d) => (
+      <Layout meta={{ title: "My repos — SlopScore", noindex: true }} user={user} url={url}>
+        <section class="wrap narrow" style="padding:0">
+          <h2>My repos</h2>
+          <p class="muted">Every repo here that you own as <strong>{user.login}</strong>, or maintain through its <code>maintainers:</code> list (the only way org repos show up).</p>
+          {rows.length === 0 ? <div class="empty">Nothing yet. Commit a slopscore.md (<a href="/spec">spec</a>), then <a href="/scan">request a scan</a>.</div> : null}
+          {d.groups.filter(([, , g]) => g.length).map(([t, sub, g]) => (
+            <>
+              <h3>{t} <span class="muted">· {sub} · {g.length}</span></h3>
+              <FeedList rows={g} page={1} hasMore={false} votes={votes} user={user} baseUrl="/me" showStatus />
+            </>
+          ))}
+        </section>
+      </Layout>
+    ),
   });
 });
 
@@ -237,14 +302,22 @@ pages.get("/queue", async (c) => {
         <section>
           <h2 style="margin:8px 0">In the trough</h2>
           <p class="muted">{intro}</p>
+          {/* A visitor wants to know how long the line is. Neuron budgets, plan mode and D1 write ceilings
+              are ours to worry about, so they stay behind the mod login; the full numbers live on /stats. */}
           <div class={`capacity ${d.cap.mode}`}>
-            <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
-            <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons</div>
             <div><span class="label">free scans left today</span><strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day}</div>
-            <div><span class="label">paid scans</span><strong>{d.cap.paid_scans_unlimited ? "unlimited" : "front of the line, same ceiling"}</strong> <span class="muted">via {d.cap.paid_scan_provider}</span></div>
-            <div><span class="label">daily limits</span><span>{d.cap.limits.workers_requests_per_day ? `${(d.cap.limits.workers_requests_per_day / 1000).toFixed(0)}k requests · ` : "unlimited requests · "}{d.cap.limits.ai_neurons_per_day ? `${(d.cap.limits.ai_neurons_per_day / 1000).toFixed(0)}k neurons · ` : "metered AI · "}{(d.cap.limits.d1_writes_per_day / 1000).toFixed(0)}k D1 writes</span></div>
             <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
-            <p class="muted small">Budget resets at 00:00 UTC. When "waiting on budget" grows day over day, the free tier is the bottleneck and it's time to pay for a bigger trough. <a href="/stats">History</a>.</p>
+            {user?.isAdmin ? (
+              <>
+                <div><span class="label">mod · mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
+                <div><span class="label">mod · AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons</div>
+                <div><span class="label">mod · paid scans</span><strong>{d.cap.paid_scans_unlimited ? "unlimited" : "front of the line, same ceiling"}</strong> <span class="muted">via {d.cap.paid_scan_provider}</span></div>
+                <div><span class="label">mod · daily limits</span><span>{d.cap.limits.workers_requests_per_day ? `${(d.cap.limits.workers_requests_per_day / 1000).toFixed(0)}k requests · ` : "unlimited requests · "}{d.cap.limits.ai_neurons_per_day ? `${(d.cap.limits.ai_neurons_per_day / 1000).toFixed(0)}k neurons · ` : "metered AI · "}{(d.cap.limits.d1_writes_per_day / 1000).toFixed(0)}k D1 writes</span></div>
+                <p class="muted small">Budget resets at 00:00 UTC. When "waiting on budget" grows day over day, the free tier is the bottleneck and it's time to pay for a bigger trough. <a href="/stats">History</a>.</p>
+              </>
+            ) : (
+              <p class="muted small">Scans are rationed daily so the trough stays free to enter; the count resets at 00:00 UTC. The line is first come, first served, jumpers excepted. Every number behind it is public on <a href="/stats">/stats</a>.</p>
+            )}
           </div>
           {flash ? <div class="notice">{flash}</div> : null}
           <CrawlClockBox clock={d.clock} user={user} back="/queue" />
@@ -432,6 +505,12 @@ pages.get("/about", (c) => {
     "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits. The [source](https://github.com/NTBooks/slopscore) is public.", "",
+    "## Trawled listings", "",
+    "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, search engines are asked not to index them, and they can't win awards. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
+    "## Critics", "",
+    `Some votes come from SlopScore's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
+    ...CRITICS.map((cr) => `- [${cr.login}](/u/${cr.login}) — *${cr.name}.* ${cr.rubric}`), "",
+    `Critics only upvote, never vote on the site owner's repos, count at half weight, show up as \"incl. N critics\" beside the score, and are subtracted when awards are ranked, so they shape the feed and never pick the winners. Each reviews a repo once, ever, and at most ${CRITIC_DAILY_CAP} a day. They read the data the site already stores instead of crawling anything, and they never comment: a repo's text is untrusted input, so a critic may answer only yes or no, and its reason is kept in the database, never published.`, "",
     "## Tiers", "", "A repo the crawler finds is **found**: listed and votable, with an *unclaimed* chip. When the owner logs in and presses Submit it becomes **submitted**: a launch, eligible for Slop of the Day and the weekly awards. Votes carry over.", "",
     "## Votes", "", "Only logged-in slopsmiths vote. Votes are weighted by account trust derived from GitHub (age, public repos, followers), rate-limited per account and per network, and bursts from same-week accounts or one network count for nothing. Displayed scores are lightly fuzzed so bots can't tell whether they counted. This is roughly how Reddit does it; the knobs are public in the repo.", "",
     "## Moderation", "", "Cheapest first: GitHub's own enforcement, a denylist, a risk score that quarantines suspicious repos for a human, Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed.", "",
@@ -472,6 +551,15 @@ pages.get("/r/:owner/:name", async (c) => {
       html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
+  if (r.source === "trawl" && r.status === "delisted" && !isOwnerOf(r, user?.login, user?.id)) {
+    // A removed trawled listing leaves no tombstone: it never asked to be here. The owner still sees the page (and Refresh).
+    const note = "was listed by the Cap'm's trawl and has been removed, by its owner or on their behalf. We kept only the name, so the trawl never brings it back.";
+    return respond(c, { full_name: r.full_name }, {
+      json: (d) => ({ error: "removed", full_name: d.full_name, note: `${d.full_name} ${note}` }),
+      md: (d) => `# Removed\n\n${d.full_name} ${note}`,
+      html: (d) => <Layout meta={{ title: "Removed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Removed</h2><p><code>{d.full_name}</code> {note}</p><p class="muted">The owner can come back any time by committing a <code>slopscore.md</code> (<a href="/spec">spec</a>).</p></section></Layout>,
+    }, 404);
+  }
   c.executionCtx.waitUntil(freshen(c.env, r));
   c.executionCtx.waitUntil(recordView(c.env.DB, r.id, Number(c.env.VIEW_SAMPLE || 1)).catch(() => {}));
   const [tags, cs, awards, versions, mine] = await Promise.all([
@@ -485,7 +573,7 @@ pages.get("/r/:owner/:name", async (c) => {
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),
     md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards),
     html: (d) => (
-      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" }} user={user} url={url}>
+      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || d.repo.source === "trawl", jsonLd: repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />
         <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
       </Layout>
@@ -534,7 +622,11 @@ pages.get("/__cron", async (c) => {
   const user = c.get("user");
   if (host !== "localhost" && host !== "127.0.0.1" && !user?.isAdmin) return c.json({ error: "admins only" }, 403);
   const cron = c.req.query("cron") ?? "*/5 * * * *";
-  return c.json({ cron, result: await runCron(cron, c.env) });
+  const n = c.req.query("n");
+  const release = c.req.query("release");
+  const dry = c.req.query("dry");
+  const auto = c.req.query("auto");
+  return c.json({ cron, result: await runCron(cron, c.env, { n: n ? Number(n) : undefined, repo: c.req.query("repo"), reason: c.req.query("reason"), release: release ? Number(release) : undefined, dry: dry === "1" || dry === "true", auto: auto ? Number(auto) : undefined }) });
 });
 
 // Admin/localhost: accept the Workers AI vision model license and show the raw result.
@@ -578,7 +670,9 @@ pages.post("/r/:owner/:name/vote", requireUser, async (c) => {
   const v = Number(b.value);
   if (![1, -1, 0].includes(v)) return c.json({ error: "value must be 1, -1, or 0" }, 400);
   if (!(await rateLimit(c.env.DB, `vote:${user.id}`, 60, 600))) return c.json({ error: "slow down" }, 429);
-  const updated = await castVote(c.env.DB, user.row, r, v as -1 | 0 | 1, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET));
+  const refusal = user.isCritic ? criticVoteRefusal(v, r.owner, adminLogins(c.env)) : null;
+  if (refusal) return c.json({ error: refusal }, 403);
+  const updated = await castVote(c.env.DB, user.row, r, v as -1 | 0 | 1, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET), user.isCritic);
   if (updated.ring) await logAction(c.env.DB, { actor: "system", role: "system", action: "vote-ring-flag", targetType: "repo", targetId: r.id, label: r.full_name, note: updated.ring });
   if (wantsJson(c)) return c.json({ ok: true, score: updated.score, up: updated.up, down: updated.down, mine: v });
   return c.redirect(c.req.header("referer")?.startsWith(new URL(c.req.url).origin) ? c.req.header("referer")! : `/r/${r.full_name}`);

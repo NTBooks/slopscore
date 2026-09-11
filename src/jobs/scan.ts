@@ -1,4 +1,5 @@
-// Cron */5: scan up to N discovered repos. Paid jumpers (priority_at) first, FIFO; then the free line, FIFO.
+// Cron */5: scan up to N discovered repos (admins can pass a bigger batch: /__cron?cron=*/5+*+*+*+*&n=20).
+// Paid jumpers (priority_at) first, FIFO; then the free line, FIFO, opted-in before trawled.
 // Stops early when the AI budget is spent; those repos stay discovered with queue_reason = ai-budget.
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
@@ -11,20 +12,23 @@ const PER_RUN = 4;
 const MIN_NEURONS = 250;
 
 export async function scanQueue(env: Env, limit = PER_RUN): Promise<{ scanned: number; deferred: number; results: { repo: string; status: string }[] }> {
+  limit = Math.min(Math.max(1, Math.floor(limit)), 25); // one request's worth of GitHub + AI calls
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
   await setBudget(env.DB, Number(env.AI_NEURON_BUDGET || 9000));
   const results: { repo: string; status: string }[] = [];
   let scanned = 0;
   let deferred = 0;
   const rows = await env.DB.prepare(
-    "SELECT * FROM repos WHERE status = 'discovered' ORDER BY priority_at IS NULL, priority_at ASC, first_seen ASC LIMIT ?",
+    "SELECT * FROM repos WHERE status = 'discovered' ORDER BY priority_at IS NULL, priority_at ASC, source ASC, first_seen ASC LIMIT ?",
   ).bind(limit * 2).all<RepoRow>().then((r) => r.results ?? []);
 
   for (const r of rows) {
     if (scanned >= limit) break;
     if (gh.throttled()) { await setState(env.DB, "scan:last_note", "github rate limit; waiting"); break; }
     const paid = r.priority_at != null;
-    const paidPath = paid && (env.PLAN_MODE === "paid" || Boolean(env.OPENROUTER_API_KEY));
+    // Trawled repos are our own bulk work, so their AI checks go to OpenRouter when a key is set instead of eating Workers AI neurons.
+    const viaOpenRouter = (paid || r.source === "trawl") && Boolean(env.OPENROUTER_API_KEY);
+    const paidPath = viaOpenRouter || (paid && env.PLAN_MODE === "paid");
     const budget = paidPath ? { ok: true } : await budgetAllows(env.DB, env, MIN_NEURONS);
     if (!budget.ok) {
       // mark the free line as waiting (once), keep the rows for tomorrow
@@ -34,7 +38,7 @@ export async function scanQueue(env: Env, limit = PER_RUN): Promise<{ scanned: n
       }
       continue;
     }
-    const res = await scanRepo(env.DB, env, gh, r.owner, r.name, { ignoreBudget: paid && env.PLAN_MODE === "paid", paid: paidPath });
+    const res = await scanRepo(env.DB, env, gh, r.owner, r.name, { ignoreBudget: paidPath, paid: viaOpenRouter });
     scanned++;
     const status = "error" in res.outcome ? `missing: ${res.outcome.error}` : res.outcome.status;
     if (!("error" in res.outcome) && res.outcome.deferred) deferred++;

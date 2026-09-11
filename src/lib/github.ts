@@ -155,10 +155,20 @@ export class GitHub {
     const q = encodeURIComponent("filename:slopscore.md path:/");
     return this.get<{ total_count: number; incomplete_results: boolean; items: GhCodeSearchItem[] }>(`/search/code?q=${q}&per_page=100&page=${page}${sort ? `&sort=${sort}&order=desc` : ""}`);
   }
+  /** Repository search (the truffle trawl). Requires a token. 30 req/min, shared with code search. */
+  searchRepos(q: string, page = 1, perPage = 50) {
+    return this.get<{ total_count: number; incomplete_results: boolean; items: GhRepo[] }>(`/search/repositories?q=${encodeURIComponent(q)}&sort=updated&order=desc&per_page=${perPage}&page=${page}`);
+  }
   /** Render markdown through GitHub's sanitiser, resolving relative links against the repo. */
   async renderMarkdown(text: string, context: string): Promise<string | null> {
     const r = await this.post<string>("/markdown", { text, mode: "gfm", context }, { accept: "text/html", raw: true });
     return r.status === 200 ? r.data : null;
+  }
+
+  /** The README as text, whatever it is called. One core call. */
+  async readmeText(owner: string, name: string, maxBytes = 60_000): Promise<string> {
+    const r = await this.get<string>(`/repos/${owner}/${name}/readme`, { accept: "application/vnd.github.raw", raw: true });
+    return r.status === 200 && r.data ? String(r.data).slice(0, maxBytes) : "";
   }
 
   /** Raw file from the default branch. No token needed, no API rate limit. */

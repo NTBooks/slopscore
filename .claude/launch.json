@@ -45,6 +45,18 @@
         "--test-scheduled"
       ],
       "port": 8817
+    },
+    {
+      "name": "slopscore-dev-8827",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8827",
+        "--test-scheduled"
+      ],
+      "port": 8827
     }
   ]
 }

@@ -10,6 +10,7 @@ import { ago, isoDate } from "../lib/time";
 import { VoteBox, ghUrl, Chips } from "./feed";
 import { CONTAINS_LISTED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import type { VulnSummary } from "../lib/osv";
+import { adoptionTemplate } from "../lib/virtual";
 
 export interface RepoPageData {
   repo: RepoRow;
@@ -61,6 +62,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       </div>
 
       <StatusBox r={r} scan={scan} />
+      {r.source === "trawl" && !d.isOwner ? <ClaimBox r={r} user={user} /> : null}
       {d.isOwner ? <OwnerBox r={r} user={user!} /> : null}
 
       {images.length ? (
@@ -91,7 +93,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       </div>
 
       <div class="disclosures">
-        <h3>Disclosures</h3>
+        <h3>{r.source === "trawl" ? "Disclosures, inferred by the Cap'm" : "Disclosures"}</h3>
         <dl class="about" style="margin:0">
           {DECLARED_FACETS.filter((f) => byFacet.has(f)).map((f) => (
             <><dt>{f}</dt><dd>{byFacet.get(f)!.map((t) => <a class={`chip${t.recognized ? "" : " unrec"}${f === "contains" ? ((CONTAINS_LISTED as readonly string[]).includes(t.value) ? " warn" : " bad") : ""}`} href={`/f/${f}/${t.value}`} title={t.recognized ? "" : "unrecognized value, kept as a free tag"}>{t.value}</a>)}</dd></>
@@ -103,7 +105,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
         {meta.contains?.length ? <p class="muted">Disclosed content is shown as-is. The author says it's there; graders decide if it matters.</p> : null}
       </div>
 
-      {r.body_html ? <div class="body"><h3>The pitch</h3>{raw(r.body_html)}</div> : null}
+      {r.body_html ? <div class="body"><h3>{r.source === "trawl" ? "The Cap'm's log" : "The pitch"}</h3>{raw(r.body_html)}</div> : null}
       {r.readme_html ? (
         <div class="body">
           <h3>README <a class="muted" href={ghUrl(r)} target="_blank" rel="noopener">(read the rest on GitHub)</a></h3>
@@ -152,6 +154,14 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
 };
 
 const StatusBox: FC<{ r: RepoRow; scan: ScanReport | null }> = ({ r, scan }) => {
+  if (r.source === "trawl" && (r.status === "listed" || r.status === "discovered")) {
+    return (
+      <div class="status queued">
+        <strong>The owner didn't write this.</strong>{" "}
+        <span class="muted">This repo never submitted itself. The Cap'm found it on a truffle trawl and wrote its paperwork from what GitHub already shows. {r.virtual_reason} {r.status === "listed" ? "Votes count; awards don't until the owner claims it." : "It waits in the queue behind every repo that opted in."}</span>
+      </div>
+    );
+  }
   switch (r.status) {
     case "listed": {
       const m = parseJson<{ slopscore?: number }>(r.meta, {});
@@ -179,12 +189,26 @@ const StatusBox: FC<{ r: RepoRow; scan: ScanReport | null }> = ({ r, scan }) => 
     case "hidden":
       return <div class="status queued"><strong>Under review.</strong> <span class="muted">Reported by several graders; hidden from feeds until a moderator decides.</span></div>;
     case "delisted":
-      return <div class="status delisted"><strong>Removed {isoDate(r.removed_at)}.</strong> <span class="muted">Reason: {r.removed_reason === "owner-request" ? "the owner asked" : r.removed_reason === "marker-removed" ? "slopscore.md was removed" : r.removed_reason === "dmca" ? "DMCA takedown on GitHub" : r.removed_reason === "404" ? "gone from GitHub" : r.removed_reason}. Votes and comments stay readable.</span></div>;
+      return <div class="status delisted"><strong>Removed {isoDate(r.removed_at)}.</strong> <span class="muted">Reason: {r.removed_reason === "owner-request" ? "the owner asked" : r.removed_reason === "marker-removed" ? "slopscore.md was removed" : r.removed_reason === "dmca" ? "DMCA takedown on GitHub" : r.removed_reason === "takedown" ? "a takedown request" : r.removed_reason === "404" ? "gone from GitHub" : r.removed_reason}. Votes and comments stay readable.</span></div>;
   }
 };
 
+/** Shown on trawled listings to everyone but the owner: how to claim or remove it, and the no-login takedown. */
+const ClaimBox: FC<{ r: RepoRow; user: SessionUser | null }> = ({ r, user }) => (
+  <div class="owner claim">
+    <h3>I'm not calling your project slop! Geeze, it's a joke... Do you own this repo?</h3>
+    <p>Log in with GitHub as <strong>{r.owner}</strong>. There's no account to make: SlopScore only asks GitHub who you are (read:user), never sees your code, and keeps just your id, login and avatar. Then you can:</p>
+    <ul>
+      <li><strong>Keep it, on your terms.</strong> Commit your own <code>slopscore.md</code> (<a href="/spec">spec</a>) and press Refresh. Your paperwork replaces the Cap'm's, and you can submit it for Slop of the Day.</li>
+      <li><strong>Take it down.</strong> One click on Remove. It stays gone; the trawl never brings it back.</li>
+    </ul>
+    {user ? <p class="muted">You're logged in as {user.login}, which isn't this repo's owner.</p> : <p><a class="btn" href={`/auth/github?next=/r/${r.full_name}`}>Log in with GitHub</a></p>}
+    <p class="muted">Can't log in as the owner? <a href={`/r/${r.full_name}/takedown`}>Request a takedown</a>. No login needed, and a trawled listing comes down right away.</p>
+  </div>
+);
+
 const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
-  const canSubmit = r.status === "listed" && (r.tier === "found" || (r.submitted_at ?? 0) < Math.floor(Date.now() / 1000) - 180 * 86400);
+  const canSubmit = r.source !== "trawl" && r.status === "listed" && (r.tier === "found" || (r.submitted_at ?? 0) < Math.floor(Date.now() / 1000) - 180 * 86400);
   const act = (name: string, label: string, opts: { disabled?: boolean; secondary?: boolean; confirm?: string; title?: string } = {}) => (
     <form class="owner" method="post" action={`/r/${r.full_name}/owner/${name}`} onsubmit={opts.confirm ? `return confirm(${JSON.stringify(opts.confirm)})` : undefined}>
       <input type="hidden" name="csrf" value={user.csrf} />
@@ -194,10 +218,19 @@ const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
   return (
     <div class="owner">
       <h3>You own this. Controls:</h3>
+      {r.source === "trawl" && r.virtual_md ? (
+        <div class="notice">
+          <strong>The Cap'm listed this without asking.</strong> Keep it by committing <code>slopscore.md</code> at the repo root and pressing Refresh: your file replaces his, and you can then submit it for awards. Or press Remove and it's gone for good. His guess, to start from (fix what's wrong):
+          <pre>{adoptionTemplate(r.virtual_md)}</pre>
+        </div>
+      ) : null}
+      {r.status === "listed" ? <BadgeBox r={r} /> : null}
       <p class="muted">Tier: <strong>{r.tier}</strong> · status: <strong>{r.status}</strong>. {r.tier === "found" ? "Votes already count. Submitting makes it a launch and puts it in the running for Slop of the Day." : `Launched ${isoDate(r.submitted_at)}.`}</p>
       {act("refresh", "Refresh from GitHub", { secondary: true, title: "re-crawl now, re-run every gate" })}
-      {act("submit", "Submit for consideration", { disabled: !canSubmit, title: canSubmit ? "" : r.status !== "listed" ? "available once listed" : "already submitted in the last 180 days" })}
-      {r.status === "delisted" && r.removed_reason === "owner-request"
+      {act("submit", "Submit for consideration", { disabled: !canSubmit, title: canSubmit ? "" : r.source === "trawl" ? "commit your own slopscore.md and press Refresh first" : r.status !== "listed" ? "available once listed" : "already submitted in the last 180 days" })}
+      {r.status === "delisted" && r.source === "trawl"
+        ? <p class="muted">Removed. To come back, commit a slopscore.md and press Refresh.</p>
+        : r.status === "delisted" && r.removed_reason === "owner-request"
         ? act("restore", "Restore listing", { secondary: true })
         : act("remove", "Remove listing", { secondary: true, confirm: "Remove this listing? The page stays as a public tombstone and the removal is logged. You can restore it later, or set unlisted: true in slopscore.md instead." })}
       {r.status === "discovered" || r.status === "rejected" ? (
@@ -206,10 +239,31 @@ const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
           <button type="submit" title="Stripe Checkout. Covers the hosting bill; buys the wait, never a gate.">Jump the line · $5 toward the hosting bill</button>
         </form>
       ) : null}
-      <p class="muted">Badge: <code>{`[![SlopScore](https://slopscore.org/badge/${r.full_name}.svg)](https://slopscore.org/r/${r.full_name})`}</code></p>
     </div>
   );
 };
+
+/**
+ * The badge is the growth loop: it lives in the owner's README, shows the live score, and sends every
+ * reader of that repo back here. So it goes at the top of the owner box with a copy button, not in a footnote.
+ */
+const BadgeBox: FC<{ r: RepoRow }> = ({ r }) => {
+  const md = `[![SlopScore](https://slopscore.org/badge/${r.full_name}.svg)](https://slopscore.org/r/${r.full_name})`;
+  return (
+    <div class="badgebox">
+      <span class="label">Badge for your README</span>
+      <img src={`/badge/${r.full_name}.svg`} alt={`SlopScore badge for ${r.full_name}`} height="20" class="badge-preview" />
+      <div class="badge-copy">
+        <input type="text" readonly value={md} onclick="this.select()" aria-label="Badge markdown" />
+        <button type="button" class="secondary" onclick={COPY_JS}>copy</button>
+      </div>
+      <p class="muted small">Paste it near the top of your README. It updates itself with the live score and links back to this page, so everyone reading your repo can grade it.</p>
+    </div>
+  );
+};
+
+// Copies the sibling input and says so for a beat. No clipboard permission prompt: it is a user gesture.
+const COPY_JS = "var i=this.previousElementSibling,t=this.textContent;i.select();navigator.clipboard.writeText(i.value).then(function(){},function(){document.execCommand('copy')});this.textContent='copied';var b=this;setTimeout(function(){b.textContent=t},1500)";
 
 const Comment: FC<{ c: CommentRow; r: RepoRow; user: SessionUser | null; pinned?: boolean; replies: CommentRow[] }> = ({ c, r, user, pinned, replies }) => (
   <div class={`comment${pinned ? " pinned" : ""}`} id={`c${c.id}`}>

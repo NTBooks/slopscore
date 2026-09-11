@@ -8,7 +8,8 @@ import { repoJson } from "./pages";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
 import { renderMarkdown } from "../lib/markdown";
-import { ipHash } from "../lib/trust";
+import { ipHash, criticVoteRefusal } from "../lib/trust";
+import { adminLogins } from "../env";
 
 export const mcp = new Hono<AppEnv>();
 
@@ -114,7 +115,10 @@ async function callTool(c: Context<AppEnv>, name: string, a: Record<string, unkn
       if (!user!.canWrite) return fail("account too new to vote");
       const v = Number(a.value);
       if (![1, -1, 0].includes(v)) return fail("value must be 1, -1, or 0");
-      const updated = await castVote(db, user!.row, r, v as -1 | 0 | 1, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET));
+      if (!(await rateLimit(db, `vote:${user!.id}`, 60, 600))) return fail("slow down: 60 votes per 10 minutes");
+      const refusal = user!.isCritic ? criticVoteRefusal(v, r.owner, adminLogins(c.env)) : null;
+      if (refusal) return fail(refusal);
+      const updated = await castVote(db, user!.row, r, v as -1 | 0 | 1, await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET), user!.isCritic);
       return text({ ok: true, score: updated.score, up: updated.up, down: updated.down, mine: v, flagged: updated.ring ?? null });
     }
     case "comment": {

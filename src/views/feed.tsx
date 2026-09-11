@@ -65,7 +65,7 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
       {thumb ? <a href={repoUrl(repo)} class="thumbwrap"><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank thumbwrap">🐷</a>}
       <div>
         <div class="title">
-          <a href={ghUrl(repo)} rel="noopener">{repo.title ?? repo.name}</a> <span class="domain">(github.com/{repo.owner})</span>
+          <a href={ghUrl(repo)} target="_blank" rel="noopener">{repo.title ?? repo.name}</a> <span class="domain">(github.com/{repo.owner})</span>
         </div>
         <div class="tagline">{repo.tagline}</div>
         <div class="meta">

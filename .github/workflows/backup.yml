@@ -1,0 +1,74 @@
+# Daily logical backup of the production D1 database.
+#
+# Why here and not a Worker cron: the free plan allows 5 cron triggers per account and they are all in use.
+# Why not `wrangler d1 export`: it refuses FTS5 databases and takes the database offline while it runs.
+#
+# Secrets to set on the repo (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   an API token with Account → D1 → Edit (needed for the query endpoint)
+#   BACKUP_PASSPHRASE      any long random string; the artifact is encrypted with it because artifacts on a
+#                          public repo are downloadable by any logged-in GitHub user
+# Optional variable:
+#   R2_BACKUP_BUCKET       an R2 bucket name; when set, the encrypted archive is also copied there (R2 has a
+#                          free tier of 10 GB; this archive is a few MB)
+#
+# Restore: see "Backups" in README.md.
+name: backup
+
+on:
+  schedule:
+    - cron: "20 4 * * *"   # 04:20 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Export every table
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          STAMP=$(date -u +%Y-%m-%d-%H%M)
+          echo "STAMP=$STAMP" >> "$GITHUB_ENV"
+          node scripts/backup.mjs "backup/$STAMP" --env production
+          cat "backup/$STAMP/manifest.json"
+
+      - name: Archive and encrypt
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_PASSPHRASE" || { echo "BACKUP_PASSPHRASE secret is not set"; exit 1; }
+          tar -C backup -czf "slopscore-$STAMP.tar.gz" "$STAMP"
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "slopscore-$STAMP.tar.gz" -out "slopscore-$STAMP.tar.gz.enc" -pass env:BACKUP_PASSPHRASE
+          rm -rf "slopscore-$STAMP.tar.gz" backup
+          ls -la "slopscore-$STAMP.tar.gz.enc"
+
+      - name: Keep as a 90-day artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slopscore-db-${{ env.STAMP }}
+          path: slopscore-${{ env.STAMP }}.tar.gz.enc
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Copy to R2 (only when R2_BACKUP_BUCKET is set)
+        if: vars.R2_BACKUP_BUCKET != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler r2 object put "${{ vars.R2_BACKUP_BUCKET }}/slopscore-$STAMP.tar.gz.enc" --file "slopscore-$STAMP.tar.gz.enc" --remote

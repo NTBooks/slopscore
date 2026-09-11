@@ -84,6 +84,26 @@ docs/           PLAN.md, SPEC.md
 
 Cheapest first: GitHub's own enforcement (takedowns delist automatically), a denylist and link rules, a risk score that quarantines suspicious repos for a human, Google Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed. Every action lands in the public log.
 
+## Backups
+
+Two layers, both free at this size:
+
+- **D1 Time Travel** is always on: point-in-time restore of the last 7 days (30 on Workers Paid). `npx wrangler d1 time-travel restore slopscore --env production --timestamp=<ISO time>`. It overwrites in place and hands back a bookmark to undo.
+- **Daily logical backup** via [`.github/workflows/backup.yml`](.github/workflows/backup.yml): every table exported by [`scripts/backup.mjs`](scripts/backup.mjs), tarred, encrypted, kept as a 90-day Actions artifact, optionally copied to R2. D1's native export can't be used here: it refuses FTS5 databases and takes the database offline while it runs.
+
+Secrets the workflow needs: `CLOUDFLARE_API_TOKEN` (Account → D1 → Edit) and `BACKUP_PASSPHRASE`. Optional repo variable `R2_BACKUP_BUCKET`.
+
+Restore from an artifact:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in slopscore-<stamp>.tar.gz.enc -out backup.tar.gz -pass pass:'<passphrase>'
+tar -xzf backup.tar.gz
+node scripts/restore.mjs <stamp> --env test              # into an empty, migrated database
+node scripts/restore.mjs <stamp> --env production --yes-production
+```
+
+Rows go in with `INSERT OR REPLACE`, parents before children; the search index follows through the triggers on `repos`. A manual run is `node scripts/backup.mjs` with a wrangler login.
+
 ## License
 
 MIT.

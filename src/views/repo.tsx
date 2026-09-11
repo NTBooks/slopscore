@@ -47,14 +47,14 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
         <VoteBox repo={r} mine={d.mine} user={user} />
         {gh.owner_avatar ? <img class="thumb thumbwrap" src={gh.owner_avatar} alt="" referrerpolicy="no-referrer" /> : <span class="thumb blank thumbwrap">🐷</span>}
         <div>
-          <h1><a href={ghUrl(r)} rel="noopener">{r.title ?? r.name}</a> <span class="domain muted">(github.com/{r.full_name})</span></h1>
+          <h1><a href={ghUrl(r)} target="_blank" rel="noopener">{r.title ?? r.name}</a> <span class="domain muted">(github.com/{r.full_name})</span></h1>
           <div class="tagline">{r.tagline}</div>
           <div class="sub">
             {r.language ? <span><i class="langdot"></i>{r.language} · </span> : null}★ {r.stars} · {r.forks} forks{r.license ? ` · ${r.license}` : ""} · <Chips repo={r} full />
           </div>
           <div class="muted">
             {r.status === "listed" ? <>listed {ago(r.listed_at)}</> : <>found {ago(r.first_seen)}</>} by <a href={`/u/${r.owner}`}>{r.owner}</a> · last checked {ago(r.last_crawled)}
-            {r.demo_url ? <> · <a href={r.demo_url} rel="nofollow noopener">demo</a></> : null}
+            {r.demo_url ? <> · <a href={r.demo_url} target="_blank" rel="nofollow noopener">demo</a></> : null}
             {d.awards.map((a) => <> · <span class="chip ok" title="a truffle: Schnitzel dug this one up">🏆 #{a.rank} {a.kind} {a.period}</span></>)}
           </div>
         </div>
@@ -72,7 +72,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       <div class="about">
         <dl>
           {gh.description ? <><dt>GitHub says</dt><dd>{gh.description}</dd></> : null}
-          {gh.homepage ? <><dt>website</dt><dd><a href={gh.homepage} rel="nofollow noopener">{gh.homepage}</a></dd></> : null}
+          {gh.homepage ? <><dt>website</dt><dd><a href={gh.homepage} target="_blank" rel="nofollow noopener">{gh.homepage}</a></dd></> : null}
           {gh.topics?.length ? <><dt>topics</dt><dd>{gh.topics.map((t) => <a class="chip" href={`/f/topic/${t}`}>{t}</a>)}</dd></> : null}
           <dt>created</dt><dd>{isoDate(r.gh_created_at)} · pushed {ago(r.pushed_at)}{gh.commits ? ` · ${gh.commits} commits` : ""}{gh.contributors ? ` · ${gh.contributors} contributor${gh.contributors === 1 ? "" : "s"}` : ""}</dd>
           {gh.release ? <><dt>release</dt><dd><a href={gh.release.url} rel="nofollow noopener">{gh.release.tag}</a>{gh.release.date ? ` · ${gh.release.date.slice(0, 10)}` : ""}</dd></> : null}
@@ -106,7 +106,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       {r.body_html ? <div class="body"><h3>The pitch</h3>{raw(r.body_html)}</div> : null}
       {r.readme_html ? (
         <div class="body">
-          <h3>README <a class="muted" href={ghUrl(r)}>(read the rest on GitHub)</a></h3>
+          <h3>README <a class="muted" href={ghUrl(r)} target="_blank" rel="noopener">(read the rest on GitHub)</a></h3>
           <div class="readme">{raw(r.readme_html)}</div>
         </div>
       ) : null}

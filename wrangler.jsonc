@@ -36,7 +36,7 @@
       "vars": {
         "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",
-    "PLAN_MODE": "free",
+    "PLAN_MODE": "paid",
         "ADMIN_LOGINS": "NTBooks",
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",
@@ -58,7 +58,7 @@
       "vars": {
         "SITE_NAME": "SlopScore",
         "SITE_URL": "https://slopscore.org",
-    "PLAN_MODE": "free",
+    "PLAN_MODE": "paid",
         "ADMIN_LOGINS": "NTBooks",
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",

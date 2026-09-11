@@ -338,6 +338,14 @@ x402 is for agents with wallets. Logged-in slopsmiths get the same thing with a 
 - **Truffles**: the winners page title and empty state, the nav tooltip, and award chips call the picks truffles ("what Schnitzel dug up"); the word never replaces "winners" in navigation.
 - Still needed from the owner: Stripe keys (test mode first, with the Stripe CLI forwarding the webhook), a Base wallet address for x402, and "Enable Device Flow" on the GitHub OAuth app.
 
+## Phase 6 shipped (2026-09-11): hardening
+
+- **Vulnerable dependencies** (`src/lib/osv.ts`): GitHub's dependency-graph SBOM → purls → OSV.dev batch query (≤ 1000 packages, 500 per call). Stored in `gh.vulns`, re-checked when the repo was pushed since the last check or after 7 days. Repo page shows "✓ N deps, none with known advisories" or "⚠ N of M deps have known advisories" with the top advisories in the tooltip; `.md` carries the same line. A badge, never a gate.
+- Repo page About block now also shows commits, contributors, latest release, a language bar, and GitHub community-profile "paperwork" chips (all data the scan already pulled).
+- `/stats` gains a **free-tier headroom** box from our own counters (neurons, scans, a rough D1 write estimate) with a link to the Cloudflare dashboard for the real meters.
+- `docs/SPEC.md` regenerated from `/spec.md` (v2 with the `spec:` line). README refreshed.
+- Watching the metrics for a day is the owner's job in the Cloudflare dashboard: Workers requests, D1 rows read/written, Workers AI neurons. The public `/stats` page shows the same story from the inside.
+
 ## Vote throttling v2: correlate votes with visitors (phase 4)
 
 What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack Overflow allow **no anonymous votes at all**; they lower the friction of logging in instead, then weight, fuzz, rate-limit, and ring-detect logged-in votes (already built, see `src/lib/trust.ts`). The extra layer worth borrowing is **traffic correlation**: votes should never outrun the people who could have cast them.

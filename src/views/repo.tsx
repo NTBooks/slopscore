@@ -9,6 +9,7 @@ import { POLICY_LABELS } from "../lib/scan";
 import { ago, isoDate } from "../lib/time";
 import { VoteBox, ghUrl, Chips } from "./feed";
 import { CONTAINS_LISTED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+import type { VulnSummary } from "../lib/osv";
 
 export interface RepoPageData {
   repo: RepoRow;
@@ -28,7 +29,7 @@ const REPORT_REASONS = ["objectionable", "undisclosed", "malware", "spam", "not-
 export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
   const { repo: r, user } = d;
   const meta = parseJson<Partial<SlopMeta>>(r.meta, {});
-  const gh = parseJson<{ description?: string; homepage?: string; topics?: string[]; watchers?: number; open_issues?: number; owner_avatar?: string }>(r.gh, {});
+  const gh = parseJson<{ description?: string; homepage?: string; topics?: string[]; watchers?: number; open_issues?: number; owner_avatar?: string; vulns?: VulnSummary | null; languages?: Record<string, number> | null; release?: { tag: string; date: string | null; url: string } | null; contributors?: number | null; commits?: number | null; community?: { health: number; files: string[] } | null }>(r.gh, {});
   const scan = parseJson<ScanReport | null>(r.scan, null);
   const images = r.images_hidden ? [] : parseJson<{ path: string }[]>(r.images, []);
   const byFacet = new Map<string, TagRow[]>();
@@ -73,7 +74,18 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
           {gh.description ? <><dt>GitHub says</dt><dd>{gh.description}</dd></> : null}
           {gh.homepage ? <><dt>website</dt><dd><a href={gh.homepage} rel="nofollow noopener">{gh.homepage}</a></dd></> : null}
           {gh.topics?.length ? <><dt>topics</dt><dd>{gh.topics.map((t) => <a class="chip" href={`/f/topic/${t}`}>{t}</a>)}</dd></> : null}
-          <dt>created</dt><dd>{isoDate(r.gh_created_at)} · pushed {ago(r.pushed_at)}</dd>
+          <dt>created</dt><dd>{isoDate(r.gh_created_at)} · pushed {ago(r.pushed_at)}{gh.commits ? ` · ${gh.commits} commits` : ""}{gh.contributors ? ` · ${gh.contributors} contributor${gh.contributors === 1 ? "" : "s"}` : ""}</dd>
+          {gh.release ? <><dt>release</dt><dd><a href={gh.release.url} rel="nofollow noopener">{gh.release.tag}</a>{gh.release.date ? ` · ${gh.release.date.slice(0, 10)}` : ""}</dd></> : null}
+          {gh.languages && Object.keys(gh.languages).length ? <><dt>languages</dt><dd><LangBar langs={gh.languages} /></dd></> : null}
+          {gh.community?.files?.length ? <><dt>paperwork</dt><dd>{gh.community.files.map((f) => <span class="chip">{f.replace(/_/g, " ")}</span>)} <span class="muted">{gh.community.health}% health</span></dd></> : null}
+          {gh.vulns ? (
+            <><dt>dependencies</dt><dd>
+              {gh.vulns.deps === 0 ? <span class="muted">{gh.vulns.note ?? "none found"}</span> : gh.vulns.vulnerable === 0
+                ? <span class="chip ok" title={`${gh.vulns.deps} packages checked against OSV.dev`}>✓ {gh.vulns.deps} deps, none with known advisories</span>
+                : <span class="chip bad" title={gh.vulns.sample.map((x) => `${x.name}@${x.version}: ${x.ids.join(", ")}`).join("\n")}>⚠ {gh.vulns.vulnerable} of {gh.vulns.deps} deps have known advisories</span>}
+              <span class="muted"> · OSV.dev, checked {ago(gh.vulns.checked_at)}</span>
+            </dd></>
+          ) : null}
           {r.tier === "submitted" ? <><dt>launched</dt><dd>{isoDate(r.submitted_at)}</dd></> : null}
         </dl>
       </div>
@@ -209,3 +221,14 @@ const Comment: FC<{ c: CommentRow; r: RepoRow; user: SessionUser | null; pinned?
     {replies.length ? <div class="replies">{replies.map((x) => <Comment c={x} r={r} user={user} replies={[]} />)}</div> : null}
   </div>
 );
+
+
+const LangBar = ({ langs }: { langs: Record<string, number> }) => {
+  const total = Object.values(langs).reduce((a, b) => a + b, 0) || 1;
+  const top = Object.entries(langs).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  return (
+    <span class="langbar" title={top.map(([n, b]) => `${n} ${((b / total) * 100).toFixed(1)}%`).join(" · ")}>
+      {top.map(([n, b]) => <span class="chip">{n} {Math.round((b / total) * 100)}%</span>)}
+    </span>
+  );
+};

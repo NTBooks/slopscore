@@ -16,6 +16,7 @@ content_rating: everyone
 contains: []
 category: [cli]
 status: works-on-my-machine
+slopbucket: [cli]            # optional: pick a bucket or invent one
 ---
 ```
 
@@ -44,6 +45,7 @@ status: works-on-my-machine
 - needs: free (external accounts/keys)
 - domain: free (subject matter)
 - tags: free, ≤ 20; GitHub topics are merged in as detected
+- slopbucket: up to 3 buckets (subreddit-style feeds at /b); unknown ones are created, banned ones stripped
 - images: explicit repo-relative image paths (else slopscore-1.png … slopscore-6.png at the root are auto-discovered)
 - maintainers: GitHub logins who get owner controls on the site (the only way for an org-owned repo)
 - unlisted: true — delist on next check without logging in
@@ -110,14 +112,13 @@ Optional markdown after the frontmatter, ≤ 4000 chars: the pitch. If empty, th
 - webapp → web-app
 - command-line → cli
 - terminal → cli
-- mcp-server → mcp
 - everybody → everyone
 - general → everyone
 - g → everyone
 
 ## Search operators
 
-category: cat: lang: language: tool: built_with: model: platform: interface: ui: audience: data: human: ai: status: contains: framework: needs: domain: tag: topic: license: owner: user: tier:
+category: cat: lang: language: tool: built_with: model: platform: interface: ui: audience: data: human: ai: status: contains: framework: needs: domain: tag: bucket: slopbucket: topic: license: owner: user: tier:
  — prefix with `-` to exclude. Quotes for phrases.
 
 Machine-readable: `/api/v1/vocab`.

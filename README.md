@@ -37,6 +37,10 @@ Found repos are listed and votable straight away. Log in and press **Submit** on
 - **$0/month.** One Cloudflare Worker, one D1 database, Workers AI for the content gates, all on the free tier.
 - **Nothing here is a secret.** Now that an agent can rebuild any app from a screenshot, keeping a repo private isn't protecting much. Push it and let the trough decide.
 
+## What's built
+
+Listing, voting (weighted, ring-checked, crowd votes shown separately), comments with maker flair, owner controls, the crawler with all gates (denylist, eligibility, contract, content via Safe Browsing + Llama Guard + a vision check, risk → quarantine), slopbuckets, a public moderation queue, mod console, public log and stats, device login for agents, RSS, sitemap, OpenAPI, an MCP server at `/mcp`, jump-the-line via Stripe or x402 with a public ledger, and an OSV dependency check. See [docs/PLAN.md](docs/PLAN.md) for the full design and what shipped when.
+
 ## Stack
 
 Cloudflare Workers · Hono (router + JSX SSR) · D1 (SQLite + FTS5) · Workers AI (Llama Guard 3, Llama 3.2 Vision) · Cron Triggers · Durable Objects for MCP. No client-side framework; forms work without JavaScript.

@@ -32,6 +32,10 @@ export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], award
   if (r.license) out.push(`- License: ${r.license}`);
   out.push(`- Listed: ${r.listed_at ? isoDate(r.listed_at) : "not yet"} · first seen ${isoDate(r.first_seen)} · last checked ${ago(r.last_crawled)}`);
   if (awards.length) out.push(`- Awards: ${awards.map((a) => `#${a.rank} ${a.kind} ${a.period}`).join(", ")}`);
+  try {
+    const gh = r.gh ? (JSON.parse(r.gh) as { vulns?: { deps: number; vulnerable: number; sample: { name: string; version: string; ids: string[] }[]; note?: string } | null }) : null;
+    if (gh?.vulns && gh.vulns.deps > 0) out.push(`- Dependencies: ${gh.vulns.vulnerable} of ${gh.vulns.deps} with known advisories (OSV.dev)${gh.vulns.sample.length ? ` · ${gh.vulns.sample.slice(0, 3).map((x) => `${x.name}@${x.version} (${x.ids.join(", ")})`).join("; ")}` : ""}`);
+  } catch { /* ignore */ }
   out.push("");
   const byFacet = new Map<string, string[]>();
   for (const t of tags) byFacet.set(t.facet, [...(byFacet.get(t.facet) ?? []), t.value + (t.recognized ? "" : "?") + (t.source === "detected" ? " (detected)" : "")]);

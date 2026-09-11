@@ -128,3 +128,15 @@ describe("stripe signature helpers", async () => {
     expect(timingSafeEqual("a", "ab")).toBe(false);
   });
 });
+
+describe("osv purl mapping", async () => {
+  const { fromPurl } = await import("../src/lib/osv");
+  it("maps common ecosystems and skips unknown or unversioned ones", () => {
+    expect(fromPurl("pkg:npm/lodash@4.17.21")).toEqual({ ecosystem: "npm", name: "lodash", version: "4.17.21" });
+    expect(fromPurl("pkg:npm/%40hono/zod-openapi@0.16.0")).toEqual({ ecosystem: "npm", name: "@hono/zod-openapi", version: "0.16.0" });
+    expect(fromPurl("pkg:pypi/requests@2.31.0")).toEqual({ ecosystem: "PyPI", name: "requests", version: "2.31.0" });
+    expect(fromPurl("pkg:maven/org.apache/log4j@2.14.1")).toEqual({ ecosystem: "Maven", name: "org.apache:log4j", version: "2.14.1" });
+    expect(fromPurl("pkg:githubactions/actions/checkout@v4")).toBeNull();
+    expect(fromPurl("pkg:npm/lodash")).toBeNull();
+  });
+});

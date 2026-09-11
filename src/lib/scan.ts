@@ -10,6 +10,7 @@ import { denylistGate, loadDenyRows } from "./denylist";
 import { riskScore } from "./risk";
 import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS, VISION_HARD } from "./content";
 import { bump } from "../jobs/stats";
+import { vulnerableDeps, type VulnSummary } from "./osv";
 import type { Env } from "../env";
 
 export type Policy = "denylist" | "metadata" | "contract" | "risk" | "content" | "owner-request" | "admin";
@@ -231,7 +232,17 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     bodyHtml = sanitizeReadmeHtml(bodyHtml, { owner: g.owner.login, repo: g.name, branch: g.default_branch });
   } else if (!parsed.body) bodyHtml = null;
 
+  // Known-vulnerable dependencies (badge, not a gate): GitHub SBOM → OSV. Re-checked when the repo was pushed since the last check.
+  let vulns: VulnSummary | null = null;
+  const prevGh = existing?.gh ? (JSON.parse(existing.gh) as { vulns?: VulnSummary }) : null;
+  const pushedAt = parseGhDate(g.pushed_at) ?? 0;
+  if (status === "listed" || status === "quarantined") {
+    if (!prevGh?.vulns || prevGh.vulns.checked_at < pushedAt || prevGh.vulns.checked_at < now() - 7 * 86400) {
+      try { vulns = await vulnerableDeps(gh, g.owner.login, g.name); } catch (e) { vulns = { checked_at: now(), deps: 0, vulnerable: 0, sample: [], note: (e as Error).message }; }
+    } else vulns = prevGh.vulns;
+  }
   const ghSnapshot = {
+    vulns,
     description: g.description, homepage: g.homepage, topics: g.topics ?? [], watchers: g.watchers_count, open_issues: g.open_issues_count, size: g.size,
     is_template: g.is_template ?? false, parent: g.parent?.full_name ?? null, owner_avatar: g.owner.avatar_url,
     languages, release: rel ? { tag: rel.tag_name, name: rel.name, date: rel.published_at, url: rel.html_url } : null,

@@ -354,6 +354,13 @@ pages.get("/stats", async (c) => {
             <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
           </div>
           <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>slopsmiths</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
+          <h3>Free-tier headroom <span class="muted">· what we can count from inside the Worker</span></h3>
+          <div class="capacity free">
+            <div><span class="label">AI neurons today</span><strong>{d.cap.neurons_used}</strong> of {d.cap.limits.ai_neurons_per_day ?? "∞"}</div>
+            <div><span class="label">scans, 30 days</span><strong>{d.led.scans_30d}</strong> <span class="muted">≈ {d.led.scans_30d * 12} GitHub calls</span></div>
+            <div><span class="label">D1 writes, rough</span><strong>{(d.daily[0] ? (Number(d.daily[0].scans) * 40 + Number(d.daily[0].found) * 2) : 0) + d.stats.votes + d.stats.comments}</strong> <span class="muted">today's scans×40 + finds×2 + all votes + comments; limit {(d.cap.limits.d1_writes_per_day / 1000).toFixed(0)}k/day</span></div>
+            <div><span class="label">the real meters</span><span>requests, D1 rows, CPU: <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" rel="noopener">Cloudflare dashboard</a> (owner only)</span></div>
+          </div>
           <h3>Ledger <span class="muted">· jump-the-line income vs. what the site costs</span></h3>
           <div class={`capacity ${d.led.covered ? "free" : "paid"}`}>
             <div><span class="label">income, 30 days</span><strong>${(d.led.income_30d_cents / 100).toFixed(2)}</strong> <span class="muted">({d.led.providers.map((p) => `${p.provider} ${p.n}`).join(", ") || "no payments yet"})</span></div>

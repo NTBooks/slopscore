@@ -328,6 +328,16 @@ x402 is for agents with wallets. Logged-in slopsmiths get the same thing with a 
 - **OpenAPI** at `/openapi.json`, hand-written 3.1 document covering the read API, the device flow, votes, comments, reports, owner controls.
 - **MCP** at `/mcp` (`src/routes/mcp.ts`): Streamable HTTP in stateless mode, plain JSON-RPC over POST, no Durable Object and no SDK dependency. Tools: list_repos, search_repos, get_repo, get_queue, list_buckets, ping_repo, whoami, vote, comment, report. Reads open; writes need the bearer. Verified with raw initialize / tools/list / tools/call.
 
+## Phase 5, slice 2 shipped (2026-09-11): payments, mobile, truffles
+
+- **Rush** (`src/lib/rush.ts`): one routine for both providers. Idempotent on the payment id (`payments.external_id`), sets `priority_at`, re-enters rejected repos as `discovered`, logs `donation` / `rush-paid` publicly, and either scans immediately (`immediateMode`: paid plan or OpenRouter key) or leaves the repo at the front of the line.
+- **Stripe** (`src/routes/pay.ts`): `POST /r/:o/:r/donate` (owner or maintainer, logged in) creates a Checkout Session with inline price data (`DONATE_USD`, default 5) and redirects; `POST /webhooks/stripe` verifies the `Stripe-Signature` HMAC itself (5-minute tolerance, constant-time compare), handles `checkout.session.completed`, and rushes the repo. Secrets: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`. Button "Jump the line · $5 toward the hosting bill" in the owner box when the repo is discovered or rejected.
+- **x402**: `POST|GET /r/:o/:r/rush` answers 402 with an `accepts` block (exact scheme, USDC on `X402_NETWORK`, default base-sepolia, price `RUSH_PRICE_USD` default 0.25, `payTo` = `X402_PAY_TO`); with an `X-PAYMENT` header it calls the facilitator's `/verify` then `/settle` (`X402_FACILITATOR`, default x402.org) and rushes on success, returning `X-PAYMENT-RESPONSE`. Disabled (503 with the Stripe alternative) until `X402_PAY_TO` is set.
+- **Ledger** on `/stats` (and `.json`): income by provider (30 d / all time) vs an estimated monthly cost (plan, domain, AI overage, OpenRouter), and whether it's covered.
+- **Mobile pass**: compact one-row header with scrollable tabs and full-width search; feed rows are vote box + stacked text (rank and thumbnail hidden); the winner strip flows inline; owner buttons full width; tables scroll; the rail drops below the feed with a smaller pig. Root cause of the "one word per line" bug: hidden thumbnail wrappers and an empty rank span still took grid cells.
+- **Truffles**: the winners page title and empty state, the nav tooltip, and award chips call the picks truffles ("what Schnitzel dug up"); the word never replaces "winners" in navigation.
+- Still needed from the owner: Stripe keys (test mode first, with the Stripe CLI forwarding the webhook), a Base wallet address for x402, and "Enable Device Flow" on the GitHub OAuth app.
+
 ## Vote throttling v2: correlate votes with visitors (phase 4)
 
 What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack Overflow allow **no anonymous votes at all**; they lower the friction of logging in instead, then weight, fuzz, rate-limit, and ring-detect logged-in votes (already built, see `src/lib/trust.ts`). The extra layer worth borrowing is **traffic correlation**: votes should never outrun the people who could have cast them.

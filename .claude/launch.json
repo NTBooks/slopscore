@@ -6,6 +6,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["wrangler", "dev", "--port", "8787"],
       "port": 8787
+    },
+    {
+      "name": "slopscore-dev-alt",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["wrangler", "dev", "--port", "8797"],
+      "port": 8797
     }
   ]
 }

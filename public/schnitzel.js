@@ -6,12 +6,14 @@
  * bounce with happy closed eyes; hovering a downvote slumps him: drooped ears, worried brows, a tear.
  * The login button gets a curious head-tilt with perked ears; the nav tabs make him lift his snout and sniff.
  * At rest every layer sits at identity, so it renders exactly like the static image.
- * No animation on touch/coarse pointers, narrow layouts, or prefers-reduced-motion. */
+ * Without a fine pointer (phones, narrow layouts) there is nothing to follow, so a director plays a
+ * randomized idle show instead: glancing about, spotting food, hopping, sniffing, the odd sulk.
+ * Nothing runs under prefers-reduced-motion, and nothing runs while the pig is scrolled out of view. */
 (function () {
   'use strict';
   var mq = window.matchMedia;
-  if (!mq || !mq('(min-width: 881px) and (hover: hover) and (pointer: fine)').matches) return;
-  if (mq('(prefers-reduced-motion: reduce)').matches) return;
+  if (!mq || mq('(prefers-reduced-motion: reduce)').matches) return;
+  var desktop = mq('(min-width: 881px) and (hover: hover) and (pointer: fine)').matches;
   var imgs = Array.prototype.slice.call(document.querySelectorAll('figure.mascot img.mascot-img'));
   if (!imgs.length || !window.fetch || !window.DOMParser) return;
 
@@ -62,14 +64,44 @@
     this.hop = 0; this.sadSince = 0;
     this.phase = Math.random() * TAU; this.nextTwitch = 1 + Math.random() * 3; this.nextBlink = 2 + Math.random() * 4; this.blinkAt = -1;
     this.visible = true; this.wasHungry = false;
+    this.idleLook = null; this.beat = null; this.beatEnd = 0; this.glanceAt = 0;
   }
+  // Idle show for touch screens: weighted random beats with random lengths. mood sets the global mood
+  // targets; look fixes the gaze; glance re-aims the gaze every so often (with an optional vertical bias).
+  var BEATS = [
+    { n: 'rest', w: 3, d: [2.5, 5], glance: [1.2, 2.6] },
+    { n: 'stare', w: 2, d: [2, 3.2], look: [0, 0.25] },
+    { n: 'hungry', w: 3, d: [2.5, 4.5], mood: 'hungry', glance: [0.9, 1.8], gy: 0.3 },
+    { n: 'happy', w: 2, d: [1.6, 2.8], mood: 'happy', look: [0, 0] },
+    { n: 'sniff', w: 2, d: [2, 3.4], mood: 'sniff', glance: [0.6, 1.3], gy: -0.55 },
+    { n: 'curious', w: 2, d: [2, 3.2], mood: 'curious', side: true },
+    { n: 'sad', w: 1, d: [3, 4.4], mood: 'sad', look: [0, 0.45] }
+  ];
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  Pig.prototype.direct = function (now) {
+    var b = this.beat;
+    if (!b || now > this.beatEnd) {
+      // After a mood beat, usually settle first; never play the same beat twice running.
+      var pool = b && b.mood && Math.random() < 0.5 ? [BEATS[0]] : BEATS.filter(function (x) { return x !== b; });
+      var total = pool.reduce(function (a, x) { return a + x.w; }, 0), pick = Math.random() * total;
+      for (var i = 0; i < pool.length; i++) { pick -= pool[i].w; if (pick <= 0) { b = pool[i]; break; } }
+      this.beat = b; this.beatEnd = now + rnd(b.d[0], b.d[1]); this.glanceAt = 0;
+      hungryT = happyT = sadT = curiousT = sniffT = 0;
+      if (b.mood === 'hungry') hungryT = 1; else if (b.mood === 'happy') happyT = 1; else if (b.mood === 'sad') sadT = 1;
+      else if (b.mood === 'curious') curiousT = 1; else if (b.mood === 'sniff') sniffT = 1;
+      if (b.look) this.idleLook = b.look; else if (b.side) this.idleLook = [Math.random() < 0.5 ? -0.7 : 0.7, rnd(-0.2, 0.3)];
+    }
+    if (b.glance && now > this.glanceAt) { this.idleLook = [rnd(-0.9, 0.9), rnd(-0.6, 0.6) + (b.gy || 0)]; this.glanceAt = now + rnd(b.glance[0], b.glance[1]); }
+  };
   Pig.prototype.step = function (dt, now) {
     var g = this.g;
     // Where is the cursor relative to the face? Saturates smoothly so far-away cursors still read as a glance.
+    if (!desktop) this.direct(now);
     if (mouse) {
       var r = this.svg.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height * 0.5;
       this.lookT[0] = tanh((mouse.x - cx) / 340); this.lookT[1] = tanh((mouse.y - cy) / 300);
-    } else { this.lookT[0] = this.lookT[1] = 0; }
+    } else if (this.idleLook) { this.lookT[0] = this.idleLook[0]; this.lookT[1] = this.idleLook[1]; }
+    else { this.lookT[0] = this.lookT[1] = 0; }
     var lx = spring(this.look[0], this.lookT[0], 90, 0.32, dt), ly = spring(this.look[1], this.lookT[1], 90, 0.32, dt);
     var h = spring(this.hunger, hungryT, 60, 0.38, dt), hc = clamp(h, 0, 1.4), h1 = clamp(h, 0, 1);
     if (hungryT && !this.wasHungry) { this.ears[0].v -= 420; this.ears[1].v += 420; this.blinkAt = -1; } // ears perk when food shows up
@@ -160,13 +192,15 @@
     });
     if (!pigs.length) return;
 
-    document.addEventListener('mousemove', function (e) { mouse = { x: e.clientX, y: e.clientY }; }, { passive: true });
-    document.documentElement.addEventListener('mouseleave', function () { mouse = null; hungryT = happyT = sadT = curiousT = sniffT = 0; });
-    document.addEventListener('mouseover', function (e) {
-      var t = e.target, over = function (sel) { return t && t.closest && t.closest(sel) ? 1 : 0; };
-      happyT = over(UP); sadT = happyT ? 0 : over(DOWN); curiousT = happyT || sadT ? 0 : over(LOGIN);
-      sniffT = happyT || sadT || curiousT ? 0 : over(TABS); hungryT = happyT || sadT || curiousT || sniffT ? 0 : over(FOOD);
-    });
+    if (desktop) {
+      document.addEventListener('mousemove', function (e) { mouse = { x: e.clientX, y: e.clientY }; }, { passive: true });
+      document.documentElement.addEventListener('mouseleave', function () { mouse = null; hungryT = happyT = sadT = curiousT = sniffT = 0; });
+      document.addEventListener('mouseover', function (e) {
+        var t = e.target, over = function (sel) { return t && t.closest && t.closest(sel) ? 1 : 0; };
+        happyT = over(UP); sadT = happyT ? 0 : over(DOWN); curiousT = happyT || sadT ? 0 : over(LOGIN);
+        sniffT = happyT || sadT || curiousT ? 0 : over(TABS); hungryT = happyT || sadT || curiousT || sniffT ? 0 : over(FOOD);
+      });
+    }
     if (window.IntersectionObserver) {
       var io = new IntersectionObserver(function (entries) {
         entries.forEach(function (en) { pigs.forEach(function (pg) { if (pg.svg === en.target) pg.visible = en.isIntersecting; }); });

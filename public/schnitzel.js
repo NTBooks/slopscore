@@ -4,6 +4,7 @@
  * the jaw chews, the ears flick every so often, and hovering anything edible (a repo link) makes him
  * hungry: big eyes, blush, and a strand of drool that stretches and swings. Hovering an upvote makes him
  * bounce with happy closed eyes; hovering a downvote slumps him: drooped ears, worried brows, a tear.
+ * The login button gets a curious head-tilt with perked ears; the nav tabs make him lift his snout and sniff.
  * At rest every layer sits at identity, so it renders exactly like the static image.
  * No animation on touch/coarse pointers, narrow layouts, or prefers-reduced-motion. */
 (function () {
@@ -15,9 +16,9 @@
   if (!imgs.length || !window.fetch || !window.DOMParser) return;
 
   var FOOD = 'a[href^="/r/"], a[href^="https://github.com/"], .row .title a, .row .thumb, .strip a';
-  var UP = '.votebox button.up', DOWN = '.votebox button.down';
+  var UP = '.votebox button.up', DOWN = '.votebox button.down', LOGIN = '.login', TABS = '.tabs a';
   var TAU = Math.PI * 2;
-  var mouse = null, hungryT = 0, happyT = 0, sadT = 0;
+  var mouse = null, hungryT = 0, happyT = 0, sadT = 0, curiousT = 0, sniffT = 0;
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -57,7 +58,7 @@
     this.sparks = svg.querySelectorAll('.s-spark'); this.happyEyes = svg.querySelectorAll('.s-happy'); this.brows = svg.querySelectorAll('.s-brow');
     ['all', 'earL', 'earR', 'head', 'snout', 'eyeL', 'eyeR', 'pupilL', 'pupilR', 'scleraL', 'scleraR', 'mud'].forEach(function (k) { this.g[k].style.willChange = 'transform'; }, this);
     this.look = [S(), S()]; this.lookT = [0, 0];
-    this.hunger = S(); this.happy = S(); this.sad = S(); this.ears = [S(), S()]; this.droolL = S(); this.droolS = S();
+    this.hunger = S(); this.happy = S(); this.sad = S(); this.curious = S(); this.sniff = S(); this.ears = [S(), S()]; this.droolL = S(); this.droolS = S();
     this.hop = 0; this.sadSince = 0;
     this.phase = Math.random() * TAU; this.nextTwitch = 1 + Math.random() * 3; this.nextBlink = 2 + Math.random() * 4; this.blinkAt = -1;
     this.visible = true; this.wasHungry = false;
@@ -74,6 +75,8 @@
     if (hungryT && !this.wasHungry) { this.ears[0].v -= 420; this.ears[1].v += 420; this.blinkAt = -1; } // ears perk when food shows up
     this.wasHungry = !!hungryT;
     var hp = clamp(spring(this.happy, happyT, 80, 0.4, dt), 0, 1), sp = clamp(spring(this.sad, sadT, 40, 0.65, dt), 0, 1);
+    var cp = clamp(spring(this.curious, curiousT, 70, 0.42, dt), 0, 1), sn = clamp(spring(this.sniff, sniffT, 70, 0.5, dt), 0, 1);
+    var puls = Math.sin(now * TAU * 7) * sn; // sniff pulse
     if (sadT) { if (!this.sadSince) this.sadSince = now; } else this.sadSince = 0;
     // Happy hop: a phase that only advances while happy, so he lands and stops rather than freezing mid-air.
     this.hop += dt * TAU * 2.2 * hp;
@@ -83,7 +86,8 @@
 
     // Chewing: slow munch when idle, a fast eager quiver when hungry. j = jaw open 0..1, grind = sideways slide.
     this.phase += dt * TAU * lerp(1.35, 3.4, h1);
-    var j = (1 - Math.cos(this.phase)) / 2 * lerp(1, 0.5, h1) * (1 - sp), grind = Math.sin(this.phase) * 3 * lerp(1, 0.45, h1) * (1 - sp) + tremble;
+    var still = (1 - sp) * (1 - sn); // no chewing while sad or sniffing
+    var j = (1 - Math.cos(this.phase)) / 2 * lerp(1, 0.5, h1) * still, grind = Math.sin(this.phase) * 3 * lerp(1, 0.45, h1) * still + tremble;
     var br = Math.sin(now * TAU * 0.33) * 1.5; // breathing
 
     // Ear flicks: a velocity kick into a bouncy spring, one ear or both, every few seconds.
@@ -96,7 +100,7 @@
 
     // Blink (never while hungry: those eyes stay wide).
     var bl = 1;
-    if (h1 < 0.25 && hp < 0.2 && sp < 0.2 && now > this.nextBlink) { this.blinkAt = now; this.nextBlink = now + 2.5 + Math.random() * 5; }
+    if (h1 < 0.25 && hp < 0.2 && sp < 0.2 && cp < 0.2 && sn < 0.2 && now > this.nextBlink) { this.blinkAt = now; this.nextBlink = now + 2.5 + Math.random() * 5; }
     if (this.blinkAt >= 0) { var bt = (now - this.blinkAt) / 0.22; if (bt < 1) bl = 1 - Math.sin(Math.PI * bt) * 0.92; else this.blinkAt = -1; }
 
     // Drool: length is a loose spring toward how hungry he is; the strand swings against the jaw's sideways motion.
@@ -105,27 +109,29 @@
 
     var lean = 1 + h1 * 0.25; // hungry: leans in harder toward the cursor
     // Whole pig: hops on the spot when happy (squashing on landing), slumps a little when sad.
-    xf(g.all, 300, 492, 0, hop, sway2 * 4, 1 + h1 * 0.04 + land * 0.06 - sp * 0.02, 1 + h1 * 0.04 - land * 0.07 - sp * 0.04);
-    var droop = sp * 34, flap = wag * 14;
-    xf(g.earL, 205, 165, lx * 5, ly * 3 + br + sp * 10, -lx * 7 + eL - h1 * 7 - droop - flap, 1, 1);
-    xf(g.earR, 395, 165, lx * 5, ly * 3 + br + sp * 10, -lx * 7 + eR + h1 * 7 + droop + flap, 1, 1);
-    xf(g.head, 300, 300, lx * 14, ly * 9 + br + j * 1.2 + h1 * 6 + sp * 18, lx * 3 + shake, 1, 1);
-    var ex = lx * 30 * lean, ey = ly * 20 * lean + br + h1 * 4 + sp * 30, ps = (1 + 0.65 * h1) * (1 - 0.25 * sp), ss = 1 + 0.95 * h1;
-    xf(g.eyeL, 228, 258, ex + sp * 4, ey, 0, 1, bl); xf(g.eyeR, 372, 258, ex - sp * 4, ey, 0, 1, bl);
+    // Curious: the whole pig tilts (pivot low so the head leans). Sniff: head lifts, nose in the air.
+    xf(g.all, 300, 492, 0, hop - sn * 4, sway2 * 4 + cp * 9, 1 + h1 * 0.04 + land * 0.06 - sp * 0.02, 1 + h1 * 0.04 - land * 0.07 - sp * 0.04);
+    var droop = sp * 34, flap = wag * 14, perkL = cp * 12 - sn * 8, perkR = cp * 20 - sn * 8; // curious: one ear higher than the other
+    xf(g.earL, 205, 165, lx * 5, ly * 3 + br + sp * 10, -lx * 7 + eL - h1 * 7 - droop - flap - perkL, 1, 1);
+    xf(g.earR, 395, 165, lx * 5, ly * 3 + br + sp * 10, -lx * 7 + eR + h1 * 7 + droop + flap + perkR, 1, 1);
+    xf(g.head, 300, 300, lx * 14, ly * 9 + br + j * 1.2 + h1 * 6 + sp * 18 - sn * 5, lx * 3 + shake, 1, 1);
+    var ex = lx * 30 * lean, ey = ly * 20 * lean + br + h1 * 4 + sp * 30 - sn * 4, ps = (1 + 0.65 * h1 + 0.15 * cp) * (1 - 0.25 * sp), ss = 1 + 0.95 * h1;
+    var lid = bl * (1 - 0.35 * sn); // sniffing narrows the eyes a little
+    xf(g.eyeL, 228, 258, ex + sp * 4, ey, 0, 1, lid); xf(g.eyeR, 372, 258, ex - sp * 4, ey, 0, 1, lid);
     xf(g.pupilL, 228, 258, 0, 0, 0, ps, ps * lerp(1, 0.06, hp)); xf(g.pupilR, 372, 258, 0, 0, 0, ps, ps * lerp(1, 0.06, hp));
     xf(g.scleraL, 228, 258, 0, 0, 0, ss, ss); xf(g.scleraR, 372, 258, 0, 0, 0, ss, ss);
     setOpacity(g.scleraL, h1 * 1.2); setOpacity(g.scleraR, h1 * 1.2);
     var i;
-    for (i = 0; i < this.sparks.length; i++) setOpacity(this.sparks[i], h1);
+    for (i = 0; i < this.sparks.length; i++) setOpacity(this.sparks[i], Math.max(h1, cp * 0.9));
     for (i = 0; i < this.happyEyes.length; i++) setOpacity(this.happyEyes[i], hp * 1.5 - 0.3);
     for (i = 0; i < this.brows.length; i++) setOpacity(this.brows[i], sp);
-    setOpacity(g.blush, Math.max(h1, hp));
+    setOpacity(g.blush, Math.max(h1, hp, cp * 0.5));
     // A tear wells up after a moment of sadness and rolls down the cheek, then another.
     var tear = 0, tearY = 0;
     if (this.sadSince && now - this.sadSince > 0.7) { var tt = ((now - this.sadSince - 0.7) % 1.6) / 1.6; tearY = tt * tt * 70; tear = sp * (tt < 0.15 ? tt / 0.15 : 1 - tt * 0.6); }
     xf(g.tear, 242, 284, -sp * 4, tearY, 0, 1, 1 + tearY * 0.02); setOpacity(g.tear, tear);
-    xf(g.snout, 300, 346, lx * 38 * lean, ly * 24 * lean + br + j * 2.5 + h1 * 5 + sp * 26, lx * 1.5 + wag * 3, 1 + j * 0.03 + h1 * 0.06, 1 - j * 0.06 + h1 * 0.06 - sp * 0.05);
-    xf(g.mud, 305, 404, lx * 42 * lean + grind, ly * 26 * lean + br + j * 8 + h1 * 5 + sp * 26, grind * 0.8, 1, 1);
+    xf(g.snout, 300, 346, lx * 38 * lean, ly * 24 * lean + br + j * 2.5 + h1 * 5 + sp * 26 - sn * 9 - puls * 2.5, lx * 1.5 + wag * 3, 1 + j * 0.03 + h1 * 0.06 + puls * 0.06, 1 - j * 0.06 + h1 * 0.06 - sp * 0.05 - puls * 0.05);
+    xf(g.mud, 305, 404, lx * 42 * lean + grind, ly * 26 * lean + br + j * 8 + h1 * 5 + sp * 26 - sn * 8, grind * 0.8, 1, 1);
     if (L > 0.5) {
       var ax = 318, ay = 468, tx = ax + sway, ty = ay + L, rr = 3.5 + L * 0.07;
       g.droolp.setAttribute('d', taper(ax, ay, ax + sway * 0.35, ay + L * 0.55, tx, ty, 6.5, 2.5) +
@@ -155,11 +161,11 @@
     if (!pigs.length) return;
 
     document.addEventListener('mousemove', function (e) { mouse = { x: e.clientX, y: e.clientY }; }, { passive: true });
-    document.documentElement.addEventListener('mouseleave', function () { mouse = null; hungryT = happyT = sadT = 0; });
+    document.documentElement.addEventListener('mouseleave', function () { mouse = null; hungryT = happyT = sadT = curiousT = sniffT = 0; });
     document.addEventListener('mouseover', function (e) {
-      var t = e.target, c = t && t.closest;
-      happyT = c && t.closest(UP) ? 1 : 0; sadT = !happyT && c && t.closest(DOWN) ? 1 : 0;
-      hungryT = !happyT && !sadT && c && t.closest(FOOD) ? 1 : 0;
+      var t = e.target, over = function (sel) { return t && t.closest && t.closest(sel) ? 1 : 0; };
+      happyT = over(UP); sadT = happyT ? 0 : over(DOWN); curiousT = happyT || sadT ? 0 : over(LOGIN);
+      sniffT = happyT || sadT || curiousT ? 0 : over(TABS); hungryT = happyT || sadT || curiousT || sniffT ? 0 : over(FOOD);
     });
     if (window.IntersectionObserver) {
       var io = new IntersectionObserver(function (entries) {

@@ -37,8 +37,13 @@ export interface SlopMeta {
   x: Record<string, unknown>;
 }
 
+/** The nudge shown for a v1 file. Wording is shared by the parser warning, the scan notes and the repo page. */
+export const LEGACY_NUDGE = `outdated paperwork: this file is spec v1. Add \`slopscore: ${SPEC_VERSION}\` and \`spec: ${SPEC_URL}\` to the frontmatter; nothing else changes`;
+
 export interface ParseResult {
   ok: boolean;
+  /** True when the file is an older spec version that still parses (v1). Listed repos keep their listing; new ones need the current version. */
+  legacy?: boolean;
   /** Field-level reasons the file was rejected. Empty when ok. */
   errors: string[];
   /** Non-fatal notes (unrecognized values, ignored keys). */
@@ -76,11 +81,11 @@ const CATEGORY_ENUM = CATEGORY as unknown as readonly [string, ...string[]];
 const CONTAINS_ALL = [...CONTAINS_LISTED, ...CONTAINS_REJECTED];
 
 export const slopSchema = z.object({
-  slopscore: z.preprocess((v) => Number(v), z.literal(SPEC_VERSION, {
-    errorMap: () => ({ message: `slopscore must be ${SPEC_VERSION} (spec version; a v1 file needs slopscore: ${SPEC_VERSION} and spec: ${SPEC_URL})` }),
+  // v1 files still parse (legacy: true) so an already-listed repo isn't punished for a version bump it didn't ask for; scan.ts decides what that means.
+  slopscore: z.preprocess((v) => Number(v), z.union([z.literal(SPEC_VERSION), z.literal(1)], {
+    errorMap: () => ({ message: `slopscore must be ${SPEC_VERSION} (spec version; set slopscore: ${SPEC_VERSION} and spec: ${SPEC_URL})` }),
   })),
-  spec: z.preprocess((v) => (v == null ? undefined : String(v).trim()), z.string({ required_error: `spec is required: spec: ${SPEC_URL} (the file credits the contract it follows)` })
-    .refine(isSpecUrl, { message: `spec must be ${SPEC_URL} (the file credits the contract it follows)` })),
+  spec: z.preprocess((v) => (v == null ? undefined : String(v).trim()), z.string().optional()),
   ai_generated: enumNorm(AI_GENERATED as unknown as readonly [string, ...string[]], "ai_generated"),
   human_touch: enumNorm(HUMAN_TOUCH as unknown as readonly [string, ...string[]], "human_touch"),
   content_rating: enumNorm(CONTENT_RATING as unknown as readonly [string, ...string[]], "content_rating"),
@@ -168,14 +173,18 @@ export function parseSlopMd(text: string): ParseResult {
   }
   const d = res.data;
   const errors: string[] = [];
+  const legacy = d.slopscore < SPEC_VERSION;
+  if (legacy) warnings.push(LEGACY_NUDGE);
+  else if (!d.spec) errors.push(`spec is required: spec: ${SPEC_URL} (the file credits the contract it follows)`);
+  else if (!isSpecUrl(d.spec)) errors.push(`spec must be ${SPEC_URL} (the file credits the contract it follows)`);
   if (d.content_rating !== "everyone") errors.push(`content_rating "${d.content_rating}" is not listed; only "everyone" is`);
   const rejectedHits = d.contains.filter((c) => (CONTAINS_REJECTED as readonly string[]).includes(c));
   if (rejectedHits.length) errors.push(`contains ${rejectedHits.join(", ")}: not listed on SlopScore`);
   if (body.length > MAX_BODY) warnings.push(`body truncated to ${MAX_BODY} chars`);
 
-  const meta: SlopMeta = { ...d, x } as SlopMeta;
+  const meta: SlopMeta = { ...d, spec: d.spec ?? "", x } as SlopMeta;
   const tags = tagsFromMeta(meta, warnings);
-  return { ok: errors.length === 0, errors, warnings, meta, body: body.slice(0, MAX_BODY), tags, raw: obj };
+  return { ok: errors.length === 0, legacy, errors, warnings, meta, body: body.slice(0, MAX_BODY), tags, raw: obj };
 }
 
 export function tagsFromMeta(meta: SlopMeta, warnings: string[] = []): TagRow[] {

@@ -1,4 +1,5 @@
 // Thin typed helpers over D1 prepared statements. Keep CPU low: raw SQL, no ORM.
+import { cached, markDirty } from "./cache";
 import { hot as hotRank, controversy as contRank } from "./rank";
 import { now, SORT_WINDOWS } from "./time";
 import { filterSql, type Filter } from "./searchquery";
@@ -81,10 +82,11 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   if (o.priority === false) where.push("r.priority_at IS NULL");
   if (o.tag) { where.push("EXISTS (SELECT 1 FROM repo_tags tt WHERE tt.repo_id = r.id AND tt.facet IN ('slopbucket','category','tags','domain','topic') AND tt.value = ?)"); params.push(o.tag.toLowerCase()); }
   const win = SORT_WINDOWS[o.t ?? "all"] ?? 0;
+  const hourFloor = (secs: number) => Math.floor(secs / 3600) * 3600; // stable cache keys: windows move once an hour, not every request
   if (win && (o.sort === "top" || o.sort === "controversial" || o.sort === "new")) {
-    where.push("r.listed_at >= ?"); params.push(now() - win);
+    where.push("r.listed_at >= ?"); params.push(hourFloor(now() - win));
   }
-  if (o.sort === "rising") { where.push("r.listed_at >= ?"); params.push(now() - 3 * 86400); }
+  if (o.sort === "rising") { where.push("r.listed_at >= ?"); params.push(hourFloor(now() - 3 * 86400)); }
   if (o.sort === "upcoming") {
     where.push(`EXISTS (SELECT 1 FROM repo_tags wt WHERE wt.repo_id = r.id AND wt.facet = 'status' AND wt.value IN (${[...WIP_STATUSES].map(() => "?").join(",")}))`);
     params.push(...WIP_STATUSES);
@@ -98,8 +100,8 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
   const order = o.queue ? "r.priority_at IS NULL, r.priority_at ASC, r.first_seen ASC" : feedOrder(o.sort);
   const sql = `SELECT r.* FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ? OFFSET ?`;
   params.push(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
-  const res = await db.prepare(sql).bind(...params).all<RepoRow>();
-  const rows = res.results ?? [];
+  // Served from cache until the data version bumps; the SQL plus its bound params is the key.
+  const rows = await cached(db, `feed:${sql}:${JSON.stringify(params)}`, async () => (await db.prepare(sql).bind(...params).all<RepoRow>()).results ?? []);
   return { rows: rows.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE, page };
 }
 
@@ -128,22 +130,26 @@ export async function replaceTags(db: D1Database, repoId: number, tags: TagRow[]
 }
 
 export async function facetCounts(db: D1Database, facet: string, limit = 50): Promise<{ value: string; n: number }[]> {
-  const r = await db.prepare(
-    "SELECT rt.value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = ? AND r.status = 'listed' GROUP BY rt.value ORDER BY n DESC, rt.value LIMIT ?",
-  ).bind(facet, limit).all<{ value: string; n: number }>();
-  return r.results ?? [];
+  return cached(db, `facet-counts:${facet}:${limit}`, async () => {
+    const r = await db.prepare(
+      "SELECT rt.value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = ? AND r.status = 'listed' GROUP BY rt.value ORDER BY n DESC, rt.value LIMIT ?",
+    ).bind(facet, limit).all<{ value: string; n: number }>();
+    return r.results ?? [];
+  });
 }
 
 export async function siteStats(db: D1Database): Promise<{ listed: number; queued: number; users: number; votes: number; comments: number }> {
-  const r = await db.prepare(
-    `SELECT
-      (SELECT count(*) FROM repos WHERE status = 'listed') AS listed,
-      (SELECT count(*) FROM repos WHERE status IN ('discovered','quarantined')) AS queued,
-      (SELECT count(*) FROM users) AS users,
-      (SELECT count(*) FROM votes) AS votes,
-      (SELECT count(*) FROM comments WHERE deleted_at IS NULL) AS comments`,
-  ).first<{ listed: number; queued: number; users: number; votes: number; comments: number }>();
-  return r ?? { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 };
+  return cached(db, "site-stats", async () => {
+    const r = await db.prepare(
+      `SELECT
+        (SELECT count(*) FROM repos WHERE status = 'listed') AS listed,
+        (SELECT count(*) FROM repos WHERE status IN ('discovered','quarantined')) AS queued,
+        (SELECT count(*) FROM users) AS users,
+        (SELECT count(*) FROM votes) AS votes,
+        (SELECT count(*) FROM comments WHERE deleted_at IS NULL) AS comments`,
+    ).first<{ listed: number; queued: number; users: number; votes: number; comments: number }>();
+    return r ?? { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 };
+  });
 }
 
 // ---- users ----
@@ -212,27 +218,54 @@ export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, val
   const h = hotRank(Math.max(score, 0), Math.max(-score, 0), created);
   const c = contRank(up, down);
   await db.prepare("UPDATE repos SET up = ?, down = ?, score = ?, hot = ?, controversy = ? WHERE id = ?").bind(up, down, score, h, c, repo.id).run();
+  await markDirty(db);
   return { ...repo, up, down, score, hot: h, controversy: c, ring };
 }
 
 export interface Bucket { slug: string; title: string; blurb: string | null; curated: number; banned: number; banned_reason: string | null; created_by: string | null; n: number }
 
-const BUCKET_COUNT = "(SELECT count(DISTINCT rt.repo_id) FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND rt.facet IN ('slopbucket','category','tags','domain','topic') AND rt.value = t.slug)";
+const BUCKET_FACETS = "('slopbucket','category','tags','domain','topic')";
+
+/** Listed-repo count per bucket slug, in one pass over repo_tags (the old per-tag correlated subquery read millions of rows a day). Cached until the data changes. */
+async function bucketCounts(db: D1Database): Promise<Record<string, number>> {
+  return cached(db, "bucket-counts", async () => {
+    const r = await db.prepare(
+      `SELECT rt.value AS slug, count(DISTINCT rt.repo_id) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND rt.facet IN ${BUCKET_FACETS} GROUP BY rt.value`,
+    ).all<{ slug: string; n: number }>();
+    return Object.fromEntries((r.results ?? []).map((x) => [x.slug, x.n]));
+  });
+}
+
+type BucketRow = Omit<Bucket, "n"> & { sort: number };
 
 /** Curated, unbanned buckets for the bucket bar and the rail. */
 export async function curatedTags(db: D1Database): Promise<Bucket[]> {
-  const r = await db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t WHERE t.curated = 1 AND t.banned = 0 ORDER BY t.sort, t.slug`).all<Bucket>();
-  return r.results ?? [];
+  return cached(db, "buckets:curated", async () => {
+    const [rows, counts] = await Promise.all([
+      db.prepare("SELECT t.* FROM tags t WHERE t.curated = 1 AND t.banned = 0 ORDER BY t.sort, t.slug").all<BucketRow>().then((r) => r.results ?? []),
+      bucketCounts(db),
+    ]);
+    return rows.map((t) => ({ ...t, n: counts[t.slug] ?? 0 }));
+  });
 }
 
 /** Every bucket (for /b and /mod): curated first, then community buckets by size, banned last. */
 export async function allBuckets(db: D1Database): Promise<Bucket[]> {
-  const r = await db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t ORDER BY t.banned ASC, t.curated DESC, n DESC, t.sort, t.slug`).all<Bucket>();
-  return r.results ?? [];
+  return cached(db, "buckets:all", async () => {
+    const [rows, counts] = await Promise.all([
+      db.prepare("SELECT t.* FROM tags t").all<BucketRow>().then((r) => r.results ?? []),
+      bucketCounts(db),
+    ]);
+    return rows
+      .map((t) => ({ ...t, n: counts[t.slug] ?? 0 }))
+      .sort((a, b) => a.banned - b.banned || b.curated - a.curated || b.n - a.n || a.sort - b.sort || a.slug.localeCompare(b.slug));
+  });
 }
 
 export async function getTag(db: D1Database, slug: string): Promise<Bucket | null> {
-  return db.prepare(`SELECT t.*, ${BUCKET_COUNT} AS n FROM tags t WHERE t.slug = ?`).bind(slug.toLowerCase()).first<Bucket>();
+  const s = slug.toLowerCase();
+  const [t, counts] = await Promise.all([db.prepare("SELECT t.* FROM tags t WHERE t.slug = ?").bind(s).first<BucketRow>(), bucketCounts(db)]);
+  return t ? { ...t, n: counts[s] ?? 0 } : null;
 }
 
 /** Registers buckets a repo declared (community buckets are uncurated); returns the banned ones so the caller can strip them. */
@@ -260,6 +293,7 @@ export async function addComment(db: D1Database, repoId: number, userId: number,
   ];
   if (!hold) stmts.push(db.prepare("UPDATE repos SET comment_count = comment_count + 1 WHERE id = ?").bind(repoId));
   const [ins] = await db.batch(stmts);
+  if (!hold) await markDirty(db);
   return Number(ins.meta.last_row_id);
 }
 
@@ -292,6 +326,7 @@ export async function rateLimit(db: D1Database, key: string, max: number, window
 export async function logAction(db: D1Database, a: { actor: string; role: "admin" | "owner" | "system"; action: string; targetType: string; targetId: number; label?: string; note?: string }): Promise<void> {
   await db.prepare("INSERT INTO mod_log (actor_login, actor_role, action, target_type, target_id, target_label, note) VALUES (?,?,?,?,?,?,?)")
     .bind(a.actor, a.role, a.action, a.targetType, a.targetId, a.label ?? null, a.note ?? null).run();
+  await markDirty(db); // every admin/owner action that changes what readers see goes through here
 }
 
 export async function awardsFor(db: D1Database, repoId: number): Promise<{ kind: string; period: string; rank: number }[]> {

@@ -46,6 +46,7 @@ export const Chips: FC<{ repo: RepoRow; full?: boolean }> = ({ repo, full }) => 
       <span class="chip" title="ai_generated">{m.ai_generated} ai</span>
       <span class="chip" title="human_touch">{m.human_touch} human</span>
       <span class="chip" title="status">{m.status}</span>
+      {(m.slopscore ?? 2) < 2 ? <span class="chip warn" title="slopscore.md is on spec v1. Still listed, still votable. Owner: add slopscore: 2 and spec: https://slopscore.org/spec">v1 paperwork</span> : null}
       {(m.category ?? []).slice(0, full ? 99 : 2).map((c) => <a class="chip" href={`/f/category/${c}`}>{c}</a>)}
       {(m.contains ?? []).map((c) => <span class={`chip ${(CONTAINS_LISTED as readonly string[]).includes(c) ? "warn" : "bad"}`} title="disclosed">⚠ {c}</span>)}
       {full ? (m.built_with ?? []).map((c) => <a class="chip" href={`/f/built_with/${c}`}>🤖 {c}</a>) : null}

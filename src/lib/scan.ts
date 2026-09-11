@@ -1,5 +1,7 @@
 // The scan pipeline. Every gate result is stored in repos.scan (JSON) and rendered publicly on the repo page.
 // Order: fetch GitHub → gate 0 denylist → gate 1 metadata → gate 2 contract → gate 3 content (budgeted AI) → gate 2b risk → status.
+import { SPEC_VERSION, SPEC_URL } from "./vocab";
+import { markDirty } from "./cache";
 import { GitHub, parseGhDate, fullNameFromRedirect, type GhRepo, type GhContentsEntry, type GhRelease, type GhCommunity, type GhUser } from "./github";
 import { parseSlopMd, type TagRow, type SlopMeta } from "./slopmd";
 import { replaceTags, registerBuckets, type RepoRow } from "./db";
@@ -116,6 +118,11 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const parsed = parseSlopMd(raw.text);
   const meta = parsed.meta;
   const contractGate: GateResult = { gate: "contract", ok: parsed.ok, reasons: [...parsed.errors], notes: parsed.warnings };
+  // A v1 file is grandfathered when the repo has ever been listed: it stays listed and the page shows the nudge. A brand-new v1 listing is asked for v2.
+  if (parsed.ok && parsed.legacy && !existing?.listed_at) {
+    contractGate.ok = false;
+    contractGate.reasons.push(`slopscore.md is spec v1; new listings need v${SPEC_VERSION}: set \`slopscore: ${SPEC_VERSION}\` and \`spec: ${SPEC_URL}\``);
+  }
   const tagline = meta?.tagline || g.description || null;
   if (parsed.ok && !tagline) { contractGate.ok = false; contractGate.reasons.push("no tagline: set `tagline:` in slopscore.md or a description on GitHub"); }
   report.warnings.push(...parsed.warnings);
@@ -304,6 +311,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     if (status === "quarantined") await bump(db, "quarantined");
   }
 
+  await markDirty(db);
   const repo = await db.prepare("SELECT * FROM repos WHERE id = ?").bind(g.id).first<RepoRow>();
   return { repo, outcome: { status, report, reject_reason: rejectReason, deferred } };
 }
@@ -324,6 +332,7 @@ export function metadataGate(g: GhRepo): GateResult {
 
 export async function delist(db: D1Database, id: number, reason: string): Promise<void> {
   await db.prepare("UPDATE repos SET status = 'delisted', removed_at = unixepoch(), removed_reason = ?, last_crawled = unixepoch(), next_crawl = unixepoch() + 30 * 86400 WHERE id = ? AND status != 'delisted'").bind(reason, id).run();
+  await markDirty(db);
 }
 
 /** Seconds until the next recrawl: 1 h … 7 d by how recently the repo was pushed; ≤ 6 h when it's hot. */

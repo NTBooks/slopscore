@@ -153,7 +153,16 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
 
 const StatusBox: FC<{ r: RepoRow; scan: ScanReport | null }> = ({ r, scan }) => {
   switch (r.status) {
-    case "listed": return null;
+    case "listed": {
+      const m = parseJson<{ slopscore?: number }>(r.meta, {});
+      if ((m.slopscore ?? 2) >= 2) return null;
+      return (
+        <div class="status queued">
+          <strong>Outdated paperwork.</strong>{" "}
+          <span class="muted">slopscore.md is on spec v1. Still listed, still votable, nothing lost. To update, add <code>slopscore: 2</code> and <code>spec: https://slopscore.org/spec</code> to the frontmatter; nothing else changes. <a href="/spec">Spec</a>.</span>
+        </div>
+      );
+    }
     case "rejected":
       return (
         <div class="status rejected">

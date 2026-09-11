@@ -1,4 +1,5 @@
 // Cron */10: 40 repos by next_crawl. One conditional GET each; 304 is free. Changes trigger a full re-scan.
+import { markDirty } from "../lib/cache";
 import { GitHub, fullNameFromRedirect, parseGhDate, type GhRepo } from "../lib/github";
 import { scanRepo, delist, nextInterval } from "../lib/scan";
 import type { Env } from "../env";
@@ -72,6 +73,7 @@ export async function checkOne(env: Env, gh: GitHub, r: RepoRow, out?: RecrawlRe
   }
   if (!changed) {
     await env.DB.prepare("UPDATE repos SET stars = ?, forks = ?, etag_repo = ?, last_crawled = ?, next_crawl = ? WHERE id = ?").bind(g.stargazers_count, g.forks_count, res.etag, t, t + nextInterval(pushed, r.hot), r.id).run();
+    if (g.stargazers_count !== r.stars || g.forks_count !== r.forks) await markDirty(env.DB);
     if (out) out.unchanged++;
     return "unchanged";
   }

@@ -46,7 +46,16 @@ describe("parseSlopMd", () => {
 
   it("rejects bad enum values and wrong spec version", () => {
     expect(parseSlopMd(good().replace("human_touch: light", "human_touch: a-bit")).errors.join(" ")).toMatch(/human_touch must be one of/);
-    expect(parseSlopMd(good().replace("slopscore: 2", "slopscore: 1")).errors.join(" ")).toMatch(/spec version/);
+    expect(parseSlopMd(good().replace("slopscore: 2", "slopscore: 3")).errors.join(" ")).toMatch(/spec version/);
+  });
+
+  it("still parses a v1 file, flagged legacy with the upgrade nudge", () => {
+    const r = parseSlopMd(good().replace("slopscore: 2", "slopscore: 1").replace("spec: https://slopscore.org/spec\n", ""));
+    expect(r.ok).toBe(true);
+    expect(r.legacy).toBe(true);
+    expect(r.meta?.slopscore).toBe(1);
+    expect(r.warnings.join(" ")).toMatch(/outdated paperwork/);
+    expect(parseSlopMd(good()).legacy).toBe(false);
   });
 
   it("requires spec: to name the canonical contract URL", () => {

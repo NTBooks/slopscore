@@ -1,4 +1,5 @@
 // HTML pages (each also answers as .json / .md via respond()).
+import { cached } from "../lib/cache";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import {
@@ -32,15 +33,18 @@ import { ago, isoDate } from "../lib/time";
 
 export const pages = new Hono<AppEnv>();
 
+/** The rail is on every page; it is served from cache until the data version bumps. */
 async function railData(db: D1Database): Promise<RailData> {
-  const [stats, tags, tools] = await Promise.all([
-    siteStats(db),
-    curatedTags(db),
-    db.prepare(
-      "SELECT rt.value, count(*) AS n, avg(r.score) AS mean FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = 'built_with' AND r.status = 'listed' GROUP BY rt.value ORDER BY mean DESC, n DESC LIMIT 8",
-    ).all<{ value: string; n: number; mean: number }>().then((r) => r.results ?? []),
-  ]);
-  return { stats, tools, tags };
+  return cached(db, "rail", async () => {
+    const [stats, tags, tools] = await Promise.all([
+      siteStats(db),
+      curatedTags(db),
+      db.prepare(
+        "SELECT rt.value, count(*) AS n, avg(r.score) AS mean FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = 'built_with' AND r.status = 'listed' GROUP BY rt.value ORDER BY mean DESC, n DESC LIMIT 8",
+      ).all<{ value: string; n: number; mean: number }>().then((r) => r.results ?? []),
+    ]);
+    return { stats, tools, tags };
+  });
 }
 
 function sortParam(s: string | undefined): Sort {
@@ -287,11 +291,11 @@ pages.get("/best", async (c) => {
 
 pages.get("/tools", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
-  const rows = await c.env.DB.prepare(
+  const rows = await cached(c.env.DB, "tools-leaderboard", () => c.env.DB.prepare(
     `SELECT rt.value, count(*) AS n, round(avg(r.score), 2) AS mean, max(r.score) AS best,
        (SELECT r2.full_name FROM repo_tags t2 JOIN repos r2 ON r2.id = t2.repo_id WHERE t2.facet = 'built_with' AND t2.value = rt.value AND r2.status = 'listed' ORDER BY r2.score DESC LIMIT 1) AS best_repo
      FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = 'built_with' AND r.status = 'listed' GROUP BY rt.value ORDER BY mean DESC, n DESC`,
-  ).all<{ value: string; n: number; mean: number; best: number; best_repo: string }>().then((r) => r.results ?? []);
+  ).all<{ value: string; n: number; mean: number; best: number; best_repo: string }>().then((r) => r.results ?? []));
   return respond(c, { rows }, {
     json: (d) => ({ facet: "built_with", leaderboard: d.rows }),
     md: (d) => ["# Which AI produces the best slop?", "", "| tool | listings | mean score | best |", "|---|---|---|---|", ...d.rows.map((r) => `| ${r.value} | ${r.n} | ${r.mean} | [${r.best_repo}](/r/${r.best_repo}) (${r.best}) |`)].join("\n"),
@@ -389,7 +393,7 @@ pages.get("/spec", (c) => {
     "Missing or invalid **disclosure** fields reject the repo with the reason shown publicly on its page. Fix the file, then `curl /ping/owner/repo` (or press Refresh if you own it).", "",
     "## Minimal file", "", "```yaml", MINIMAL_EXAMPLE.trim(), "```", "",
     "## Required (disclosures)", "",
-    ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.`, `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
+    ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.`, "Older files: a v1 file on a repo that is already listed stays listed and votable, with an \"outdated paperwork\" note on its page until it is updated. New listings need the current version.", `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
       `contains: list, may be empty. Listed with a chip: ${v.contains.listed.join(", ")}. Rejected: ${v.contains.rejected.join(", ")}.`, `category: ≥ 1 of ${v.controlled.category.join(", ")}`, `status: ${v.controlled.status.join(" | ")}`,
       "tagline: ≤ 140 chars, or a GitHub description (rejected only if both are empty)"].map((x) => `- ${x}`), "",
     "## Optional facets (unknown values never reject; they're kept as free tags marked unrecognized)", "",

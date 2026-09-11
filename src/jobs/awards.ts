@@ -1,5 +1,6 @@
 // Cron 5 0 * * *: Slop of the Day (yesterday), Slop of the Week + Most Promising (Mondays, previous ISO week).
 // Only submitted repos compete; the period is the launch (submitted_at) day/week.
+import { markDirty } from "../lib/cache";
 import type { Env } from "../env";
 import { WIP_STATUSES } from "../lib/vocab";
 import { pruneViews } from "../lib/views";
@@ -37,6 +38,7 @@ export async function awards(env: Env, today = new Date()): Promise<{ day: numbe
     upcoming = wip.length;
   }
   await pruneViews(db);
+  await markDirty(db);
   return { day: dayRows.length, week, upcoming, period };
 }
 

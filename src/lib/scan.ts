@@ -237,7 +237,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const prevGh = existing?.gh ? (JSON.parse(existing.gh) as { vulns?: VulnSummary }) : null;
   const pushedAt = parseGhDate(g.pushed_at) ?? 0;
   if (status === "listed" || status === "quarantined") {
-    if (!prevGh?.vulns || prevGh.vulns.checked_at < pushedAt || prevGh.vulns.checked_at < now() - 7 * 86400) {
+    if (!prevGh?.vulns || prevGh.vulns.note || prevGh.vulns.checked_at < pushedAt || prevGh.vulns.checked_at < now() - 7 * 86400) {   // a check that failed (note set) is retried every scan
       try { vulns = await vulnerableDeps(gh, g.owner.login, g.name); } catch (e) { vulns = { checked_at: now(), deps: 0, vulnerable: 0, sample: [], note: (e as Error).message }; }
     } else vulns = prevGh.vulns;
   }

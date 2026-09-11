@@ -10,6 +10,7 @@ import { mod } from "./routes/mod";
 import { feeds } from "./routes/feeds";
 import { mcp } from "./routes/mcp";
 import { pay } from "./routes/pay";
+import { contact } from "./routes/contact";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -26,6 +27,7 @@ app.route("/mod", mod);
 app.route("/", feeds);
 app.route("/mcp", mcp);
 app.route("/", pay);
+app.route("/contact", contact);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
@@ -53,6 +55,7 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 - ${origin}/search?q=   full-text + operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner:  (prefix - to exclude)
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
+- ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
 
 ## Formats
 Every HTML page is also available as JSON and Markdown: append .json or .md to the path, or send Accept: application/json / text/markdown.

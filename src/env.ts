@@ -31,6 +31,12 @@ export interface Env {
   X402_NETWORK?: string;
   X402_FACILITATOR?: string;
   RUSH_PRICE_USD?: string;
+  /** Contact: public aliases (Email Routing) and an optional notification path via the send-email binding. */
+  CONTACT_EMAIL?: string;
+  ABUSE_EMAIL?: string;
+  CONTACT_NOTIFY?: string;   // secret: a verified Email Routing destination (your real inbox); never rendered
+  CONTACT_FROM?: string;
+  MAIL?: { send(message: unknown): Promise<void> };
 }
 
 export interface SessionUser {

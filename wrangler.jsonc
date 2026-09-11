@@ -17,6 +17,8 @@
     "SITE_NAME": "SlopScore",
     "SITE_URL": "http://localhost:8787",
     "PLAN_MODE": "free",
+    "CONTACT_EMAIL": "hello@slopscore.org",
+    "ABUSE_EMAIL": "abuse@slopscore.org",
     "ADMIN_LOGINS": "NTBooks",
     "MIN_ACCOUNT_AGE_DAYS": "30",
     "AUTO_HIDE_REPORTS": "3",
@@ -31,12 +33,15 @@
         { "binding": "DB", "database_name": "slopscore-test", "database_id": "65264eba-0c77-477d-b4b6-80bff9b6e032", "migrations_dir": "migrations" }
       ],
       "ai": { "binding": "AI" },
+      "send_email": [{ "name": "MAIL" }],
       // The free plan allows 5 cron triggers per account: production takes 4, test gets one combined tick.
       "triggers": { "crons": ["*/30 * * * *"] },
       "vars": {
         "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",
     "PLAN_MODE": "paid",
+        "CONTACT_EMAIL": "hello@slopscore.org",
+        "ABUSE_EMAIL": "abuse@slopscore.org",
         "ADMIN_LOGINS": "NTBooks",
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",
@@ -54,11 +59,14 @@
         { "binding": "DB", "database_name": "slopscore", "database_id": "a93167e0-ce88-4697-b92b-748d39084c70", "migrations_dir": "migrations" }
       ],
       "ai": { "binding": "AI" },
+      "send_email": [{ "name": "MAIL" }],
       "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
       "vars": {
         "SITE_NAME": "SlopScore",
         "SITE_URL": "https://slopscore.org",
     "PLAN_MODE": "paid",
+        "CONTACT_EMAIL": "hello@slopscore.org",
+        "ABUSE_EMAIL": "abuse@slopscore.org",
         "ADMIN_LOGINS": "NTBooks",
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",

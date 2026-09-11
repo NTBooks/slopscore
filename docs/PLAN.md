@@ -346,6 +346,13 @@ x402 is for agents with wallets. Logged-in slopsmiths get the same thing with a 
 - `docs/SPEC.md` regenerated from `/spec.md` (v2 with the `spec:` line). README refreshed.
 - Watching the metrics for a day is the owner's job in the Cloudflare dashboard: Workers requests, D1 rows read/written, Workers AI neurons. The public `/stats` page shows the same story from the inside.
 
+## Contact without spam (2026-09-11)
+
+- **Public addresses are Email Routing aliases**, never a real inbox: `CONTACT_EMAIL` (hello@slopscore.org) and `ABUSE_EMAIL` (abuse@slopscore.org, for DMCA/legal). The owner creates them in Cloudflare → Email → Email Routing → Custom addresses, forwarding to a verified destination. Rotate an alias if it draws spam; nothing else changes.
+- **Everything else goes through `/contact`** (`src/routes/contact.tsx`): GitHub login required, 3 messages/hour, ≤ 5 links, stored in `messages` (migration 0006) and shown at the top of the mod console with resolve / ban-sender / reply-on-GitHub. Message bodies are private; the public log only records `message-resolved`.
+- **Optional email ping** via Cloudflare's send-email binding (`MAIL`, declared on test and production): when the secret `CONTACT_NOTIFY` (a verified Email Routing destination, i.e. the owner's real inbox) is set, each new message is mailed from `CONTACT_FROM` (default schnitzel@slopscore.org). Never rendered anywhere. Sending needs Email Routing enabled on the zone.
+- Skipped on purpose: obfuscated mailto links and honeypots (scrapers beat both, and neither identifies an abuser).
+
 ## Vote throttling v2: correlate votes with visitors (phase 4)
 
 What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack Overflow allow **no anonymous votes at all**; they lower the friction of logging in instead, then weight, fuzz, rate-limit, and ring-detect logged-in votes (already built, see `src/lib/trust.ts`). The extra layer worth borrowing is **traffic correlation**: votes should never outrun the people who could have cast them.

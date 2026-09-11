@@ -4,14 +4,35 @@
     {
       "name": "slopscore-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "--port", "8787"],
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8787"
+      ],
       "port": 8787
     },
     {
       "name": "slopscore-dev-alt",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "--port", "8797"],
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8797"
+      ],
       "port": 8797
+    },
+    {
+      "name": "slopscore-dev-8807",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8807"
+      ],
+      "port": 8807
     }
   ]
 }

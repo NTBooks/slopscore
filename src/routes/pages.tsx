@@ -429,6 +429,7 @@ pages.get("/about", (c) => {
     "## Votes", "", "Only logged-in slopsmiths vote. Votes are weighted by account trust derived from GitHub (age, public repos, followers), rate-limited per account and per network, and bursts from same-week accounts or one network count for nothing. Displayed scores are lightly fuzzed so bots can't tell whether they counted. This is roughly how Reddit does it; the knobs are public in the repo.", "",
     "## Moderation", "", "Cheapest first: GitHub's own enforcement, a denylist, a risk score that quarantines suspicious repos for a human, Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed.", "",
     "## For agents", "", "Append `.json` or `.md` to any page. See [/llms.txt](/llms.txt), [/openapi.json](/openapi.json), and the MCP server at `/mcp`.",
+    "", "## Contact", "", "Use the [contact form](/contact) (GitHub login, lands in the mod console). Legal and abuse notices: " + (c.env.ABUSE_EMAIL ?? "abuse@slopscore.org") + ". General: " + (c.env.CONTACT_EMAIL ?? "hello@slopscore.org") + ".",
   ].join("\n");
   return respond(c, { md }, {
     json: (d) => ({ about: d.md }),

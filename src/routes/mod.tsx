@@ -22,6 +22,7 @@ interface ReportRow { id: number; target_type: "repo" | "comment"; target_id: nu
 mod.get("/", async (c) => {
   const user = c.get("user")!; const url = new URL(c.req.url);
   const db = c.env.DB;
+  const messages = await db.prepare("SELECT id, login, subject, body, repo_full_name, created_at, read_at, reply FROM messages WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all<{ id: number; login: string; subject: string; body: string; repo_full_name: string | null; created_at: number; read_at: number | null; reply: string | null }>().then((r) => r.results ?? []);
   const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
       `SELECT rp.id, rp.target_type, rp.target_id, rp.reason, rp.note, rp.created_at, u.login AS reporter,
@@ -87,6 +88,20 @@ mod.get("/", async (c) => {
             </div>
           );
         })}
+
+        <h3>Messages <span class="muted">· contact form · {messages.length} open</span></h3>
+        {messages.length === 0 ? <div class="empty">Nobody has written in. Suspicious.</div> : null}
+        {messages.map((m) => (
+          <div class="modcard" id={`msg${m.id}`}>
+            <div><strong>{m.subject}</strong> from <a href={`/u/${m.login}`}>{m.login}</a>{m.repo_full_name ? <> about <a href={`/r/${m.repo_full_name}`}>{m.repo_full_name}</a></> : null} · {ago(m.created_at)}{m.read_at ? null : <span class="chip warn"> new</span>}</div>
+            <blockquote>{m.body}</blockquote>
+            <div class="actions">
+              <form method="post" action={`/mod/message/${m.id}`} class="inline">{csrf}<input type="text" name="note" placeholder="private note (optional)" maxlength={300} /> <button class="btn secondary" name="action" value="resolve">resolve</button></form>
+              {act("ban", "ban sender", `/mod/message/${m.id}`, "btn secondary", "Ban this account?")}
+              <a class="muted" href={`https://github.com/${m.login}`} target="_blank" rel="noopener">reply on GitHub ↗</a>
+            </div>
+          </div>
+        ))}
 
         <h3>Quarantined <span class="muted">· awaiting a human · {quarantined.length}</span></h3>
         {quarantined.length === 0 ? <div class="empty">Nobody is in quarantine.</div> : null}
@@ -258,6 +273,23 @@ mod.post("/comment/:id", requireUser, async (c) => {
     await logAction(db, { actor: admin, role: "admin", action: "ban", targetType: "user", targetId: cm.user_id, note: "held comment" });
   }
   await logAction(db, { actor: admin, role: "admin", action: `comment-${action}`, targetType: "comment", targetId: id, label: cm.full_name });
+  return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod");
+});
+
+mod.post("/message/:id", requireUser, async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await body(c);
+  const admin = c.get("user")!.login;
+  const db = c.env.DB;
+  const m = await db.prepare("SELECT id, user_id, login FROM messages WHERE id = ?").bind(id).first<{ id: number; user_id: number; login: string }>();
+  if (!m) return c.json({ error: "unknown message" }, 404);
+  if (b.action === "ban") {
+    await db.prepare("UPDATE users SET banned_at = unixepoch(), ban_reason = 'contact form abuse' WHERE id = ?").bind(m.user_id).run();
+    await logAction(db, { actor: admin, role: "admin", action: "ban", targetType: "user", targetId: m.user_id, label: m.login, note: "contact form abuse" });
+  }
+  await db.prepare("UPDATE messages SET resolved_at = unixepoch(), resolved_by = ?, read_at = COALESCE(read_at, unixepoch()), reply = ? WHERE id = ?").bind(admin, (b.note ?? "").slice(0, 300) || null, id).run();
+  // messages are private; the public log only records that one was handled, never the content
+  await logAction(db, { actor: admin, role: "admin", action: "message-resolved", targetType: "message", targetId: id });
   return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod");
 });
 

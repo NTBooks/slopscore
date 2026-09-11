@@ -91,6 +91,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
           <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does. Made by slopsmiths, for slopsmiths.</p>
         </footer>
         {raw(VOTE_JS)}
+        <script src="/schnitzel.js" defer></script>
       </body>
     </html>
   );

@@ -6,7 +6,7 @@ export const SPEC_URL = "https://slopscore.org/spec";
 /** True when a declared `spec:` value points at the canonical spec. Tolerates protocol, www, a trailing slash, and .md. */
 export function isSpecUrl(v: unknown): boolean {
   if (typeof v !== "string") return false;
-  const s = v.trim().toLowerCase().replace(/^https?:///, "").replace(/^www./, "").replace(/.md$|/$/, "");
+  const s = v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\.md$|\/$/, "");
   return s === "slopscore.org/spec";
 }
 

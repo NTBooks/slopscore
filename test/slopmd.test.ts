@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { parseSlopMd, MINIMAL_EXAMPLE } from "../src/lib/slopmd";
 
 const good = (extra = "") => `---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone
@@ -36,7 +37,7 @@ describe("parseSlopMd", () => {
   });
 
   it("rejects missing disclosure fields with field-level reasons", () => {
-    const r = parseSlopMd("---\nslopscore: 1\nai_generated: entirely\n---\n");
+    const r = parseSlopMd("---\nslopscore: 2\nspec: https://slopscore.org/spec\nai_generated: entirely\n---\n");
     expect(r.ok).toBe(false);
     expect(r.errors.join(" ")).toMatch(/human_touch/);
     expect(r.errors.join(" ")).toMatch(/category/);
@@ -45,7 +46,15 @@ describe("parseSlopMd", () => {
 
   it("rejects bad enum values and wrong spec version", () => {
     expect(parseSlopMd(good().replace("human_touch: light", "human_touch: a-bit")).errors.join(" ")).toMatch(/human_touch must be one of/);
-    expect(parseSlopMd(good().replace("slopscore: 1", "slopscore: 2")).errors.join(" ")).toMatch(/spec version/);
+    expect(parseSlopMd(good().replace("slopscore: 2", "slopscore: 1")).errors.join(" ")).toMatch(/spec version/);
+  });
+
+  it("requires spec: to name the canonical contract URL", () => {
+    expect(parseSlopMd(good().replace("spec: https://slopscore.org/spec\n", "")).errors.join(" ")).toMatch(/spec is required/);
+    expect(parseSlopMd(good().replace("https://slopscore.org/spec", "https://example.com/spec")).errors.join(" ")).toMatch(/spec must be/);
+    for (const ok of ["slopscore.org/spec", "http://www.slopscore.org/spec/", "https://slopscore.org/spec.md"]) {
+      expect(parseSlopMd(good().replace("https://slopscore.org/spec", ok)).ok).toBe(true);
+    }
   });
 
   it("rejects mature content ratings and rejected-set contains values", () => {
@@ -104,7 +113,8 @@ describe("parseSlopMd", () => {
 describe("slopbucket", () => {
   it("parses up to three buckets, normalized, with aliases for the key", () => {
     const r = parseSlopMd(`---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone

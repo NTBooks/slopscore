@@ -10,6 +10,7 @@ import { ipHash } from "../lib/trust";
 import { recordView } from "../lib/views";
 import { anonId, castAnonVote } from "../lib/anon";
 import { ledger } from "../lib/rush";
+import { flagOn, flagsSnapshot } from "../lib/flags";
 import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
@@ -345,7 +346,7 @@ pages.get("/stats", async (c) => {
   const cap = await capacity(c.env.DB, c.env);
   const led = await ledger(c.env.DB, c.env);
   return respond(c, { stats, daily, byStatus, budget, cap, led }, {
-    json: (d) => ({ capacity: d.cap, ledger: d.led, by_status: d.byStatus, stats: d.stats, daily: d.daily }),
+    json: (d) => ({ capacity: d.cap, ledger: d.led, moderation_flags: flagsSnapshot(), by_status: d.byStatus, stats: d.stats, daily: d.daily }),
     md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
     html: (d) => (
       <Layout meta={{ title: "Stats — SlopScore" }} user={user} url={url}>
@@ -547,6 +548,7 @@ pages.get("/__ai-agree", async (c) => {
 // Anonymous "crowd" vote: shown separately, never ranking. Logged-in users fall through to the real vote.
 pages.post("/r/:owner/:name/vote", async (c, next) => {
   if (c.get("user")) return next();
+  if (!flagOn("crowd")) return c.json({ error: "login required", login: "/auth/github" }, 401);
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
   if (!r) return c.json({ error: "unknown repo" }, 404);
   if (r.status !== "listed") return c.json({ error: "not yet graded", status: r.status }, 409);
@@ -590,7 +592,7 @@ pages.post("/r/:owner/:name/comments", requireUser, async (c) => {
   const parent = b.parent_id ? Number(b.parent_id) : null;
   // Llama Guard on the comment (≈2 neurons) when the budget allows; flagged comments are held for a human, never dropped.
   let hold: { reason: string; guard: string } | undefined;
-  const budget = await budgetAllows(c.env.DB, c.env, 5);
+  const budget = flagOn("guard") ? await budgetAllows(c.env.DB, c.env, 5) : { ok: false };
   if (budget.ok) {
     const g = await llamaGuard(c.env, text);
     if (g.neurons) await spendNeurons(c.env.DB, g.neurons);

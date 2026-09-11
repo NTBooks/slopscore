@@ -140,3 +140,16 @@ describe("osv purl mapping", async () => {
     expect(fromPurl("pkg:npm/lodash")).toBeNull();
   });
 });
+
+describe("moderation flags", async () => {
+  const { parseFlags, ALL_FLAGS } = await import("../src/lib/flags");
+  it("defaults to all, supports lists, negations, all/none", () => {
+    expect([...parseFlags(undefined)]).toEqual([...ALL_FLAGS]);
+    expect([...parseFlags("all")]).toEqual([...ALL_FLAGS]);
+    expect(parseFlags("none").size).toBe(0);
+    expect([...parseFlags("weight, guard")]).toEqual(["weight", "guard"]);
+    const noBurst = parseFlags("-burst,-crowd");
+    expect(noBurst.has("burst")).toBe(false); expect(noBurst.has("crowd")).toBe(false); expect(noBurst.has("weight")).toBe(true);
+    expect(parseFlags("bogus,weight").has("weight")).toBe(true);
+  });
+});

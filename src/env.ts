@@ -10,6 +10,8 @@ export interface Env {
   AUTO_HIDE_REPORTS: string;
   AI_NEURON_BUDGET: string;
   RISK_QUARANTINE: string;
+  /** Moderation flags, comma list of what's ON (see lib/flags.ts). Empty = all. */
+  MOD_FLAGS?: string;
   VIEW_SAMPLE?: string;
   FRESHNESS?: string;
   ANON_PER_ID_DAY?: string;

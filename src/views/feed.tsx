@@ -6,6 +6,7 @@ import { parseJson } from "../lib/db";
 import type { SlopMeta } from "../lib/slopmd";
 import { CONTAINS_LISTED } from "../lib/vocab";
 import { fuzz } from "../lib/trust";
+import { flagOn } from "../lib/flags";
 import { Flag } from "./art";
 import { isOwnerOf } from "../lib/owner";
 
@@ -31,9 +32,9 @@ export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
     <form class={`vote votebox${votable ? "" : " off"}${user ? "" : " anon"}`} method="post" action={`${repoUrl(repo)}/vote`} title={title}>
       {user ? <input type="hidden" name="csrf" value={user.csrf} /> : null}
       <button name="value" value={mine === 1 ? "0" : "1"} class={`up${mine === 1 ? " on" : ""}`} disabled={!votable} aria-label="upvote">▲</button>
-      <span class="score" title="weighted, lightly fuzzed">{fuzz(repo.score, repo.id)}</span>
+      <span class="score" title={flagOn("fuzz") ? "weighted, lightly fuzzed" : "weighted"}>{flagOn("fuzz") ? fuzz(repo.score, repo.id) : repo.score}</span>
       <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote">▼</button>
-      {crowd !== 0 || !user ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
+      {flagOn("crowd") && (crowd !== 0 || !user) ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
     </form>
   );
 };

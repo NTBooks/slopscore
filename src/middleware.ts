@@ -4,9 +4,11 @@ import { adminLogins } from "./env";
 import { readSession, csrfToken } from "./lib/session";
 import { getUser } from "./lib/db";
 import { now } from "./lib/time";
+import { setFlags } from "./lib/flags";
 
 /** Loads the session user (cookie or bearer) into c.var.user. Never blocks. */
 export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
+  setFlags(c.env.MOD_FLAGS);
   c.set("user", null);
   const sess = await readSession(c, c.env.SESSION_SECRET);
   if (sess) {

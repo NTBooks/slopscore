@@ -7,6 +7,7 @@ import { Layout } from "../views/layout";
 import { ago } from "../lib/time";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
+import { flagsSnapshot, ALL_FLAGS } from "../lib/flags";
 
 export const mod = new Hono<AppEnv>();
 
@@ -16,6 +17,16 @@ mod.use("*", async (c, next) => {
   if (!u.isAdmin) return c.json({ error: "admins only" }, 403);
   await next();
 });
+
+const FLAG_HELP: Record<string, string> = {
+  weight: "votes carry a trust weight from GitHub account age/repos/followers; off = every vote weighs 1",
+  ring: "bursts from same-week accounts or one network are stored with weight 0 and flagged",
+  burst: "votes per hour beyond max(10, half the visitors) weigh 0 and are flagged",
+  crowd: "anonymous crowd votes accepted and shown beside the score (never ranking)",
+  fuzz: "displayed scores above 20 jittered ±2% so bots can't observe their own vote",
+  guard: "comments pass through Llama Guard; flagged ones are held here",
+  risk: "risk score at or above RISK_QUARANTINE sends a repo to quarantine",
+};
 
 interface ReportRow { id: number; target_type: "repo" | "comment"; target_id: number; reason: string; note: string | null; created_at: number; reporter: string; label: string | null; status: string | null; body: string | null; author: string | null }
 
@@ -56,6 +67,12 @@ mod.get("/", async (c) => {
       <section class="wrap narrow" style="padding:0">
         <h2>Mod console</h2>
         <p class="muted">Every action here lands in the <a href="/log">public log</a> with your login. Nothing here is a secret.</p>
+        <div class="capacity free" style="margin:8px 0">
+          <div style="grid-column:1/-1"><span class="label">moderation flags · MOD_FLAGS var, deploy to change</span>
+            {ALL_FLAGS.map((f) => <span class={`chip ${flagsSnapshot()[f] ? "ok" : "bad"}`} title={FLAG_HELP[f]}>{f}: {flagsSnapshot()[f] ? "on" : "off"}</span>)}
+            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score</span>
+          </div>
+        </div>
 
         <h3>Reports <span class="muted">· {groups.size} targets, {reports.length} reports</span></h3>
         {groups.size === 0 ? <div class="empty">Nothing reported. Suspicious.</div> : null}

@@ -13,6 +13,7 @@ import { riskScore } from "./risk";
 import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS, VISION_HARD } from "./content";
 import { bump } from "../jobs/stats";
 import { vulnerableDeps, type VulnSummary } from "./osv";
+import { flagOn } from "./flags";
 import type { Env } from "../env";
 
 export type Policy = "denylist" | "metadata" | "contract" | "risk" | "content" | "owner-request" | "admin";
@@ -214,7 +215,8 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   });
   report.risk = risk;
   const threshold = Number(env.RISK_QUARANTINE || 40);
-  report.gates.push({ gate: "risk", ok: risk.score < threshold, reasons: risk.score >= threshold ? [`risk ${risk.score} ≥ ${threshold}`] : [], notes: risk.reasons });
+  const riskFails = flagOn("risk") && risk.score >= threshold;
+  report.gates.push({ gate: "risk", ok: !riskFails, reasons: riskFails ? [`risk ${risk.score} ≥ ${threshold}`] : [], notes: [...risk.reasons, ...(flagOn("risk") ? [] : ["quarantine by risk is switched off (MOD_FLAGS)"])] });
   report.calls = gh.calls;
 
   // ---- decide ----

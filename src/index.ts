@@ -11,6 +11,7 @@ import { feeds } from "./routes/feeds";
 import { mcp } from "./routes/mcp";
 import { pay } from "./routes/pay";
 import { contact } from "./routes/contact";
+import { setFlags } from "./lib/flags";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -97,6 +98,7 @@ app.onError((err, c) => {
 });
 
 export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<unknown> {
+  setFlags(env.MOD_FLAGS);
   const started = Date.now();
   let result: unknown;
   try {

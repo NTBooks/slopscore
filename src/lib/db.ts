@@ -7,6 +7,7 @@ import type { TagRow } from "./slopmd";
 import { WIP_STATUSES } from "./vocab";
 import { trustFor, ringCheck } from "./trust";
 import { viewsRecent, burstAllowance } from "./views";
+import { flagOn } from "./flags";
 
 export interface RepoRow {
   id: number; full_name: string; owner: string; name: string; owner_id: number | null; owner_type: string | null;
@@ -185,12 +186,12 @@ export async function userVotesFor(db: D1Database, userId: number, repoIds: numb
 /** Upsert/remove a vote and recompute the repo's counters. value 0 removes the vote.
  *  Weighted: score = round(sum(weight * value)); up/down stay raw counts. Suspected vote rings get weight 0. */
 export async function castVote(db: D1Database, user: UserRow, repo: RepoRow, value: -1 | 0 | 1, ipHashValue: string | null = null): Promise<RepoRow & { ring?: string }> {
-  let weight = user.trust ?? trustFor(user);
+  let weight = flagOn("weight") ? (user.trust ?? trustFor(user)) : 1;
   let ring: string | undefined;
   if (value !== 0) {
-    const rc = await ringCheck(db, repo.id, ipHashValue);
+    const rc = flagOn("ring") ? await ringCheck(db, repo.id, ipHashValue) : { suspicious: false as const };
     if (rc.suspicious) { weight = 0; ring = rc.reason; }
-    else {
+    else if (flagOn("burst")) {
       // burst rule: votes in the last hour can't outrun the people who could have cast them
       const [votesHour, views] = await Promise.all([
         db.prepare("SELECT count(*) AS n FROM votes WHERE repo_id = ? AND created_at >= unixepoch() - 3600").bind(repo.id).first<{ n: number }>(),

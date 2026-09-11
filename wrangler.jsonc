@@ -23,7 +23,8 @@
     "MIN_ACCOUNT_AGE_DAYS": "30",
     "AUTO_HIDE_REPORTS": "3",
     "AI_NEURON_BUDGET": "9000",
-    "RISK_QUARANTINE": "40"
+    "RISK_QUARANTINE": "40",
+    "MOD_FLAGS": "all"
   },
   "env": {
     "test": {
@@ -46,7 +47,8 @@
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",
         "AI_NEURON_BUDGET": "2000",
-        "RISK_QUARANTINE": "40"
+        "RISK_QUARANTINE": "40",
+        "MOD_FLAGS": "all"
       }
     },
     "production": {
@@ -71,7 +73,8 @@
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",
         "AI_NEURON_BUDGET": "9000",
-        "RISK_QUARANTINE": "40"
+        "RISK_QUARANTINE": "40",
+        "MOD_FLAGS": "all"
       }
     }
   }

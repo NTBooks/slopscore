@@ -69,7 +69,7 @@ feeds.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
   const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/spec", "/stats", "/log"];
+  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/stats", "/log"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -109,6 +109,7 @@ feeds.get("/openapi.json", (c) => {
       "/api/v1/me": { get: { summary: "Who am I", security: bearer, responses: { "200": okJson("user"), "401": okJson("not logged in") } } },
       "/b": { get: { summary: "Slopbucket directory (append .json)", responses: { "200": okJson("buckets") } } },
       "/queue": { get: { summary: "Public moderation queue + capacity (append .json)", responses: { "200": okJson("queue") } } },
+      "/scan": { post: { summary: "Request a scan of a public repo (login); explains in words why it was or was not queued", requestBody: { content: { "application/json": { schema: { type: "object", properties: { repo: { type: "string", description: "owner/name or a github.com URL" } }, required: ["repo"] } } } }, responses: { "200": okJson("listed, or current verdict inside the 10-minute window"), "202": okJson("queued, rejected, quarantined, hidden, or delisted; see headline, detail, next"), "404": okJson("not reachable on GitHub or no slopscore.md"), "429": okJson("too many requests") } } },
       "/ping/{owner}/{repo}": { get: { summary: "Trigger a scan now (1 per 10 min per repo)", parameters: [{ name: "owner", in: "path", required: true, schema: { type: "string" } }, { name: "repo", in: "path", required: true, schema: { type: "string" } }], responses: { "200": okJson("listed"), "202": okJson("scanned, not listed (see status + reject_reason)"), "429": okJson("pinged recently") } } },
       "/auth/device/start": { post: { summary: "Begin the GitHub device flow", responses: { "200": okJson("{device_code, user_code, verification_uri, interval}") } } },
       "/auth/device/poll": { post: { summary: "Poll for the bearer token", requestBody: { content: { "application/json": { schema: { type: "object", properties: { device_code: { type: "string" } }, required: ["device_code"] } } } }, responses: { "200": okJson("{token}"), "202": okJson("pending") } } },

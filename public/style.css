@@ -113,6 +113,7 @@ details.reportform { display: inline; } details.reportform summary { display: in
 .gallery { display: flex; gap: 8px; overflow-x: auto; margin: 8px 0; } .gallery img { height: 160px; border-radius: 4px; border: 1px solid var(--line); }
 .body { border-top: 1px solid var(--line); padding-top: 8px; } .readme { max-height: 60vh; overflow: hidden; position: relative; }
 .readme.open { max-height: none; } .readme::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 60px; background: linear-gradient(transparent, var(--bg)); } .readme.open::after { display: none; }
+.verdict { padding: 8px 12px; border-radius: 4px; margin: 8px 0; } .verdict details { margin-top: 4px; }
 .scanreport { font-size: 12px; } .scanreport li { margin: 2px 0; } .gate-ok { color: #2e8b57; } .gate-bad { color: #c0392b; }
 .disclosures { margin: 6px 0; }
 .owner { border: 1px solid var(--accent); border-radius: 4px; padding: 8px 12px; margin: 8px 0; background: var(--panel); }
@@ -175,3 +176,18 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 }
 .owner form.owner { border: 0; padding: 0; background: none; margin: 0 6px 6px 0; display: inline; }
 @media (max-width: 600px) { .owner form.owner { display: block; margin: 6px 0; } }
+
+/* orphanage landing page */
+.orphanage .est { margin: 0 0 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.orphanage h2 { font-family: var(--serif); font-size: 20px; margin: 22px 0 6px; }
+.orphanage .intake { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 8px 0; }
+.orphanage .ward { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; font-size: 13px; }
+.orphanage .ward strong { font-family: var(--serif); font-size: 15px; display: block; margin-bottom: 4px; }
+.orphanage .ward p { margin: 0; color: var(--muted); }
+.orphanage .rules { padding-left: 18px; } .orphanage .rules li { margin: 6px 0; }
+.orphanage .faq { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 8px 0; font-size: 13px; }
+.orphanage .faq dt { font-weight: bold; font-family: var(--serif); } .orphanage .faq dd { margin: 0; color: var(--muted); }
+.orphanage .inline-stamp { width: 44px; height: 44px; vertical-align: middle; }
+.orphanage .doorstep { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 12px 16px 6px; margin: 22px 0 12px; }
+.orphanage .doorstep h2 { margin-top: 4px; }
+@media (max-width: 600px) { .orphanage .faq { grid-template-columns: 1fr; } .orphanage .faq dt { margin-top: 6px; } }

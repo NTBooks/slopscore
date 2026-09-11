@@ -11,6 +11,8 @@ import { feeds } from "./routes/feeds";
 import { mcp } from "./routes/mcp";
 import { pay } from "./routes/pay";
 import { contact } from "./routes/contact";
+import { scan } from "./routes/scan";
+import { orphanage } from "./routes/orphanage";
 import { setFlags } from "./lib/flags";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
@@ -30,6 +32,9 @@ app.route("/", feeds);
 app.route("/mcp", mcp);
 app.route("/", pay);
 app.route("/contact", contact);
+app.route("/scan", scan);
+app.route("/orphanage", orphanage);
+app.route("/home", orphanage);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
@@ -56,6 +61,7 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 - ${origin}/f/{facet}/{value}  facet feeds, e.g. /f/built_with/claude-code, /f/language/python
 - ${origin}/search?q=   full-text + operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner:  (prefix - to exclude)
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)
+- ${origin}/scan        same thing as a form for logged-in humans; POST {repo} with a session or bearer token, answers in words why the repo was or was not queued
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
 

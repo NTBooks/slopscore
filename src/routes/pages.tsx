@@ -221,7 +221,7 @@ pages.get("/queue", async (c) => {
   ]);
   const ids = [...paid.rows, ...free.rows, ...other.rows].map((r) => r.id);
   const votes = user ? await userVotesFor(c.env.DB, user.id, ids) : new Map<number, number>();
-  const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix.";
+  const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix. Missing a repo that has the file? Log in and request a scan at /scan; it tells you why.";
   return respond(c, { cap, clock, paid: paid.rows, free: free.rows, other: other.rows, freeMore: free.hasMore, otherMore: other.hasMore, page }, {
     json: (d) => ({ capacity: d.cap, crawler: d.clock, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
     md: (d) => [
@@ -397,7 +397,7 @@ pages.get("/spec", (c) => {
   const md = [
     `# slopscore.md — the contract (v${v.spec})`, "",
     "Principle: the file only holds what GitHub can't tell us. Name, description, topics, language, license, stars, README, and release come from the API.", "",
-    "Missing or invalid **disclosure** fields reject the repo with the reason shown publicly on its page. Fix the file, then `curl /ping/owner/repo` (or press Refresh if you own it).", "",
+    "Missing or invalid **disclosure** fields reject the repo with the reason shown publicly on its page. Fix the file, then `curl /ping/owner/repo`, use the [scan form](/scan), or press Refresh if you own it.", "",
     "## Minimal file", "", "```yaml", MINIMAL_EXAMPLE.trim(), "```", "",
     "## Required (disclosures)", "",
     ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.`, "Older files: a v1 file on a repo that is already listed stays listed and votable, with an \"outdated paperwork\" note on its page until it is updated. New listings need the current version.", `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
@@ -469,7 +469,7 @@ pages.get("/r/:owner/:name", async (c) => {
     return respond(c, { owner: c.req.param("owner"), name: c.req.param("name") }, {
       json: (d) => ({ error: "not listed", hint: `GET /ping/${d.owner}/${d.name} after committing slopscore.md` }),
       md: (d) => `# Not listed\n\nNo listing for ${d.owner}/${d.name}. Commit a slopscore.md then GET /ping/${d.owner}/${d.name}.`,
-      html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>. Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
+      html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
   c.executionCtx.waitUntil(freshen(c.env, r));

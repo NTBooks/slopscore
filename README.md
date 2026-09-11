@@ -24,7 +24,7 @@ status: works-on-my-machine
 Optional pitch in markdown. If empty, your README is the pitch.
 ```
 
-That's the whole file. Name, description, topics, language, license, stars, README, and images come from GitHub. Impatient? `curl https://slopscore.org/ping/you/your-repo`. Full contract: [/spec](https://slopscore.org/spec) · [docs/SPEC.md](docs/SPEC.md).
+That's the whole file. Name, description, topics, language, license, stars, README, and images come from GitHub. Impatient, or the crawler hasn't found you? `curl https://slopscore.org/ping/you/your-repo`, or log in and use [/scan](https://slopscore.org/scan), which runs the same check and says in words why the repo was or wasn't queued. Full contract: [/spec](https://slopscore.org/spec) · [docs/SPEC.md](docs/SPEC.md).
 
 Found repos are listed and votable straight away. Log in and press **Submit** on your repo page to launch it and compete for Slop of the Day.
 

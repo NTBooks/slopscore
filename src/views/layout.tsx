@@ -84,7 +84,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <footer class="foot">
           <p><strong>Nothing here is a secret. That's the point.</strong></p>
           <p>
-            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/spec">spec</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/tools">built with</a>
+            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/tools">built with</a>
             · for agents: <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
             · <a href="/feed.xml">rss</a>
           </p>

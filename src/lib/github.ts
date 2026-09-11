@@ -210,3 +210,15 @@ export function fullNameFromRedirect(location: string | undefined): string | nul
   const m = /\/repos\/([^/]+)\/([^/?#]+)/.exec(location);
   return m ? `${m[1]}/${m[2]}` : null;
 }
+
+/** Accepts `owner/name`, `github.com/owner/name`, a full GitHub URL (with or without .git, a trailing path, or a branch), and returns [owner, name] or null. */
+export function parseRepoInput(input: string): [string, string] | null {
+  let s = input.trim();
+  if (!s) return null;
+  s = s.replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, "").replace(/^git@github\.com:/i, "");
+  const m = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?(?:[/?#].*)?$/.exec(s);
+  if (!m) return null;
+  const name = m[2];
+  if (name === "." || name === "..") return null;
+  return [m[1], name];
+}

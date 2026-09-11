@@ -92,6 +92,7 @@ details.reportform { display: inline; } details.reportform summary { display: in
 .capacity.free { border-left: 4px solid var(--goo); } .capacity.paid { border-left: 4px solid var(--accent); }
 .capacity .label { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
 .capacity p { grid-column: 1 / -1; margin: 4px 0 0; }
+.capacity.crawler { border-left: 4px solid var(--link); } .capacity.crawler .countdown { font-variant-numeric: tabular-nums; }
 
 /* rail */
 .rail { font-size: 12px; } .rail .box { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; margin-bottom: 12px; }

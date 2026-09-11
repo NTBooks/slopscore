@@ -4,10 +4,16 @@ import type { AppEnv } from "../env";
 import { allBuckets, logAction, getRepoById, type RepoRow } from "../lib/db";
 import { requireUser, body, wantsJson } from "../middleware";
 import { Layout } from "../views/layout";
-import { ago } from "../lib/time";
+import { ago, now } from "../lib/time";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
 import { flagsSnapshot, ALL_FLAGS } from "../lib/flags";
+import { crawlClock, parseManual, JOBS, MANUAL_COOLDOWN, type Job } from "../lib/crawlclock";
+import { CrawlClockBox } from "../views/crawlclock";
+import { sweep } from "../jobs/sweep";
+import { scanQueue } from "../jobs/scan";
+import { recrawl } from "../jobs/recrawl";
+import { getState, setState } from "../jobs/stats";
 
 export const mod = new Hono<AppEnv>();
 
@@ -33,6 +39,8 @@ interface ReportRow { id: number; target_type: "repo" | "comment"; target_id: nu
 mod.get("/", async (c) => {
   const user = c.get("user")!; const url = new URL(c.req.url);
   const db = c.env.DB;
+  const flash = c.req.query("flash");
+  const clock = await crawlClock(db);
   const messages = await db.prepare("SELECT id, login, subject, body, repo_full_name, created_at, read_at, reply FROM messages WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all<{ id: number; login: string; subject: string; body: string; repo_full_name: string | null; created_at: number; read_at: number | null; reply: string | null }>().then((r) => r.results ?? []);
   const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
@@ -67,6 +75,9 @@ mod.get("/", async (c) => {
       <section class="wrap narrow" style="padding:0">
         <h2>Mod console</h2>
         <p class="muted">Every action here lands in the <a href="/log">public log</a> with your login. Nothing here is a secret.</p>
+        {flash ? <div class="notice">{flash}</div> : null}
+        <h3>Crawler</h3>
+        <CrawlClockBox clock={clock} user={user} back="/mod" />
         <div class="capacity free" style="margin:8px 0">
           <div style="grid-column:1/-1"><span class="label">moderation flags · MOD_FLAGS var, deploy to change</span>
             {ALL_FLAGS.map((f) => <span class={`chip ${flagsSnapshot()[f] ? "ok" : "bad"}`} title={FLAG_HELP[f]}>{f}: {flagsSnapshot()[f] ? "on" : "off"}</span>)}
@@ -329,6 +340,44 @@ mod.post("/user/:id", requireUser, async (c) => {
     await logAction(db, { actor: admin, role: "admin", action: "ban", targetType: "user", targetId: id, label: login || undefined, note: b.reason });
   }
   return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod");
+});
+
+// ---- crawler: run a job now instead of waiting for its cron ----
+const RUN: Record<Job, (env: AppEnv["Bindings"]) => Promise<string>> = {
+  sweep: async (env) => {
+    const r = await sweep(env);
+    return r.note ? `Sweep skipped: ${r.note}.` : `Sweep searched ${r.pages} page(s) of GitHub code search and found ${r.found} new repo(s).`;
+  },
+  scan: async (env) => {
+    const r = await scanQueue(env);
+    return `Scan tick inspected ${r.scanned}${r.deferred ? `, ${r.deferred} waiting on budget` : ""}${r.results.length ? `: ${r.results.map((x) => `${x.repo} ${x.status}`).join(", ")}` : ""}.`;
+  },
+  recrawl: async (env) => {
+    const r = await recrawl(env);
+    return `Recrawl checked ${r.checked}: ${r.rescanned} rescanned, ${r.unchanged} unchanged, ${r.delisted} delisted${r.renamed ? `, ${r.renamed} renamed` : ""}${r.revived ? `, ${r.revived} revived` : ""}.`;
+  },
+};
+
+mod.post("/crawl", requireUser, async (c) => {
+  const b = await body(c);
+  const admin = c.get("user")!.login;
+  const db = c.env.DB;
+  const back = b.back === "/queue" ? "/queue" : "/mod";
+  const jobs: Job[] = b.action === "all" ? [...JOBS] : JOBS.filter((j) => j === b.action);
+  if (!jobs.length) return c.json({ error: "unknown job; use sweep, scan, recrawl or all" }, 400);
+  const msgs: string[] = [];
+  for (const job of jobs) {
+    const t = now();
+    const last = parseManual(await getState(db, `${job}:manual`));
+    if (last && t - last.at < MANUAL_COOLDOWN) { msgs.push(`${job}: ${last.by} ran it ${t - last.at}s ago; try again in ${MANUAL_COOLDOWN - (t - last.at)}s.`); continue; }
+    await setState(db, `${job}:manual`, `${t}|${admin}`); // before running, so a double click doesn't run it twice
+    let msg: string;
+    try { msg = await RUN[job](c.env); } catch (e) { msg = `${job} failed: ${(e as Error).message}`; }
+    await logAction(db, { actor: admin, role: "admin", action: `run-${job}`, targetType: "crawler", targetId: 0, label: job, note: msg.slice(0, 300) });
+    msgs.push(msg);
+  }
+  const msg = msgs.join(" ");
+  return wantsJson(c) ? c.json({ ok: true, message: msg }) : c.redirect(`${back}?flash=${encodeURIComponent(msg.slice(0, 600))}#crawler`);
 });
 
 // ---- buckets + denylist (unchanged from the first cut) ----

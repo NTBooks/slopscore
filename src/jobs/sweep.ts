@@ -2,6 +2,7 @@
 import { GitHub } from "../lib/github";
 import type { Env } from "../env";
 import { bump, setState } from "./stats";
+import { markDirty } from "../lib/cache";
 
 export async function sweep(env: Env): Promise<{ pages: number; found: number; note?: string }> {
   if (!env.GITHUB_CRAWL_TOKEN) return { pages: 0, found: 0, note: "no GITHUB_CRAWL_TOKEN; code search needs auth" };
@@ -31,7 +32,7 @@ export async function sweep(env: Env): Promise<{ pages: number; found: number; n
     if (fresh.length === 0 && page > 1) break;
     if (r.data.items.length < 100) break;
   }
-  if (found) await bump(env.DB, "found", found);
+  if (found) { await bump(env.DB, "found", found); await markDirty(env.DB); } // /queue's feed is cached by data version
   await setState(env.DB, "sweep:last_run", String(Math.floor(Date.now() / 1000)));
   await setState(env.DB, "sweep:last_found", String(found));
   return { pages, found };

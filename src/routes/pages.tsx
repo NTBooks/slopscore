@@ -31,6 +31,8 @@ import { isOwnerOf } from "./owner";
 import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 import { ago, isoDate } from "../lib/time";
+import { crawlClock, untilText } from "../lib/crawlclock";
+import { CrawlClockBox } from "../views/crawlclock";
 
 export const pages = new Hono<AppEnv>();
 
@@ -208,7 +210,8 @@ pages.get("/queue", async (c) => {
   const st = c.req.query("status");
   const user = c.get("user"); const url = new URL(c.req.url);
   const page = Number(c.req.query("page") ?? 1);
-  const cap = await capacity(c.env.DB, c.env);
+  const [cap, clock] = await Promise.all([capacity(c.env.DB, c.env), crawlClock(c.env.DB)]);
+  const flash = c.req.query("flash");
   // Three lines: paid jumpers (FIFO), the free line (FIFO), then everything else by filter.
   const [paid, free, other, rail] = await Promise.all([
     st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: true, page: 1 }),
@@ -219,11 +222,12 @@ pages.get("/queue", async (c) => {
   const ids = [...paid.rows, ...free.rows, ...other.rows].map((r) => r.id);
   const votes = user ? await userVotesFor(c.env.DB, user.id, ids) : new Map<number, number>();
   const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix.";
-  return respond(c, { cap, paid: paid.rows, free: free.rows, other: other.rows, freeMore: free.hasMore, otherMore: other.hasMore, page }, {
-    json: (d) => ({ capacity: d.cap, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
+  return respond(c, { cap, clock, paid: paid.rows, free: free.rows, other: other.rows, freeMore: free.hasMore, otherMore: other.hasMore, page }, {
+    json: (d) => ({ capacity: d.cap, crawler: d.clock, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
     md: (d) => [
       "# In the trough", "", intro, "",
       `**Mode: ${d.cap.mode}.** AI budget today ${d.cap.neurons_used}/${d.cap.budget} neurons ≈ ${d.cap.scans_left_today} of ${d.cap.scans_per_day} free scans left. Paid scans: ${d.cap.paid_scans_unlimited ? `unlimited via ${d.cap.paid_scan_provider}` : "priority only; same daily ceiling until the site moves to a paid plan"}.`, "",
+      `**Crawler.** ${d.clock.jobs.map((j) => `${j.label}: ${j.next_run ? untilText(j.next_run - d.clock.now) : "not scheduled yet"}`).join(" · ")}.`, "",
       "## Jumpers (paid, FIFO)", "", ...(d.paid.length ? d.paid.map((r, i) => `${i + 1}. [${r.full_name}](/r/${r.full_name}) — paid ${isoDate(r.priority_at)}`) : ["_nobody has paid to jump. The line is honest today._"]), "",
       "## Free line (FIFO)", "", ...(d.free.length ? d.free.map((r, i) => `${(d.page - 1) * 25 + i + 1}. [${r.full_name}](/r/${r.full_name}) — ${r.queue_reason ?? "awaiting-scan"} · found ${ago(r.first_seen)}`) : ["_empty. The inspector is bored._"]), "",
       "## Needs a human or was rejected", "", ...d.other.map((r) => `- [${r.full_name}](/r/${r.full_name}) — **${r.status}**${r.reject_reason ? `: ${r.reject_reason}` : r.queue_reason ? ` (${r.queue_reason})` : ""}`),
@@ -242,6 +246,8 @@ pages.get("/queue", async (c) => {
             <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
             <p class="muted small">Budget resets at 00:00 UTC. When "waiting on budget" grows day over day, the free tier is the bottleneck and it's time to pay for a bigger trough. <a href="/stats">History</a>.</p>
           </div>
+          {flash ? <div class="notice">{flash}</div> : null}
+          <CrawlClockBox clock={d.clock} user={user} back="/queue" />
           {!st ? (
             <>
               <h3>Jumpers <span class="muted">· paid, first come first served</span></h3>
@@ -326,7 +332,7 @@ pages.get("/log", async (c) => {
           <h2>Moderation log</h2>
           <p class="muted">Every admin and owner action, in public. Nothing here is a secret.</p>
           <table class="list"><tr><th>when</th><th>who</th><th>action</th><th>target</th><th>note</th></tr>
-            {d.rows.map((r) => <tr><td title={isoDate(r.created_at)}>{ago(r.created_at)}</td><td><a href={`/u/${r.actor_login}`}>{r.actor_login}</a> <span class="muted">{r.actor_role}</span></td><td>{r.action}</td><td>{r.target_type === "repo" && r.target_label ? <a href={`/r/${r.target_label}`}>{r.target_label}</a> : `${r.target_type} ${r.target_id}`}</td><td class="muted">{r.note}</td></tr>)}
+            {d.rows.map((r) => <tr><td title={isoDate(r.created_at)}>{ago(r.created_at)}</td><td><a href={`/u/${r.actor_login}`}>{r.actor_login}</a> <span class="muted">{r.actor_role}</span></td><td>{r.action}</td><td>{r.target_type === "repo" && r.target_label ? <a href={`/r/${r.target_label}`}>{r.target_label}</a> : `${r.target_type} ${r.target_label ?? r.target_id}`}</td><td class="muted">{r.note}</td></tr>)}
           </table>
           {d.rows.length === 0 ? <div class="empty">Nothing has needed moderating. Suspicious.</div> : null}
         </section>

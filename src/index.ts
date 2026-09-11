@@ -17,6 +17,7 @@ import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
 import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
+import { recordCron } from "./lib/crawlclock";
 
 const app = new Hono<AppEnv>();
 
@@ -102,6 +103,7 @@ export async function runCron(cron: string, env: AppEnv["Bindings"]): Promise<un
   const started = Date.now();
   let result: unknown;
   try {
+    await recordCron(env.DB, cron).catch(() => {}); // lets /queue show when each job runs next
     switch (cron) {
       case "*/15 * * * *": result = await sweep(env); break;
       case "*/5 * * * *": result = await scanQueue(env); break;

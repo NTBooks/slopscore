@@ -47,7 +47,7 @@ names.forEach(([name, tagline], i) => {
   if (i === 20) { status = "delisted"; }
   const wip = statuses[i % statuses.length];
   const meta = {
-    slopscore: 1, ai_generated: ["entirely", "mostly", "entirely", "partly"][i % 4], human_touch: ["light", "none", "heavy"][i % 3], content_rating: "everyone",
+    slopscore: 2, spec: "https://slopscore.org/spec", ai_generated: ["entirely", "mostly", "entirely", "partly"][i % 4], human_touch: ["light", "none", "heavy"][i % 3], content_rating: "everyone",
     contains: i % 6 === 0 ? ["scraping"] : i % 9 === 0 ? ["crypto", "mild-language"] : [], category: [cats[i % cats.length], ...(i % 2 ? [cats[(i + 3) % cats.length]] : [])], status: wip,
     built_with: [tools[i % tools.length], ...(i % 3 === 0 ? [tools[(i + 1) % tools.length]] : [])], models: ["claude-fable-5-1"], interface: [i % 2 ? "cli" : "web"], frameworks: i % 2 ? [] : ["hono"],
     platforms: ["linux", ...(i % 2 ? ["docker"] : [])], audience: ["developers"], data: ["local-only"], needs: [], domain: [], tags: ["seed", `t${i % 5}`], images: [], maintainers: [], unlisted: false, x: {},

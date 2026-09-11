@@ -39,7 +39,8 @@ YAML frontmatter + optional markdown body. **Missing or invalid disclosure field
 
 ```yaml
 ---
-slopscore: 1                 # required, spec version
+slopscore: 2                 # required, spec version
+spec: https://slopscore.org/spec   # required, the contract's URL: credits the format and marks the file as meant for SlopScore
 ai_generated: entirely       # required: entirely | mostly | partly | none  (the joke: everyone says entirely)
 human_touch: light           # required: none | light | heavy — how much a human edited the output
 content_rating: everyone     # required; ONLY "everyone" is listed. mature|adult ⇒ rejected
@@ -77,7 +78,7 @@ x-anything: ...              # any `x-` prefixed key is preserved verbatim in me
 Optional body: the pitch, ≤ 4000 chars markdown. If empty, the README is the pitch.
 ```
 
-WIP is welcome: `status: idea|prototype|works-on-my-machine|alpha` repos are listed like any other, surface in the **up and coming** tab, and compete for the weekly "Most Promising Slop" award once submitted. Only the eight disclosure fields (`slopscore`, `ai_generated`, `human_touch`, `content_rating`, `contains`, `category`, `status`, and a non-empty tagline from either source) can cause rejection. `slopscore: 1` versioning lets the vocab change later. Controlled vocabularies and the alias table live in `src/lib/vocab.ts`, published at `/api/v1/vocab` and in `docs/SPEC.md`.
+WIP is welcome: `status: idea|prototype|works-on-my-machine|alpha` repos are listed like any other, surface in the **up and coming** tab, and compete for the weekly "Most Promising Slop" award once submitted. Only the nine disclosure fields (`slopscore`, `spec`, `ai_generated`, `human_touch`, `content_rating`, `contains`, `category`, `status`, and a non-empty tagline from either source) can cause rejection. `slopscore: 2` versioning lets the vocab change later (v1 had no `spec:` line and is rejected with an upgrade hint). Controlled vocabularies and the alias table live in `src/lib/vocab.ts`, published at `/api/v1/vocab` and in `docs/SPEC.md`.
 
 ### What we pull from GitHub instead (per repo, all free API)
 | Source | Fields used | Cost |

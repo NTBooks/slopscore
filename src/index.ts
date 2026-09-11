@@ -9,6 +9,7 @@ import { owner } from "./routes/owner";
 import { mod } from "./routes/mod";
 import { feeds } from "./routes/feeds";
 import { mcp } from "./routes/mcp";
+import { pay } from "./routes/pay";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -24,6 +25,7 @@ app.route("/r", owner);
 app.route("/mod", mod);
 app.route("/", feeds);
 app.route("/mcp", mcp);
+app.route("/", pay);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /\nDisallow: /mod\nDisallow: /auth\nSitemap: /sitemap.xml\n"));
@@ -63,6 +65,9 @@ Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device
   POST /r/{owner}/{repo}/report    {"reason": "objectionable|undisclosed|malware|spam|not-slop|other", "note"?: string}
 Votes and comments return 409 until a repo is listed. Without a login, POST /vote counts as an anonymous "crowd" vote: shown next to the score, capped by that repo's visitors, never part of ranking or awards. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
 
+## Jump the line (paid, optional)
+Agents: POST ${origin}/r/{owner}/{repo}/rush returns 402 with an x402 'accepts' block (USDC on Base); pay and retry with X-PAYMENT. Humans: log in as the owner and press "Jump the line · $5" (Stripe). Both buy the wait only, never a gate, vote, or award; every payment is in the public log and the ledger on /stats.
+
 ## Owner controls (session login = repo owner, or listed in maintainers: in slopscore.md)
   POST /r/{owner}/{repo}/owner/refresh | submit | remove | restore
 "submit" is the launch: it makes the repo eligible for Slop of the Day. Found-but-unsubmitted repos still get votes.
@@ -70,7 +75,8 @@ Votes and comments return 409 until a repo is listed. Without a login, POST /vot
 ## Listing your own repo
 Commit this to slopscore.md at the repo root, then GET ${origin}/ping/{owner}/{repo}:
 ---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone

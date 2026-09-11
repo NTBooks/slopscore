@@ -8,6 +8,7 @@ import {
 import { ipHash } from "../lib/trust";
 import { recordView } from "../lib/views";
 import { anonId, castAnonVote } from "../lib/anon";
+import { ledger } from "../lib/rush";
 import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
@@ -266,11 +267,11 @@ pages.get("/best", async (c) => {
     json: (d) => ({ kind, period: period ?? null, winners: d.rows.map((r) => ({ period: r.period, rank: r.rank, ...repoJson(r) })) }),
     md: (d) => feedMd(`Winners — ${kind}${period ? ` ${period}` : ""}`, d.rows, 1, false),
     html: (d) => (
-      <Layout meta={{ title: `Winners — Slop of the ${kind} — SlopScore` }} user={user} url={url}>
+      <Layout meta={{ title: `Truffles — Slop of the ${kind} — SlopScore`, description: "What Schnitzel dug up: Certified Slop of the Day and Week." }} user={user} url={url}>
         <section>
-          <h2>🏆 Certified Slop of the {kind === "day" ? "Day" : kind === "week" ? "Week" : "Week (Most Promising)"}</h2>
-          <p class="muted">Only submitted repos compete. <a href="/best?kind=day">day</a> · <a href="/best?kind=week">week</a> · <a href="/best?kind=upcoming-week">most promising</a></p>
-          {d.rows.length === 0 ? <div class="empty">No winners yet. The awards cron runs at 00:05 UTC.</div> : null}
+          <h2>🏆 Certified Slop of the {kind === "day" ? "Day" : kind === "week" ? "Week" : "Week (Most Promising)"} <span class="muted small" title="the ones Schnitzel dug up">· truffles</span></h2>
+          <p class="muted">What Schnitzel dug up. Only submitted repos compete. <a href="/best?kind=day">day</a> · <a href="/best?kind=week">week</a> · <a href="/best?kind=upcoming-week">most promising</a></p>
+          {d.rows.length === 0 ? <div class="empty">No truffles yet. Schnitzel digs at 00:05 UTC.</div> : null}
           {Object.entries(groupBy(d.rows, (r) => r.period)).map(([p, rs]) => (
             <>
               <h3>{p}</h3>
@@ -338,8 +339,9 @@ pages.get("/stats", async (c) => {
   ]);
   const budget = Number(c.env.AI_NEURON_BUDGET || 9000);
   const cap = await capacity(c.env.DB, c.env);
-  return respond(c, { stats, daily, byStatus, budget, cap }, {
-    json: (d) => ({ capacity: d.cap, by_status: d.byStatus, stats: d.stats, daily: d.daily }),
+  const led = await ledger(c.env.DB, c.env);
+  return respond(c, { stats, daily, byStatus, budget, cap, led }, {
+    json: (d) => ({ capacity: d.cap, ledger: d.led, by_status: d.byStatus, stats: d.stats, daily: d.daily }),
     md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
     html: (d) => (
       <Layout meta={{ title: "Stats — SlopScore" }} user={user} url={url}>
@@ -352,6 +354,14 @@ pages.get("/stats", async (c) => {
             <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
           </div>
           <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>slopsmiths</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
+          <h3>Ledger <span class="muted">· jump-the-line income vs. what the site costs</span></h3>
+          <div class={`capacity ${d.led.covered ? "free" : "paid"}`}>
+            <div><span class="label">income, 30 days</span><strong>${(d.led.income_30d_cents / 100).toFixed(2)}</strong> <span class="muted">({d.led.providers.map((p) => `${p.provider} ${p.n}`).join(", ") || "no payments yet"})</span></div>
+            <div><span class="label">income, all time</span><strong>${(d.led.income_all_cents / 100).toFixed(2)}</strong></div>
+            <div><span class="label">estimated cost, 30 days</span><strong>${(d.led.cost_30d_estimate_cents / 100).toFixed(2)}</strong> <span class="muted">plan ${(d.led.estimate.workers_plan_cents / 100).toFixed(2)} · domain {(d.led.estimate.domain_cents / 100).toFixed(2)} · AI overage {(d.led.estimate.ai_overage_cents / 100).toFixed(2)} · OpenRouter {(d.led.estimate.openrouter_cents / 100).toFixed(2)}</span></div>
+            <div><span class="label">covered?</span><strong>{d.led.covered ? "yes" : "not yet"}</strong> <span class="muted">· {d.led.scans_30d} scans in 30 days</span></div>
+            <p class="muted small">If income ever materially exceeds cost, the price comes down. The point is offsetting, not profit.</p>
+          </div>
           <h3>Last 30 days</h3>
           <table class="list"><tr><th>date</th><th>AI neurons</th><th>scans</th><th>deferred</th><th>found</th><th>listed</th><th>rejected</th><th>quarantined</th></tr>
             {d.daily.map((r) => <tr><td>{r.date}</td><td>{r.neurons_used} / {r.neurons_budget || d.budget}</td><td>{r.scans}</td><td>{r.deferred}</td><td>{r.found}</td><td>{r.listed}</td><td>{r.rejected}</td><td>{r.quarantined}</td></tr>)}
@@ -367,12 +377,12 @@ pages.get("/spec", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const v = vocabJson();
   const md = [
-    "# slopscore.md — the contract (v1)", "",
+    `# slopscore.md — the contract (v${v.spec})`, "",
     "Principle: the file only holds what GitHub can't tell us. Name, description, topics, language, license, stars, README, and release come from the API.", "",
     "Missing or invalid **disclosure** fields reject the repo with the reason shown publicly on its page. Fix the file, then `curl /ping/owner/repo` (or press Refresh if you own it).", "",
     "## Minimal file", "", "```yaml", MINIMAL_EXAMPLE.trim(), "```", "",
     "## Required (disclosures)", "",
-    ...["slopscore: 1 (spec version)", `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
+    ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.`, `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
       `contains: list, may be empty. Listed with a chip: ${v.contains.listed.join(", ")}. Rejected: ${v.contains.rejected.join(", ")}.`, `category: ≥ 1 of ${v.controlled.category.join(", ")}`, `status: ${v.controlled.status.join(" | ")}`,
       "tagline: ≤ 140 chars, or a GitHub description (rejected only if both are empty)"].map((x) => `- ${x}`), "",
     "## Optional facets (unknown values never reject; they're kept as free tags marked unrecognized)", "",
@@ -450,7 +460,7 @@ pages.get("/r/:owner/:name", async (c) => {
     c.env.DB.prepare("SELECT md_sha, seen_at, stars FROM repo_versions WHERE repo_id = ? ORDER BY seen_at DESC LIMIT 20").bind(r.id).all<{ md_sha: string | null; seen_at: number; stars: number | null }>().then((x) => x.results ?? []),
     user ? userVote(c.env.DB, user.id, r.id) : Promise.resolve(0),
   ]);
-  const data: RepoPageData = { repo: r, tags, comments: cs, awards, versions, mine, user, isOwner: isOwnerOf(r, user?.login, user?.id), flash: c.req.query("flash") ?? null };
+  const data: RepoPageData = { repo: r, tags, comments: cs, awards, versions, mine, user, isOwner: isOwnerOf(r, user?.login, user?.id), flash: c.req.query("flash") ?? null, donated: c.req.query("donated") === "1" };
   return respond(c, data, {
     json: (d) => ({ ...repoJson(d.repo), tags: d.tags, awards: d.awards, versions: d.versions, scan: parseJson(d.repo.scan, null), body_md: d.repo.body_md, my_vote: d.mine, is_owner: d.isOwner,
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),

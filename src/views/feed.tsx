@@ -61,7 +61,7 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
     <li class="row" id={`r${repo.id}`}>
       <span class="rank">{rank}</span>
       <VoteBox repo={repo} mine={mine} user={user} />
-      {thumb ? <a href={repoUrl(repo)}><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank">🐷</a>}
+      {thumb ? <a href={repoUrl(repo)} class="thumbwrap"><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank thumbwrap">🐷</a>}
       <div>
         <div class="title">
           <a href={ghUrl(repo)} rel="noopener">{repo.title ?? repo.name}</a> <span class="domain">(github.com/{repo.owner})</span>

@@ -3,13 +3,14 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import {
   AI_GENERATED, HUMAN_TOUCH, CONTENT_RATING, STATUS, CATEGORY, CONTAINS_LISTED, CONTAINS_REJECTED,
-  DECLARED_FACETS, CONTROLLED, SPEC_VERSION, normalizeValue, isRecognized,
+  DECLARED_FACETS, CONTROLLED, SPEC_VERSION, SPEC_URL, isSpecUrl, normalizeValue, isRecognized,
 } from "./vocab";
 
 export type TagRow = { facet: string; value: string; source: "declared" | "detected" | "alias"; recognized: boolean };
 
 export interface SlopMeta {
   slopscore: number;
+  spec: string;
   ai_generated: (typeof AI_GENERATED)[number];
   human_touch: (typeof HUMAN_TOUCH)[number];
   content_rating: (typeof CONTENT_RATING)[number];
@@ -76,8 +77,10 @@ const CONTAINS_ALL = [...CONTAINS_LISTED, ...CONTAINS_REJECTED];
 
 export const slopSchema = z.object({
   slopscore: z.preprocess((v) => Number(v), z.literal(SPEC_VERSION, {
-    errorMap: () => ({ message: `slopscore must be ${SPEC_VERSION} (spec version)` }),
+    errorMap: () => ({ message: `slopscore must be ${SPEC_VERSION} (spec version; a v1 file needs slopscore: ${SPEC_VERSION} and spec: ${SPEC_URL})` }),
   })),
+  spec: z.preprocess((v) => (v == null ? undefined : String(v).trim()), z.string({ required_error: `spec is required: spec: ${SPEC_URL} (the file credits the contract it follows)` })
+    .refine(isSpecUrl, { message: `spec must be ${SPEC_URL} (the file credits the contract it follows)` })),
   ai_generated: enumNorm(AI_GENERATED as unknown as readonly [string, ...string[]], "ai_generated"),
   human_touch: enumNorm(HUMAN_TOUCH as unknown as readonly [string, ...string[]], "human_touch"),
   content_rating: enumNorm(CONTENT_RATING as unknown as readonly [string, ...string[]], "content_rating"),
@@ -198,7 +201,8 @@ export function tagsFromMeta(meta: SlopMeta, warnings: string[] = []): TagRow[] 
 
 /** Minimal valid file, used in the instructions and tests. */
 export const MINIMAL_EXAMPLE = `---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone

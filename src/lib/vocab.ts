@@ -1,6 +1,14 @@
 // Controlled vocabularies for slopscore.md. Published at /api/v1/vocab and docs/SPEC.md.
 
-export const SPEC_VERSION = 1;
+export const SPEC_VERSION = 2;
+/** Canonical URL of the contract. Every slopscore.md names it in `spec:`, so the file credits the spec it follows. */
+export const SPEC_URL = "https://slopscore.org/spec";
+/** True when a declared `spec:` value points at the canonical spec. Tolerates protocol, www, a trailing slash, and .md. */
+export function isSpecUrl(v: unknown): boolean {
+  if (typeof v !== "string") return false;
+  const s = v.trim().toLowerCase().replace(/^https?:///, "").replace(/^www./, "").replace(/.md$|/$/, "");
+  return s === "slopscore.org/spec";
+}
 
 export const AI_GENERATED = ["entirely", "mostly", "partly", "none"] as const;
 export const HUMAN_TOUCH = ["none", "light", "heavy"] as const;
@@ -173,7 +181,8 @@ export function isRecognized(facet: string, value: string): boolean {
 
 export const vocabJson = () => ({
   spec: SPEC_VERSION,
-  required: ["slopscore", "ai_generated", "human_touch", "content_rating", "contains", "category", "status"],
+  spec_url: SPEC_URL,
+  required: ["slopscore", "spec", "ai_generated", "human_touch", "content_rating", "contains", "category", "status"],
   controlled: CONTROLLED,
   contains: { listed: CONTAINS_LISTED, rejected: CONTAINS_REJECTED },
   free: FREE_FACETS,

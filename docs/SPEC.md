@@ -1,4 +1,4 @@
-# slopscore.md — the contract (v1)
+# slopscore.md — the contract (v2)
 
 Principle: the file only holds what GitHub can't tell us. Name, description, topics, language, license, stars, README, and release come from the API.
 
@@ -8,7 +8,8 @@ Missing or invalid **disclosure** fields reject the repo with the reason shown p
 
 ```yaml
 ---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone
@@ -20,7 +21,8 @@ status: works-on-my-machine
 
 ## Required (disclosures)
 
-- slopscore: 1 (spec version)
+- slopscore: 2 (spec version)
+- spec: https://slopscore.org/spec — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.
 - ai_generated: entirely | mostly | partly | none
 - human_touch: none | light | heavy
 - content_rating: everyone (mature | adult are rejected)

@@ -1,5 +1,6 @@
 ---
-slopscore: 1
+slopscore: 2
+spec: https://slopscore.org/spec
 ai_generated: entirely
 human_touch: light
 content_rating: everyone

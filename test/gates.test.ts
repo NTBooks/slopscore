@@ -117,3 +117,14 @@ describe("vote burst allowance", async () => {
     expect(burstAllowance(1001)).toBe(500);
   });
 });
+
+describe("stripe signature helpers", async () => {
+  const { hmacHex, timingSafeEqual } = await import("../src/routes/pay");
+  it("hmac matches a known vector and compares in constant time", async () => {
+    const h = await hmacHex("whsec_test", "1700000000.{\"id\":\"evt\"}");
+    expect(h).toHaveLength(64);
+    expect(timingSafeEqual(h, h)).toBe(true);
+    expect(timingSafeEqual(h, h.slice(0, 63) + "0")).toBe(h.endsWith("0"));
+    expect(timingSafeEqual("a", "ab")).toBe(false);
+  });
+});

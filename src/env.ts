@@ -24,6 +24,13 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   OPENROUTER_GUARD_MODEL?: string;
   OPENROUTER_VISION_MODEL?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  DONATE_USD?: string;
+  X402_PAY_TO?: string;
+  X402_NETWORK?: string;
+  X402_FACILITATOR?: string;
+  RUSH_PRICE_USD?: string;
 }
 
 export interface SessionUser {

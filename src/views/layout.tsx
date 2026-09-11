@@ -62,7 +62,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
               <a href={s === "upcoming" ? "/upcoming" : `/?sort=${s}`} class={sort === s ? "on" : ""}>{s}</a>
             ))}
             <a href="/queue" class={url.pathname.startsWith("/queue") ? "on" : ""}>queue</a>
-            <a href="/best" class={url.pathname.startsWith("/best") ? "on" : ""}>winners</a>
+            <a href="/best" class={url.pathname.startsWith("/best") ? "on" : ""} title="truffles: what Schnitzel dug up">winners</a>
           </nav>
           <form class="search" action="/search" method="get" role="search">
             <input type="search" name="q" value={q ?? ""} placeholder="search slop… category:cli lang:python -tool:cursor" aria-label="Search" />

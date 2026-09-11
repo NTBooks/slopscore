@@ -20,6 +20,7 @@ export interface RepoPageData {
   user: SessionUser | null;
   isOwner: boolean;
   flash?: string | null;
+  donated?: boolean;
 }
 
 const REPORT_REASONS = ["objectionable", "undisclosed", "malware", "spam", "not-slop", "other"];
@@ -39,10 +40,11 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
   return (
     <article class="repo">
       {d.flash ? <div class="notice">{d.flash}</div> : null}
+      {d.donated ? <div class="notice">Thanks. The inspector is back from lunch. This page updates once the scan lands (refresh in a moment).</div> : null}
       <div class="row" style="border:0">
-        <span></span>
+        <span class="rank"></span>
         <VoteBox repo={r} mine={d.mine} user={user} />
-        {gh.owner_avatar ? <img class="thumb" src={gh.owner_avatar} alt="" referrerpolicy="no-referrer" /> : <span class="thumb blank">🐷</span>}
+        {gh.owner_avatar ? <img class="thumb thumbwrap" src={gh.owner_avatar} alt="" referrerpolicy="no-referrer" /> : <span class="thumb blank thumbwrap">🐷</span>}
         <div>
           <h1><a href={ghUrl(r)} rel="noopener">{r.title ?? r.name}</a> <span class="domain muted">(github.com/{r.full_name})</span></h1>
           <div class="tagline">{r.tagline}</div>
@@ -52,7 +54,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
           <div class="muted">
             {r.status === "listed" ? <>listed {ago(r.listed_at)}</> : <>found {ago(r.first_seen)}</>} by <a href={`/u/${r.owner}`}>{r.owner}</a> · last checked {ago(r.last_crawled)}
             {r.demo_url ? <> · <a href={r.demo_url} rel="nofollow noopener">demo</a></> : null}
-            {d.awards.map((a) => <> · <span class="chip ok">🏆 #{a.rank} {a.kind} {a.period}</span></>)}
+            {d.awards.map((a) => <> · <span class="chip ok" title="a truffle: Schnitzel dug this one up">🏆 #{a.rank} {a.kind} {a.period}</span></>)}
           </div>
         </div>
       </div>
@@ -177,6 +179,12 @@ const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
       {r.status === "delisted" && r.removed_reason === "owner-request"
         ? act("restore", "Restore listing", { secondary: true })
         : act("remove", "Remove listing", { secondary: true, confirm: "Remove this listing? The page stays as a public tombstone and the removal is logged. You can restore it later, or set unlisted: true in slopscore.md instead." })}
+      {r.status === "discovered" || r.status === "rejected" ? (
+        <form class="owner" method="post" action={`/r/${r.full_name}/donate`}>
+          <input type="hidden" name="csrf" value={user.csrf} />
+          <button type="submit" title="Stripe Checkout. Covers the hosting bill; buys the wait, never a gate.">Jump the line · $5 toward the hosting bill</button>
+        </form>
+      ) : null}
       <p class="muted">Badge: <code>{`[![SlopScore](https://slopscore.org/badge/${r.full_name}.svg)](https://slopscore.org/r/${r.full_name})`}</code></p>
     </div>
   );

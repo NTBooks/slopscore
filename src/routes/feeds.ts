@@ -67,19 +67,22 @@ feeds.get("/u/:file", async (c, next) => {
 
 feeds.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
-  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
+  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
+  // owner pages: someone searching their own GitHub handle should land on their listings
+  const owners = await c.env.DB.prepare("SELECT DISTINCT owner FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY owner LIMIT 2000").all<{ owner: string }>().then((r) => r.results ?? []);
   // Facet feeds are the long tail: "claude code slop", "python slop" and the like are what people actually
   // type, and each one is a real page with its own rows. Only facets with enough repos to be worth a visit.
   const facets = await c.env.DB.prepare(
     "SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND r.source = 'marker' AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200",
   ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/stats", "/log", "/scan", "/contact"];
+  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/for-agents", "/skill", "/stats", "/log", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${fixed.map((p) => url(p, null, p === "/" ? "1.0" : "0.6")).join("\n")}
 ${buckets.map((b) => url(`/b/${b.slug}`, null, "0.5")).join("\n")}
+${owners.map((o) => url(`/u/${o.owner}`, null, "0.4")).join("\n")}
 ${facets.map((f) => url(`/f/${f.facet}/${encodeURIComponent(f.value)}`, null, "0.4")).join("\n")}
 ${repos.map((r) => url(`/r/${r.full_name}`, r.md_updated_at ?? r.listed_at, "0.7")).join("\n")}
 </urlset>`;

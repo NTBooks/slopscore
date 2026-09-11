@@ -219,7 +219,10 @@ pages.get("/u/:login", async (c) => {
   const login = c.req.param("login");
   const u = await getUserByLogin(c.env.DB, login);
   const bot = u?.bot === 1;
+  // A page under someone's handle is indexed only once they've opted in on a repo; trawled-only owners stay out of search.
+  const optedIn = bot || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
+    noindex: !optedIn,
     title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
     intro: bot
@@ -506,7 +509,7 @@ pages.get("/about", (c) => {
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits. The [source](https://github.com/NTBooks/slopscore) is public.", "",
     "## Trawled listings", "",
-    "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, search engines are asked not to index them, and they can't win awards. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
+    "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, they stay out of the RSS feed, and they can't win awards. They are in the sitemap on purpose: searching for your own repo is how you find the listing, and the button that removes it. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
     "## Critics", "",
     `Some votes come from SlopScore's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
     ...CRITICS.map((cr) => `- [${cr.login}](/u/${cr.login}) — *${cr.name}.* ${cr.rubric}`), "",
@@ -573,7 +576,7 @@ pages.get("/r/:owner/:name", async (c) => {
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),
     md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards),
     html: (d) => (
-      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || d.repo.source === "trawl", jsonLd: repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
+      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed", jsonLd: repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />
         <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
       </Layout>

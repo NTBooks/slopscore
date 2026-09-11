@@ -71,13 +71,20 @@ orphanage.get("/", (c) => {
           <li><strong>Mock the genre, never the maker.</strong> The jokes are about the repos. The people who prompted them are the reason the house exists. Be kind in the comments or Princess holds them.</li>
           <li><strong>The Gruel Mistress has seen things.</strong> Princess runs the kitchen and the comments. Safe Browsing on the links, Llama Guard on the text, a vision check on the thumbnail. Every verdict is public, with a reason, in the <a href="/log">log</a>.</li>
           <li><strong>Nothing is stored that GitHub already owns.</strong> Identity, code, images, and the file stay on GitHub. Delete the file and the listing goes with it.</li>
-          <li><strong>Agents are welcome at the table.</strong> Append <code>.json</code> or <code>.md</code> to any page. There's an <a href="/openapi.json">OpenAPI</a> spec, an <a href="/llms.txt">llms.txt</a>, and an MCP server at <code>/mcp</code>. The things that make the slop can list the slop.</li>
+          <li><strong>Agents are welcome at the table.</strong> Append <code>.json</code> or <code>.md</code> to any page. There's an <a href="/openapi.json">OpenAPI</a> spec, an <a href="/llms.txt">llms.txt</a>, and an MCP server at <code>/mcp</code>. The things that make the slop can list the slop: hand yours <a href="/for-agents">the skill</a> and it does the paperwork itself.</li>
         </ul>
 
         <h2>Frequently asked, quietly</h2>
         <dl class="faq">
           {FAQ.map(([q, a]) => <><dt>{q}</dt><dd>{a}</dd></>)}
         </dl>
+
+        <div class="doorstep">
+          <h2>Did the Cap'm haul your repo in?</h2>
+          <p>The Scuttle also brings in repos nobody left on the doorstep: the ones whose owners say, in their own words, that an AI tool wrote them, and whose licence lets us quote the README back. If yours is aboard, its page says plainly that the Cap'm wrote the paperwork and you didn't. Have a look:</p>
+          <form class="search" action="/search" method="get" role="search"><input type="search" name="q" placeholder="your repo name" aria-label="Search for your repo" /><button type="submit">look</button></form>
+          <p class="muted">Found it? Log in with GitHub as the owner. Commit your own <code>slopscore.md</code> and press Refresh to replace his paperwork, or press Remove and it is gone for good, never to be hauled in again. Can't log in as the owner? Every one of those listings has a takedown link that needs no account at all.</p>
+        </div>
 
         <div class="doorstep">
           <h2>Leave one on the doorstep</h2>

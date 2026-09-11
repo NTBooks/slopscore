@@ -14,6 +14,7 @@ import { contact } from "./routes/contact";
 import { takedown } from "./routes/takedown";
 import { scan } from "./routes/scan";
 import { orphanage } from "./routes/orphanage";
+import { agents } from "./routes/agents";
 import { setFlags } from "./lib/flags";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
@@ -49,6 +50,7 @@ app.route("/contact", contact);
 app.route("/scan", scan);
 app.route("/orphanage", orphanage);
 app.route("/home", orphanage);
+app.route("/", agents);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => {
@@ -111,6 +113,8 @@ SlopScore is a public leaderboard for AI-generated software. A repo opts in by c
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)
 - ${origin}/scan        same thing as a form for logged-in humans; POST {repo} with a session or bearer token, answers in words why the repo was or was not queued
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
+- ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
+- ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
 
 ## Formats
@@ -125,7 +129,7 @@ Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device
 Votes and comments return 409 until a repo is listed. Without a login, POST /vote counts as an anonymous "crowd" vote: shown next to the score, capped by that repo's visitors, never part of ranking or awards. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
 
 ## Trawled listings
-Repos with "source": "trawl" never opted in. The Cap'm picked them by reading their READMEs (the owner says it was vibe coded or built with an AI tool; permissive license) and wrote their paperwork from GitHub data. They sort below opted-in repos, stay out of feeds and the sitemap, and never win awards. Owners replace the paperwork by committing slopscore.md and pressing Refresh, or remove the listing. Anyone may POST /r/{owner}/{repo}/takedown {"message"} without a login; the listing comes down right away.
+Repos with "source": "trawl" never opted in. The Cap'm picked them by reading their READMEs (the owner says it was vibe coded or built with an AI tool; permissive license) and wrote their paperwork from GitHub data. They sort below opted-in repos, stay out of the RSS feed, and never win awards. Owners replace the paperwork by committing slopscore.md and pressing Refresh, or remove the listing. Anyone may POST /r/{owner}/{repo}/takedown {"message"} without a login; the listing comes down right away.
 
 ## Jump the line (paid, optional)
 Agents: POST ${origin}/r/{owner}/{repo}/rush returns 402 with an x402 'accepts' block (USDC on Base); pay and retry with X-PAYMENT. Humans: log in as the owner and press "Jump the line · $5" (Stripe). Both buy the wait only, never a gate, vote, or award; every payment is in the public log and the ledger on /stats.
@@ -135,7 +139,7 @@ Agents: POST ${origin}/r/{owner}/{repo}/rush returns 402 with an x402 'accepts' 
 "submit" is the launch: it makes the repo eligible for Slop of the Day. Found-but-unsubmitted repos still get votes.
 
 ## Listing your own repo
-Commit this to slopscore.md at the repo root, then GET ${origin}/ping/{owner}/{repo}:
+Commit this to slopscore.md at the repo root, then GET ${origin}/ping/{owner}/{repo}. Agents: the step-by-step is at ${origin}/skill.md.
 ---
 slopscore: 2
 spec: https://slopscore.org/spec

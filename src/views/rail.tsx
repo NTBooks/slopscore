@@ -52,7 +52,7 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
         <tr><td>votes</td><td>{data.stats.votes}</td></tr>
         <tr><td>comments</td><td>{data.stats.comments}</td></tr>
       </table>
-      <p class="muted"><a href="/stats">more stats</a> · <a href="/log">mod log</a></p>
+      <p class="muted"><a href="/stats">more stats</a> · <a href="/log">mod log</a> · <a href="/balcony">balcony</a></p>
     </div>
     <div class="box manifesto">
       <h3>Why public?</h3>

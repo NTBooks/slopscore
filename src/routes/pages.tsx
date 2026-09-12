@@ -3,7 +3,7 @@ import { cached } from "../lib/cache";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import { adminLogins } from "../env";
-import { CRITICS, CRITIC_DAILY_CAP } from "../lib/critics";
+import { CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName } from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
   getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, SORTS, type RepoRow,
@@ -33,9 +33,10 @@ import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
 import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
-import { ago, isoDate } from "../lib/time";
+import { ago, isoDate, isoDateTime } from "../lib/time";
 import { crawlClock, untilText } from "../lib/crawlclock";
 import { CrawlClockBox } from "../views/crawlclock";
+import { BoxSeats, Heckles, type Heckle, type Seat } from "../views/balcony";
 
 export const pages = new Hono<AppEnv>();
 
@@ -225,7 +226,7 @@ pages.get("/u/:login", async (c) => {
     title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
     intro: bot
-      ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. The rules are on /about.`
+      ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. Everything it has voted on, and why, is on /balcony?critic=${login}. The rules are on /about.`
       : u ? `Slopsmith since ${isoDate(u.created_at)}${u.banned_at ? " · banned" : ""}. github.com/${login}` : `github.com/${login} — not a slopsmith (yet).`,
     extra: { user: u ? { id: u.id, login: u.login, avatar_url: u.avatar_url, bot } : null },
     empty: bot ? "Critics don't own repos. They read them." : "No slop from this account. Yet.",
@@ -410,11 +411,81 @@ pages.get("/log", async (c) => {
       <Layout meta={{ title: "Moderation log — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Moderation log</h2>
-          <p class="muted">Every admin and owner action, in public. Nothing here is a secret.</p>
+          <p class="muted">Every admin and owner action, in public. Nothing here is a secret. The critics keep their own record in <a href="/balcony">the balcony</a>.</p>
           <table class="list"><tr><th>when</th><th>who</th><th>action</th><th>target</th><th>note</th></tr>
             {d.rows.map((r) => <tr><td title={isoDate(r.created_at)}>{ago(r.created_at)}</td><td><a href={`/u/${r.actor_login}`}>{r.actor_login}</a> <span class="muted">{r.actor_role}</span></td><td>{r.action}</td><td>{r.target_type === "repo" && r.target_label ? <a href={`/r/${r.target_label}`}>{r.target_label}</a> : `${r.target_type} ${r.target_label ?? r.target_id}`}</td><td class="muted">{r.note}</td></tr>)}
           </table>
           {d.rows.length === 0 ? <div class="empty">Nothing has needed moderating. Suspicious.</div> : null}
+        </section>
+      </Layout>
+    ),
+  });
+});
+
+// ---- the balcony: every critic verdict, in public, next to the mod log ----
+pages.get("/balcony", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const wanted = (c.req.query("critic") ?? "").toLowerCase();
+  const only = CRITICS.find((x) => x.login === wanted) ?? null;
+  const page = Math.min(50, Math.max(1, Math.floor(Number(c.req.query("page") ?? 1)) || 1));
+  const per = 100;
+  // A hidden repo stays hidden: a heckle about it is not a back door to its name in a feed.
+  const clause = only ? "r.status != 'hidden' AND cr.critic_id = ?" : "r.status != 'hidden'";
+  const bind: unknown[] = only ? [only.id] : [];
+  const [rows, tallies] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT cr.critic_id, cr.upvote, cr.reason, cr.created_at, r.full_name, r.title
+       FROM critic_reviews cr JOIN repos r ON r.id = cr.repo_id
+       WHERE ${clause}
+       ORDER BY cr.created_at DESC, cr.repo_id DESC LIMIT ? OFFSET ?`,
+    ).bind(...bind, per + 1, (page - 1) * per).all<Heckle>().then((x) => x.results ?? []),
+    c.env.DB.prepare(
+      `SELECT cr.critic_id, count(*) AS reviewed, sum(cr.upvote) AS upvoted, max(cr.created_at) AS last_at
+       FROM critic_reviews cr JOIN repos r ON r.id = cr.repo_id WHERE r.status != 'hidden' GROUP BY cr.critic_id`,
+    ).all<{ critic_id: number; reviewed: number; upvoted: number; last_at: number }>().then((x) => x.results ?? []),
+  ]);
+  const hasMore = rows.length > per;
+  const heckles = hasMore ? rows.slice(0, per) : rows;
+  const seats: Seat[] = CRITICS.map((critic) => {
+    const t = tallies.find((x) => x.critic_id === critic.id);
+    return { critic, reviewed: t?.reviewed ?? 0, upvoted: Number(t?.upvoted ?? 0), last_at: t?.last_at ?? null };
+  });
+  const base = only ? `/balcony?critic=${only.login}&` : "/balcony?";
+  const heard = only ? (seats.find((s) => s.critic.id === only.id)?.reviewed ?? 0) : seats.reduce((n, s) => n + s.reviewed, 0);
+  const intro = `Every verdict the disclosed critics have cast, newest first: what they voted on, when, and why. They upvote at half weight, never downvote, never comment on a repo, and never count towards an award — so this is the whole of what they do. The quips are a small model's own words about a stranger's README (${CRITICS.length} rubrics on /about); we strip links and handles and publish the rest as written.`;
+  return respond(c, { heckles, seats, only, page, hasMore, heard, intro }, {
+    json: (d) => ({
+      critics: d.seats.map((s) => ({ login: s.critic.login, name: s.critic.name, rubric: s.critic.rubric, reviewed: s.reviewed, upvoted: s.upvoted, last_at: s.last_at })),
+      balcony: d.heckles.map((h) => ({
+        critic: criticById(h.critic_id)?.login ?? String(h.critic_id),
+        repo: h.full_name, url: `/r/${h.full_name}`,
+        upvote: h.upvote === 1, reason: criticQuip(h.reason), at: isoDateTime(h.created_at),
+      })),
+      page: d.page, has_more: d.hasMore,
+    }),
+    md: (d) => [
+      "# The Balcony", "", d.intro, "",
+      ...d.seats.map((s) => `- **${criticShortName(s.critic)}** (${s.critic.login}) — clapped for ${s.upvoted} of ${s.reviewed}`),
+      "", "| when | critic | verdict | repo | why |", "|---|---|---|---|---|",
+      ...d.heckles.map((h) => `| ${isoDateTime(h.created_at)} | ${criticById(h.critic_id)?.login ?? h.critic_id} | ${h.upvote ? "up" : "pass"} | [${h.full_name}](/r/${h.full_name}) | ${criticQuip(h.reason) || "—"} |`),
+    ].join("\n"),
+    html: (d) => (
+      <Layout meta={{ title: "The Balcony — what the critics said — SlopScore", description: "Every vote SlopScore's disclosed agent critics have cast, when, and why.", noindex: d.page > 1 }} user={user} url={url}>
+        <section class="wrap narrow" style="padding:0">
+          <h2>The Balcony</h2>
+          <p class="muted">Four critics, one box seat, no stage pass. {d.intro}</p>
+          <BoxSeats seats={d.seats} on={d.only?.login ?? null} />
+          {d.only ? <p class="muted small"><a href="/balcony">← everyone in the box</a> · showing {d.only.name}</p> : null}
+          <h3>Heckles <span class="muted">· {d.heard} verdict{d.heard === 1 ? "" : "s"} on the record</span></h3>
+          <Heckles rows={d.heckles} />
+          {d.heckles.length === 0 ? <div class="empty">The box is quiet. Nobody has been heckled yet.</div> : null}
+          {(d.page > 1 || d.hasMore) ? (
+            <div class="pager">
+              {d.page > 1 ? <a href={`${base}page=${d.page - 1}`}>‹ prev</a> : null}
+              {d.hasMore ? <a href={`${base}page=${d.page + 1}`} rel="next">next ›</a> : null}
+            </div>
+          ) : null}
+          <p class="muted small">Same rule as <a href="/log">the mod log</a>: nothing a critic does happens off the record. A critic reviews a repo once, ever, and at most {CRITIC_DAILY_CAP} a day.</p>
         </section>
       </Layout>
     ),
@@ -517,7 +588,7 @@ pages.get("/about", (c) => {
     "## Critics", "",
     `Some votes come from SlopScore's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
     ...CRITICS.map((cr) => `- [${cr.login}](/u/${cr.login}) — *${cr.name}.* ${cr.rubric}`), "",
-    `Critics only upvote, never vote on the site owner's repos, count at half weight, show up as \"incl. N critics\" beside the score, and are subtracted when awards are ranked, so they shape the feed and never pick the winners. Each reviews a repo once, ever, and at most ${CRITIC_DAILY_CAP} a day. They read the data the site already stores instead of crawling anything, and they never comment: a repo's text is untrusted input, so a critic may answer only yes or no, and its reason is kept in the database, never published.`, "",
+    `Critics only upvote, never vote on the site owner's repos, count at half weight, show up as \"incl. N critics\" beside the score, and are subtracted when awards are ranked, so they shape the feed and never pick the winners. Each reviews a repo once, ever, and at most ${CRITIC_DAILY_CAP} a day. They read the data the site already stores instead of crawling anything, and they never comment on a repo: a repo's text is untrusted input, so a critic may answer only yes or no, with one short sentence saying why. Those sentences are public on [the balcony](/balcony), links and handles stripped: what a critic voted on, when, and why, the same way the mod log publishes moderation.`, "",
     "## Tiers", "", "A repo the crawler finds is **found**: listed and votable, with an *unclaimed* chip. When the owner logs in and presses Submit it becomes **submitted**: a launch, eligible for Slop of the Day and the weekly awards. Votes carry over.", "",
     "## Votes", "", "Only logged-in slopsmiths vote. Votes are weighted by account trust derived from GitHub (age, public repos, followers), rate-limited per account and per network, and bursts from same-week accounts or one network count for nothing. Displayed scores are lightly fuzzed so bots can't tell whether they counted. This is roughly how Reddit does it; the knobs are public in the repo.", "",
     "## Moderation", "", "Cheapest first: GitHub's own enforcement, a denylist, a risk score that quarantines suspicious repos for a human, Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed.", "",

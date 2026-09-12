@@ -256,3 +256,25 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 /* truffle trawl: the claim box on listings the owner never submitted */
 .owner.claim ul { margin: 4px 0 6px 18px; padding: 0; }
 .owner .notice pre { background: var(--panel); padding: 6px 8px; overflow-x: auto; font-size: 11px; margin: 6px 0 0; white-space: pre; }
+
+/* the balcony — four critics in a box seat, and what they shouted down at the stage (/balcony) */
+.boxseats { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 12px 16px; margin: 10px 0 18px;
+  padding: 10px 12px 12px; background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 4px; }
+.boxseats .seat { font-size: 12px; }
+.boxseats .seat.on { background: var(--panel-2); border-radius: 4px; padding: 6px 8px; margin: -6px -8px; }
+.boxseats .seatname { font-family: var(--serif); font-size: 15px; }
+.boxseats .tally { margin: 2px 0 0; } .boxseats .tally strong { font-variant-numeric: tabular-nums; }
+.boxseats .rubric { margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.boxseats .seat.on .rubric { -webkit-line-clamp: 99; }
+
+.heckles { list-style: none; margin: 8px 0 0; padding: 0; }
+.heckle { padding: 8px 10px; border-bottom: 1px solid var(--line); border-left: 3px solid var(--line); }
+.heckle.up { border-left-color: var(--up); } .heckle.pass { border-left-color: var(--goo); }
+.heckleline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 12px; }
+.heckleline .heckler { font-family: var(--serif); font-size: 14px; }
+.heckleline .verdict { color: var(--muted); } .heckle.up .heckleline .verdict { color: var(--up); }
+.heckleline .when { margin-left: auto; white-space: nowrap; }
+.quip { margin: 4px 0 0; font-family: var(--serif); font-size: 14px; font-style: italic; }
+.quip::before { content: "\201C"; } .quip::after { content: "\201D"; }
+.quip.muted { font-size: 12px; } .quip.muted::before, .quip.muted::after { content: ""; }
+@media (max-width: 600px) { .heckleline .when { margin-left: 0; width: 100%; } }

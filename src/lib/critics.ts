@@ -11,6 +11,7 @@
 // src/jobs/awards.ts). Everything in this file is pure so the rules are unit-testable; the run that calls
 // the model lives in src/jobs/critics.ts.
 import { parseJson, type RepoRow } from "./db";
+import { PROFANITY } from "./denylist";
 import { stripHtml } from "./markdown";
 import type { SlopMeta } from "./slopmd";
 import type { VulnSummary } from "./osv";
@@ -70,6 +71,9 @@ export const VERDICT_SCHEMA = {
 
 export const criticById = (id: number): Critic | undefined => CRITICS.find((c) => c.id === id);
 
+/** The name without its job description: "Schnitzel", not "Schnitzel, the pig who runs the trough". */
+export const criticShortName = (c: Critic): string => c.name.split(",")[0].trim();
+
 /** Start of the UTC day, for the per-critic daily cap. */
 export const dayStart = (at: number): number => Math.floor(at / 86400) * 86400;
 
@@ -128,4 +132,28 @@ export function parseVerdict(raw: string): Verdict {
   } catch {
     return { upvote: false, reason: "unparseable answer (counted as no)" };
   }
+}
+
+/**
+ * A verdict's reason, cleaned for publication on /balcony.
+ *
+ * The sentence is a small model's, written after reading a stranger's README, so it is never trusted
+ * prose: links, @handles, markup characters and control characters come out, and a line carrying anything
+ * on the profanity list is dropped whole rather than published. What survives is one short plain sentence,
+ * which the template escapes on the way to the page. Empty means "this one doesn't get quoted".
+ */
+export function criticQuip(reason: string | null | undefined): string {
+  const flat = String(reason ?? "")
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")                // control and invisible characters
+    .replace(/\b(?:https?:\/\/|www\.)[^\s)>\]"']+/gi, "")   // a heckle is never a place to send a reader
+    .replace(/(^|[\s(])@[\w.-]+/g, "$1")             // no @handles: nobody gets summoned by a bot
+    .replace(/[<>`*_\[\]{}|\\]/g, " ")                // no markup to smuggle
+    .replace(/\(\s*\)/g, " ")               // the empty brackets a stripped link leaves behind
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+  if (flat.length < 3) return "";
+  const words = flat.toLowerCase().match(/[a-z']+/g) ?? [];
+  if (words.some((w) => PROFANITY.has(w))) return "";
+  return flat;
 }

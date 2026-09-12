@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  CRITICS, CRITIC_DAILY_CAP, criticRepoData, criticSystemPrompt, criticUserPrompt, criticById, dayStart, parseVerdict,
+  CRITICS, CRITIC_DAILY_CAP, criticRepoData, criticSystemPrompt, criticUserPrompt, criticById, criticQuip,
+  criticShortName, dayStart, parseVerdict,
 } from "../src/lib/critics";
 import type { RepoRow } from "../src/lib/db";
 
@@ -83,5 +84,34 @@ describe("caps", () => {
   });
   it("keeps the daily cap modest", () => {
     expect(CRITIC_DAILY_CAP).toBeLessThanOrEqual(25);
+  });
+});
+
+// What the balcony publishes. The quip is a model's sentence about a stranger's README, so the page gets a
+// cleaned version or nothing: the worst a hostile README can do is cost itself a quote.
+describe("quips fit to publish", () => {
+  it("passes an ordinary verdict through as written", () => {
+    expect(criticQuip("Fun, it runs, and the screenshots made me smile.")).toBe("Fun, it runs, and the screenshots made me smile.");
+  });
+  it("never publishes a link or a handle", () => {
+    expect(criticQuip("great, see https://evil.example/pwn for more")).toBe("great, see for more");
+    expect(criticQuip("as @octocat said, good")).toBe("as said, good");
+    expect(criticQuip("visit www.evil.example now")).toBe("visit now");
+  });
+  it("never publishes markup or control characters", () => {
+    expect(criticQuip("<script>alert(1)</script> nice repo")).toBe("script alert(1) /script nice repo");
+    expect(criticQuip("nice\u0000\u200b repo")).toBe("nice repo");
+    expect(criticQuip("[click here](https://evil.example)")).toBe("click here");
+  });
+  it("stays one short line", () => {
+    expect(criticQuip("a".repeat(400)).length).toBe(200);
+    expect(criticQuip("line one\nline two")).toBe("line one line two");
+  });
+  it("says nothing rather than something unpublishable", () => {
+    for (const junk of ["", null, undefined, "  ", "https://evil.example"]) expect(criticQuip(junk)).toBe("");
+  });
+  it("gives every critic a short name for the box seats", () => {
+    expect(criticShortName(CRITICS[0])).toBe("Schnitzel");
+    for (const c of CRITICS) expect(criticShortName(c).length).toBeLessThan(20);
   });
 });

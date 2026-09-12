@@ -23,7 +23,7 @@ slopbucket: [cli]            # optional: pick a bucket or invent one
 ## Required (disclosures)
 
 - slopscore: 2 (spec version)
-- spec: https://slopscore.org/spec — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScupper rather than a lookalike.
+- spec: https://slopscore.org/spec — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.
 - Older files: a v1 file on a repo that is already listed stays listed and votable, with an "outdated paperwork" note on its page until it is updated. New listings need the current version.
 - ai_generated: entirely | mostly | partly | none
 - human_touch: none | light | heavy

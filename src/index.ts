@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "./env";
 import { loadUser } from "./middleware";
 import { rewriteFormat } from "./lib/negotiate";
-import { onPrimaryHost, primaryHost, isSecondaryHost } from "./lib/host";
+import { homeUrl, SECONDARY_REDIRECT } from "./lib/host";
 import { pages } from "./routes/pages";
 import { api } from "./routes/api";
 import { auth } from "./routes/auth";
@@ -41,13 +41,12 @@ app.use("*", async (c, next) => {
   return c.redirect(url.toString(), 301);
 });
 
-// Login always happens on the primary host: the OAuth app has one registered callback, and the state
-// cookie must be set on the host GitHub returns to. Everything else answers on either domain.
-app.use("/auth/*", async (c, next) => {
-  const url = new URL(c.req.url);
-  if (!isSecondaryHost(url.hostname, primaryHost(c.env))) return next();
-  url.hostname = primaryHost(c.env);
-  return c.redirect(url.toString(), 302);
+// Any domain that is not home sends you home, path and query intact (src/lib/host.ts). This runs before the
+// www rule below so a www secondary domain is one hop, not two, and it means the OAuth callback, the session
+// cookie and the canonical URL only ever exist on one hostname.
+app.use("*", async (c, next) => {
+  const home = homeUrl(c.req.raw, c.env);
+  return home ? c.redirect(home, SECONDARY_REDIRECT) : next();
 });
 
 app.use("*", loadUser);
@@ -104,13 +103,13 @@ app.get("/:file{[A-Za-z0-9-]{8,128}\\.txt}", (c, next) => {
 
 app.get("/llms.txt", (c) => {
   const origin = new URL(c.req.url).origin;
-  return c.text(`# SlopScupper
+  return c.text(`# SlopScore
 
 > ${SITE.tagline} ${SITE.description}
 
 ${SITE.manifesto}
 
-SlopScupper is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
+SlopScore is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
 
 ## URLs
 - ${origin}/            the feed. ?sort=${visibleSorts().filter((s) => s !== "upcoming").join("|")}&t=day|week|month|year|all&page=N
@@ -132,7 +131,7 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
 - ${origin}/trends      what the corpus looks like from a distance: languages, tools, categories, and what the trawl threw back, counted nightly and split into the trawled sample and the self-selected opted-in one. .json is the whole snapshot as data
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
-- ${origin}/for-agents  how to hand SlopScupper to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
+- ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
 
@@ -212,7 +211,7 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
 
 export default {
   fetch(request: Request, env: AppEnv["Bindings"], ctx: ExecutionContext) {
-    return app.fetch(rewriteFormat(onPrimaryHost(request, env)), env, ctx);
+    return app.fetch(rewriteFormat(request), env, ctx);
   },
   async scheduled(event: ScheduledEvent, env: AppEnv["Bindings"], ctx: ExecutionContext) {
     ctx.waitUntil(runCron(event.cron, env));

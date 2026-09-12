@@ -38,7 +38,7 @@ feeds.get("/feed.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
   const sort = (c.req.query("sort") === "updated" ? "updated" : "new") as Sort;
   const { rows } = await feed(c.env.DB, { sort, page: 1, source: "marker" }); // trawled listings never go out in feeds
-  return send(c, rss(origin, sort === "updated" ? "SlopScupper — updated slop" : "SlopScupper — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
+  return send(c, rss(origin, sort === "updated" ? "SlopScore — updated slop" : "SlopScore — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
 });
 
 // The trawl gets a channel of its own rather than a share of /feed.xml. Anyone who wants to write about what
@@ -49,7 +49,7 @@ feeds.get("/feed.xml", async (c) => {
 feeds.get("/trawl.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, source: "trawl" });
-  return send(c, rss(origin, "SlopScupper — the Cap'm's hauls", "/trawl", "Repos the trawl found: public, AI-made by their owner's own account, and listed without being submitted. Any of them can be taken down from its page with no account.", rows));
+  return send(c, rss(origin, "SlopScore — the Cap'm's hauls", "/trawl", "Repos the trawl found: public, AI-made by their owner's own account, and listed without being submitted. Any of them can be taken down from its page with no account.", rows));
 });
 
 feeds.get("/b/:file", async (c, next) => {
@@ -57,7 +57,7 @@ feeds.get("/b/:file", async (c, next) => {
   const origin = new URL(c.req.url).origin;
   const slug = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, tag: slug, source: "marker" });
-  return send(c, rss(origin, `SlopScupper — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
+  return send(c, rss(origin, `SlopScore — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
 });
 
 feeds.get("/f/:facet/:file", async (c, next) => {
@@ -66,7 +66,7 @@ feeds.get("/f/:facet/:file", async (c, next) => {
   const facet = c.req.param("facet"); const value = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
   if (!([...DECLARED_FACETS, ...DETECTED_FACETS] as readonly string[]).includes(facet)) return c.notFound();
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, filters: [{ facet, value, negate: false }], source: "marker" });
-  return send(c, rss(origin, `SlopScupper — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
+  return send(c, rss(origin, `SlopScore — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
 });
 
 feeds.get("/u/:file", async (c, next) => {
@@ -74,7 +74,7 @@ feeds.get("/u/:file", async (c, next) => {
   const origin = new URL(c.req.url).origin;
   const login = c.req.param("file").replace(/\.xml$/, "");
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, owner: login, source: "marker" });
-  return send(c, rss(origin, `SlopScupper — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
+  return send(c, rss(origin, `SlopScore — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
 });
 
 feeds.get("/sitemap.xml", async (c) => {
@@ -115,7 +115,7 @@ feeds.get("/openapi.json", (c) => {
   const okJson = (desc: string) => ({ description: desc, content: { "application/json": { schema: { type: "object" } } } });
   const doc = {
     openapi: "3.1.0",
-    info: { title: "SlopScupper API", version: "1.0.0", description: "Give me your slop! Peer review for code nobody wrote. Every HTML page is also available as .json and .md. Writes need a bearer token from the GitHub device flow (POST /auth/device/start). See /llms.txt." },
+    info: { title: "SlopScore API", version: "1.0.0", description: "Give me your slop! Peer review for code nobody wrote. Every HTML page is also available as .json and .md. Writes need a bearer token from the GitHub device flow (POST /auth/device/start). See /llms.txt." },
     servers: [{ url: origin }],
     components: {
       securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", description: "token from POST /auth/device/poll" } },

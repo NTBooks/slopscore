@@ -113,7 +113,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
             <>
               <div class="hero">
                 <Mascot size={150} class="hero-pig" />
-                <div><h1>SlopScupper — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
+                <div><h1>SlopScore — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
               </div>
               {d.winner ? (
                 <div class="strip">
@@ -147,7 +147,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
 pages.get("/", (c) => {
   const sort = parseSort(c.req.query("sort"));
   if (sort === "upcoming") return c.redirect("/upcoming");
-  return feedPage(c, { title: `SlopScupper — ${SITE.tagline}`, heading: "SlopScupper — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
+  return feedPage(c, { title: `SlopScore — ${SITE.tagline}`, heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
 });
 
 pages.get("/upcoming", (c) => sortOn("upcoming") ? feedPage(c, {
@@ -161,7 +161,7 @@ pages.get("/upvoted", (c) => {
   const user = c.get("user");
   if (!user) return wantsJson(c) ? c.json({ error: "login required", login: "/auth/github?next=/upvoted" }, 401) : c.redirect("/auth/github?next=/upvoted");
   return feedPage(c, {
-    title: "Slop you upvoted — SlopScupper", heading: "Slop you upvoted", sort: "new", upvotedBy: user.id, hideSorts: true, noindex: true,
+    title: "Slop you upvoted — SlopScore", heading: "Slop you upvoted", sort: "new", upvotedBy: user.id, hideSorts: true, noindex: true,
     page: Number(c.req.query("page") ?? 1), baseUrl: "/upvoted", // Every status, so an upvote never vanishes without a word: the chip says what became of it.
     status: ["listed", "discovered", "quarantined", "rejected", "hidden", "delisted"], showStatus: true,
     intro: "Everything you have ever upvoted, newest vote first. Only votes cast while logged in; anonymous crowd votes belong to nobody. Upvote again on a repo page to take it back and it leaves this list.",
@@ -174,7 +174,7 @@ pages.get("/search", (c) => {
   const parsed = parseQuery(q);
   const sort = parseSort(c.req.query("sort"), "top");
   return feedPage(c, {
-    title: `search: ${q} — SlopScupper`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `search: ${q} — SlopScore`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     filters: parsed.filters, match: parsed.match, baseUrl: `/search?q=${encodeURIComponent(q)}`, q, noindex: true,
     intro: parsed.terms.length ? `Parsed as: ${parsed.terms.join(" ")}` : "Operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner: — prefix with - to exclude.",
     empty: "Nothing matches. Either it doesn't exist or nobody admitted to it.", extra: { parsed },
@@ -187,7 +187,7 @@ pages.get("/f/:facet/:value", async (c) => {
   if (!known.includes(facet)) return c.notFound();
   const siblings = await facetCounts(c.env.DB, facet, 30);
   return feedPage(c, {
-    title: `${facet}: ${value} — SlopScupper`, heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `${facet}: ${value} — SlopScore`, heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     filters: [{ facet, value, negate: false }], baseUrl: `/f/${facet}/${value}`,
     intro: `Other ${facet} values: ${siblings.filter((s) => s.value !== value).slice(0, 15).map((s) => `${s.value} (${s.n})`).join(", ")}`, extra: { facet, value, siblings },
   });
@@ -207,7 +207,7 @@ pages.get("/b", async (c) => {
     json: (d) => ({ curated: d.tags, community: d.community, banned: d.banned.map((b) => ({ slug: b.slug, reason: b.banned_reason })), free_tags: d.free, declare: "slopbucket: [cli, devtools]  # up to 3; unknown buckets are created" }),
     md: (d) => ["# Slopbuckets", "", "Subreddit-style feeds. Declare up to three in slopscore.md with `slopbucket: [cli, devtools]`; unknown buckets are created on the spot. A repo also lands in a bucket when its category, tags, domain, or GitHub topics match.", "", "## Curated", "", ...d.tags.map((t) => `- [b/${t.slug}](/b/${t.slug}) — ${t.title}: ${t.blurb ?? ""} (${t.n})`), "", "## Community", "", d.community.map((t) => `[b/${t.slug}](/b/${t.slug}) (${t.n})`).join(" · ") || "_none yet_", "", "## Banned", "", d.banned.map((t) => `${t.slug} — ${t.banned_reason}`).join("; ") || "_none_", "", "## Free tags", "", d.free.map((f) => `[${f.value}](/b/${f.value}) (${f.n})`).join(" · ")].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "Slopbuckets — SlopScupper" }} user={user} url={url} tags={d.tags}>
+      <Layout meta={{ title: "Slopbuckets — SlopScore" }} user={user} url={url} tags={d.tags}>
         <section class="wrap narrow" style="padding:0">
           <h2>Slopbuckets</h2>
           <p class="muted">Subreddit-style feeds. Pick up to three in your <code>slopscore.md</code> with <code>slopbucket: [cli, devtools]</code>, or invent one and it is created on the spot. A repo also lands in a bucket when its category, tags, domain, or GitHub topics match. Buckets that get out of control get banned by a mod, in public.</p>
@@ -230,7 +230,7 @@ pages.get("/b/:tag", async (c) => {
   const tag = await getTag(c.env.DB, slug);
   if (tag?.banned) return c.text(`b/${slug} is banned: ${tag.banned_reason ?? "out of control"}. See /log.`, 404);
   return feedPage(c, {
-    title: `b/${slug} — ${tag?.title ?? slug} — SlopScupper`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `b/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     tag: slug, baseUrl: `/b/${slug}`, intro: tag?.blurb ?? `Everything in the ${slug} bucket, by declared slopbucket, category, tag, domain, or GitHub topic.`, extra: { bucket: tag ?? { slug, curated: 0 } },
     empty: `No slop in b/${slug} yet. Be the first slopsmith: slopbucket: [${slug}]`,
   });
@@ -246,7 +246,7 @@ pages.get("/u/:login", async (c) => {
   const optedIn = bot || trawlOwnerIndexed(c.env) || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
     noindex: !optedIn,
-    title: `${login} — SlopScupper`, heading: bot ? `${login} — a SlopScupper critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),
+    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
     intro: bot
       ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. Everything it has voted on, and why, is on /balcony?critic=${login}. The rules are on /about.`
@@ -280,7 +280,7 @@ pages.get("/me", async (c) => {
     json: () => ({ login: user.login, needs_you: needs.map(repoJson), listed: listed.map(repoJson), submitted: launched.map(repoJson) }),
     md: (d) => [`# My repos (${user.login})`, "", ...d.groups.filter(([, , g]) => g.length).map(([t, , g]) => feedMd(t, g, 1, false))].join("\n\n"),
     html: (d) => (
-      <Layout meta={{ title: "My repos — SlopScupper", noindex: true }} user={user} url={url}>
+      <Layout meta={{ title: "My repos — SlopScore", noindex: true }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>My repos</h2>
           <p class="muted">Every repo here that you own as <strong>{user.login}</strong>, or maintain through its <code>maintainers:</code> list (the only way org repos show up).</p>
@@ -382,7 +382,7 @@ pages.get("/best", async (c) => {
     json: (d) => ({ kind, period: period ?? null, winners: d.rows.map((r) => ({ period: r.period, rank: r.rank, ...repoJson(r) })) }),
     md: (d) => feedMd(`Winners — ${kind}${period ? ` ${period}` : ""}`, d.rows, 1, false),
     html: (d) => (
-      <Layout meta={{ title: `Truffles — Slop of the ${kind} — SlopScupper`, description: "What Schnitzel dug up: Certified Slop of the Day and Week." }} user={user} url={url}>
+      <Layout meta={{ title: `Truffles — Slop of the ${kind} — SlopScore`, description: "What Schnitzel dug up: Certified Slop of the Day and Week." }} user={user} url={url}>
         <section>
           <h2>🏆 Certified Slop of the {kind === "day" ? "Day" : kind === "week" ? "Week" : "Week (Most Promising)"} <span class="muted small" title="the ones Schnitzel dug up">· truffles</span></h2>
           <p class="muted">What Schnitzel dug up. Only submitted repos compete. <a href="/best?kind=day">day</a> · <a href="/best?kind=week">week</a> · <a href="/best?kind=upcoming-week">most promising</a></p>
@@ -411,7 +411,7 @@ pages.get("/tools", async (c) => {
     json: (d) => ({ facet: "built_with", leaderboard: d.rows }),
     md: (d) => ["# Which AI produces the best slop?", "", "| tool | listings | mean score | best |", "|---|---|---|---|", ...d.rows.map((r) => `| ${r.value} | ${r.n} | ${r.mean} | [${r.best_repo}](/r/${r.best_repo}) (${r.best}) |`)].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "Built with — which AI produces the best slop? — SlopScupper" }} user={user} url={url}>
+      <Layout meta={{ title: "Built with — which AI produces the best slop? — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Which AI produces the best slop?</h2>
           <p class="muted">Mean score of listed repos by declared <code>built_with</code>. Small samples lie; that's part of the fun.</p>
@@ -431,7 +431,7 @@ pages.get("/log", async (c) => {
     json: (d) => ({ log: d.rows }),
     md: (d) => ["# Moderation log", "", ...d.rows.map((r) => `- ${isoDate(r.created_at)} **${r.actor_login}** (${r.actor_role}) ${r.action} ${r.target_type} ${r.target_label ?? r.target_id}${r.note ? ` — ${r.note}` : ""}`)].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "Moderation log — SlopScupper" }} user={user} url={url}>
+      <Layout meta={{ title: "Moderation log — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Moderation log</h2>
           <p class="muted">Every admin and owner action, in public. Nothing here is a secret. The critics keep their own record in <a href="/balcony">the balcony</a>.</p>
@@ -496,7 +496,7 @@ pages.get("/balcony", async (c) => {
       "", "All five are rows in a table on this site and nothing else: no GitHub accounts, ever. They upvote at half weight, never downvote, never comment on a repo, and are subtracted before an award is counted.",
     ].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "The Balcony — what the critics said — SlopScupper", description: "Every vote SlopScupper's disclosed agent critics have cast, when, and why.", noindex: d.page > 1 }} user={user} url={url}>
+      <Layout meta={{ title: "The Balcony — what the critics said — SlopScore", description: "Every vote SlopScore's disclosed agent critics have cast, when, and why.", noindex: d.page > 1 }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>The Balcony</h2>
           <p class="muted">Four critics, one box seat, no stage pass. {d.intro}</p>
@@ -533,7 +533,7 @@ pages.get("/stats", async (c) => {
     json: (d) => ({ capacity: d.cap, ledger: d.led, moderation_flags: flagsSnapshot(), by_status: d.byStatus, stats: d.stats, daily: d.daily }),
     md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.trawl} trawled (${d.cap.trawl_lane}), ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "Stats — SlopScupper" }} user={user} url={url}>
+      <Layout meta={{ title: "Stats — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Stats</h2>
           <p class="muted">This site runs on Cloudflare's free tier on purpose. When the "deferred" column grows day over day, the AI budget is the bottleneck and it's time to pay. Numbers about the slop itself, rather than about the machine that counts it, live on <a href="/trends">/trends</a>.</p>
@@ -578,7 +578,7 @@ pages.get("/trends", async (c) => {
     json: (x) => x ?? { error: "no snapshot yet" },
     md: (x) => (x ? trendsMd(x) : ["# Trends", "", "No snapshot yet. The nightly job writes one at 00:05 UTC."].join("\n")),
     html: (x) => (
-      <Layout meta={{ title: "Trends — SlopScupper", description }} user={user} url={url}>
+      <Layout meta={{ title: "Trends — SlopScore", description }} user={user} url={url}>
         {x ? <Trends d={x} /> : (
           <section class="wrap narrow" style="padding:0">
             <h2>Trends</h2>
@@ -599,7 +599,7 @@ pages.get("/spec", (c) => {
     "Missing or invalid **disclosure** fields reject the repo with the reason shown publicly on its page. Fix the file, then `curl /ping/owner/repo`, use the [scan form](/scan), or press Refresh if you own it.", "",
     "## Minimal file", "", "```yaml", MINIMAL_EXAMPLE.trim(), "```", "",
     "## Required (disclosures)", "",
-    ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScupper rather than a lookalike.`, "Older files: a v1 file on a repo that is already listed stays listed and votable, with an \"outdated paperwork\" note on its page until it is updated. New listings need the current version.", `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
+    ...[`slopscore: ${v.spec} (spec version)`, `spec: ${v.spec_url} — the URL of this contract. It credits where the format comes from, and it is how a crawler knows the file is meant for SlopScore rather than a lookalike.`, "Older files: a v1 file on a repo that is already listed stays listed and votable, with an \"outdated paperwork\" note on its page until it is updated. New listings need the current version.", `ai_generated: ${v.controlled.ai_generated.join(" | ")}`, `human_touch: ${v.controlled.human_touch.join(" | ")}`, "content_rating: everyone (mature | adult are rejected)",
       `contains: list, may be empty. Listed with a chip: ${v.contains.listed.join(", ")}. Rejected: ${v.contains.rejected.join(", ")}.`, `category: ≥ 1 of ${v.controlled.category.join(", ")}`, `status: ${v.controlled.status.join(" | ")}`,
       "tagline: ≤ 140 chars, or a GitHub description (rejected only if both are empty)"].map((x) => `- ${x}`), "",
     "## Optional facets (unknown values never reject; they're kept as free tags marked unrecognized)", "",
@@ -614,21 +614,21 @@ pages.get("/spec", (c) => {
   return respond(c, { md, vocab: v }, {
     json: (d) => d.vocab,
     md: (d) => d.md,
-    html: (d) => <Layout meta={{ title: "slopscore.md spec — SlopScupper" }} user={user} url={url}><section class="wrap narrow" style="padding:0">{(() => { const html = renderMarkdown(d.md); return <div dangerouslySetInnerHTML={{ __html: html }} />; })()}</section></Layout>,
+    html: (d) => <Layout meta={{ title: "slopscore.md spec — SlopScore" }} user={user} url={url}><section class="wrap narrow" style="padding:0">{(() => { const html = renderMarkdown(d.md); return <div dangerouslySetInnerHTML={{ __html: html }} />; })()}</section></Layout>,
   });
 });
 
 pages.get("/about", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const md = [
-    "# About SlopScupper", "", `**${SITE.tagline}**`, "", SITE.manifesto, "",
+    "# About SlopScore", "", `**${SITE.tagline}**`, "", SITE.manifesto, "",
     "## The problem", "",
     "Anyone can now generate a working-looking repo in an afternoon. Most of it is never run by anyone but its author, and the places that used to sort software (stars, Hacker News, Product Hunt) either ignore it or drown in it. Nobody wants to admit their project was generated, so the disclosures that would let you judge it are missing, and the good stuff is indistinguishable from the pile.", "",
-    "SlopScupper flips the incentive. You *brag* that it's slop. You disclose how much was generated, how much a human touched, and what's inside, in a six-line file. Then graders, human and otherwise, tell you whether it actually works. The disclosures are the price of admission; the leaderboard is the reward.", "",
+    "SlopScore flips the incentive. You *brag* that it's slop. You disclose how much was generated, how much a human touched, and what's inside, in a six-line file. Then graders, human and otherwise, tell you whether it actually works. The disclosures are the price of admission; the leaderboard is the reward.", "",
     "## Meet Schnitzel", "",
     "The pig is Schnitzel. He runs the trough. He is not disgusted by slop; he is a connoisseur of it, and he has opinions. The slop on his chin is from lunch. He grades with a clipboard, sniffs out every `slopscore.md` on GitHub, and stamps the winners *Certified Slop*. If your repo is rejected, it's because Schnitzel found the paperwork lacking, never because he found the slop lacking. He has never found the slop lacking.", "",
     "## What it is", "",
-    "SlopScupper is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
+    "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits, and so are the [trends](/trends). The [source](https://github.com/NTBooks/slopscore) is public.", "",
     "## Trawled listings", "",
@@ -637,7 +637,7 @@ pages.get("/about", (c) => {
     "One model reads every repo the trawl finds, before anything is listed. Keywords cannot tell a vibe-coded app from a tool built for people who vibe code, so a cheap model on OpenRouter is asked two multiple-choice questions about each candidate: what kind of thing it is, which decides whether the repo is listed at all, and what the software is for, which decides nothing.", "",
     "It answers with two values off two fixed lists and nothing else. It cannot write a sentence that reaches this site, it cannot talk a repo into being listed (only out of one), and the public reason on a trawled listing is built from the owner's own words, never the model's. The two answers are kept for every candidate it sees, including the ones thrown back, and counted on [/trends](/trends) — where the labels are marked as the classifier's guess, because that is what they are.", "",
     "## Critics", "",
-    `Some votes come from SlopScupper's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
+    `Some votes come from SlopScore's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
     ...CRITICS.map((cr) => `- [${cr.login}](/u/${cr.login}) — *${cr.name}.* ${cr.rubric}`), "",
     `Critics only upvote, never vote on the site owner's repos, count at half weight, show up as \"incl. N critics\" beside the score, and are subtracted when awards are ranked, so they shape the feed and never pick the winners. Each reviews a repo once, ever, and at most ${CRITIC_DAILY_CAP} a day. They read the data the site already stores instead of crawling anything, and they never comment on a repo: a repo's text is untrusted input, so a critic may answer only yes or no, with one short sentence saying why. Those sentences are public on [the balcony](/balcony), links and handles stripped: what a critic voted on, when, and why, the same way the mod log publishes moderation.`, "",
     "## Tiers", "", "A repo the crawler finds is **found**: listed and votable, with an *unclaimed* chip. When the owner logs in and presses Submit it becomes **submitted**: a launch, eligible for Slop of the Day and the weekly awards. Votes carry over.", "",
@@ -649,7 +649,7 @@ pages.get("/about", (c) => {
   return respond(c, { md }, {
     json: (d) => ({ about: d.md }),
     md: (d) => d.md,
-    html: (d) => <Layout meta={{ title: "About — SlopScupper" }} user={user} url={url}><section class="wrap narrow" style="padding:0"><div dangerouslySetInnerHTML={{ __html: renderMarkdown(d.md) }} /></section></Layout>,
+    html: (d) => <Layout meta={{ title: "About — SlopScore" }} user={user} url={url}><section class="wrap narrow" style="padding:0"><div dangerouslySetInnerHTML={{ __html: renderMarkdown(d.md) }} /></section></Layout>,
   });
 });
 
@@ -677,7 +677,7 @@ pages.get("/r/:owner/:name", async (c) => {
     return respond(c, { owner: c.req.param("owner"), name: c.req.param("name") }, {
       json: (d) => ({ error: "not listed", hint: `GET /ping/${d.owner}/${d.name} after committing slopscore.md` }),
       md: (d) => `# Not listed\n\nNo listing for ${d.owner}/${d.name}. Commit a slopscore.md then GET /ping/${d.owner}/${d.name}.`,
-      html: (d) => <Layout meta={{ title: "Not listed — SlopScupper", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
+      html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
   if (r.source === "trawl" && r.status === "delisted" && !isOwnerOf(r, user?.login, user?.id)) {
@@ -686,7 +686,7 @@ pages.get("/r/:owner/:name", async (c) => {
     return respond(c, { full_name: r.full_name }, {
       json: (d) => ({ error: "removed", full_name: d.full_name, note: `${d.full_name} ${note}` }),
       md: (d) => `# Removed\n\n${d.full_name} ${note}`,
-      html: (d) => <Layout meta={{ title: "Removed — SlopScupper", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Removed</h2><p><code>{d.full_name}</code> {note}</p><p class="muted">The owner can come back any time by committing a <code>slopscore.md</code> (<a href="/spec">spec</a>).</p></section></Layout>,
+      html: (d) => <Layout meta={{ title: "Removed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Removed</h2><p><code>{d.full_name}</code> {note}</p><p class="muted">The owner can come back any time by committing a <code>slopscore.md</code> (<a href="/spec">spec</a>).</p></section></Layout>,
     }, 404);
   }
   // A trawled listing is a page about somebody who never asked to be here. TRAWL_INDEX decides whether search
@@ -708,7 +708,7 @@ pages.get("/r/:owner/:name", async (c) => {
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),
     md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards, d.critics),
     html: (d) => (
-      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScupper`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || hideFromSearch, jsonLd: hideFromSearch ? undefined : repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
+      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || hideFromSearch, jsonLd: hideFromSearch ? undefined : repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />
         <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
       </Layout>
@@ -737,7 +737,7 @@ pages.get("/badge/:owner/:name", async (c) => {
   const r = await getRepo(c.env.DB, c.req.param("owner"), name);
   const award = c.req.query("award") && r ? await c.env.DB.prepare("SELECT kind, period, rank FROM awards WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1").bind(r.id).first<{ kind: string; period: string; rank: number }>() : null;
   if (r) c.executionCtx.waitUntil(freshen(c.env, r));
-  const label = "SlopScupper";
+  const label = "SlopScore";
   const value = !r ? "not listed" : r.status !== "listed" ? r.status : award ? `#${award.rank} slop of the ${award.kind} · ${award.period}` : `certified slop · ${r.score}`;
   const color = !r ? "#9a9a9a" : r.status === "listed" ? "#e8669a" : r.status === "rejected" ? "#c0392b" : "#b8860b";
   const lw = 8 + label.length * 6.6, vw = 10 + value.length * 6.3;

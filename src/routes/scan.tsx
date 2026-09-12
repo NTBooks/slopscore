@@ -83,7 +83,7 @@ function Page(p: { c: Context<AppEnv>; verdict?: Verdict | null; input?: string 
   const { c } = p; const user = c.get("user"); const url = new URL(c.req.url);
   const v = p.verdict ?? null;
   return (
-    <Layout meta={{ title: "Request a scan — SlopScupper", description: "Ask the crawler to check a public GitHub repo now, and learn exactly why it was or was not queued." }} user={user} url={url}>
+    <Layout meta={{ title: "Request a scan — SlopScore", description: "Ask the crawler to check a public GitHub repo now, and learn exactly why it was or was not queued." }} user={user} url={url}>
       <section class="wrap narrow" style="padding:0">
         <h2>Request a scan</h2>
         <p>The crawler normally finds every public repo with a <code>slopscore.md</code> on its own through GitHub code search. When that is slow or broken, this is the manual way: paste a public repo and the same scan runs right now, then tells you in words what happened and why. Same rules, same gates, same queue. Anyone logged in can ask; you do not have to own the repo.</p>

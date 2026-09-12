@@ -66,7 +66,7 @@ describe("what the model is shown", () => {
     expect(criticRepoData(repo()).pitch).toBe("It orders snacks.");
     const trawled = criticRepoData(repo({ source: "trawl", body_md: "The Cap'm wrote this paperwork" }));
     expect(trawled.pitch).toBe("");
-    expect(trawled.paperwork).toBe("written by SlopScupper, not the owner");
+    expect(trawled.paperwork).toBe("written by SlopScore, not the owner");
   });
   it("flattens the README to text", () => {
     expect(criticRepoData(repo()).readme).toBe("Snackbot It orders snacks.");

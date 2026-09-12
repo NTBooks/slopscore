@@ -14,7 +14,7 @@
   "ai": { "binding": "AI", "remote": true },
   "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
   "vars": {
-    "SITE_NAME": "SlopScupper",
+    "SITE_NAME": "SlopScore",
     "SITE_URL": "http://localhost:8787",
     // Local dev mirrors production so the indexing behaviour can be checked before it ships.
     "TRAWL_INDEX": "on",
@@ -49,7 +49,7 @@
       // The free plan allows 5 cron triggers per account: production takes 4, test gets one combined tick.
       "triggers": { "crons": ["*/30 * * * *"] },
       "vars": {
-        "SITE_NAME": "SlopScupper (test)",
+        "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",
         "PRIMARY_HOST": "test.slopscore.org",
         "TRAWL_INDEX": "on",
@@ -75,9 +75,9 @@
     },
     "production": {
       "name": "slopscore",
-      // Both names answer. slopscore.org stays primary until the OAuth app, the Stripe webhook and Email
-      // Routing move (docs/DOMAIN-MIGRATION.md); PRIMARY_HOST below is the switch. Deploy FAILS if a zone
-      // listed here is not in the Cloudflare account yet: if slopscupper.com is not added, drop its two lines.
+      // slopscore.org is home. slopscupper.com is a marketing address: it answers and redirects here
+      // (src/lib/host.ts), and it is listed so the worker owns the hostname rather than leaving it parked.
+      // Deploy FAILS if a zone listed here is not in the Cloudflare account: drop a pattern if it is not added.
       "routes": [
         { "pattern": "slopscore.org", "custom_domain": true },
         { "pattern": "www.slopscore.org", "custom_domain": true },
@@ -91,7 +91,7 @@
       "send_email": [{ "name": "MAIL" }],
       "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *", "*/10 * * * *", "5 0 * * *"] },
       "vars": {
-        "SITE_NAME": "SlopScupper",
+        "SITE_NAME": "SlopScore",
         "SITE_URL": "https://slopscore.org",
         // The one hostname every absolute URL we emit uses. Set to slopscupper.com to finish the move.
         "PRIMARY_HOST": "slopscore.org",

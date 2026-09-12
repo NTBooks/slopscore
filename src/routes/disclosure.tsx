@@ -119,7 +119,7 @@ disclosure.get("/disclosure", (c) => {
     html: (d) => (
       <Layout
         meta={{
-          title: "AI disclosure, in six lines — SlopScupper",
+          title: "AI disclosure, in six lines — SlopScore",
           description: "slopscore.md is an AI-provenance disclosure small enough that one person with a weekend project will actually commit it. What wrote the code, how much a human touched it, what is inside.",
         }}
         user={user}

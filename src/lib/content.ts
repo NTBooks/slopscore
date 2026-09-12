@@ -94,7 +94,7 @@ async function openrouter(env: Env, model: string, messages: unknown[], maxToken
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "content-type": "application/json", "http-referer": env.SITE_URL ?? "https://slopscore.org", "x-title": "SlopScupper" },
+      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "content-type": "application/json", "http-referer": env.SITE_URL ?? "https://slopscore.org", "x-title": "SlopScore" },
       body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0 }),
     });
     if (!res.ok) return { error: `openrouter ${res.status}: ${(await res.text()).slice(0, 200)}` };

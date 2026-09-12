@@ -1,43 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { onPrimaryHost, isSecondaryHost, primaryHost } from "../src/lib/host";
+import { homeUrl, isSecondaryHost, primaryHost, SECONDARY_REDIRECT } from "../src/lib/host";
 
 const env = { PRIMARY_HOST: "slopscore.org" };
-const at = (u: string) => new URL(onPrimaryHost(new Request(u), env).url);
+const to = (u: string) => homeUrl(new Request(u), env);
 
-describe("two domains, one canonical host", () => {
-  it("leaves the primary host alone", () => {
-    expect(at("https://slopscore.org/r/a/b").href).toBe("https://slopscore.org/r/a/b");
-    expect(at("https://www.slopscore.org/queue").href).toBe("https://www.slopscore.org/queue");
+describe("one home, and every other domain points at it", () => {
+  it("leaves home alone", () => {
+    expect(to("https://slopscore.org/r/a/b")).toBeNull();
+    expect(to("https://www.slopscore.org/queue")).toBeNull();   // www has its own redirect in index.ts
   });
 
-  it("speaks about a secondary host as the primary one, path and query intact", () => {
-    expect(at("https://slopscupper.com/r/a/b?sort=new").href).toBe("https://slopscore.org/r/a/b?sort=new");
+  it("sends a marketing domain home with the path and query intact", () => {
+    expect(to("https://slopscupper.com/r/a/b?sort=new")).toBe("https://slopscore.org/r/a/b?sort=new");
   });
 
-  it("keeps the www prefix so the existing www redirect still fires", () => {
-    expect(at("https://www.slopscupper.com/best").href).toBe("https://www.slopscore.org/best");
+  it("drops www in the same hop, so nobody is bounced twice", () => {
+    expect(to("https://www.slopscupper.com/best")).toBe("https://slopscore.org/best");
   });
 
-  it("never touches /auth: the OAuth callback and its state cookie live on one host", () => {
-    expect(at("https://slopscupper.com/auth/github?next=/me").href).toBe("https://slopscupper.com/auth/github?next=/me");
-    expect(at("https://slopscupper.com/auth/callback?code=x").href).toBe("https://slopscupper.com/auth/callback?code=x");
+  it("redirects /auth too: the OAuth callback and its cookie exist on one hostname only", () => {
+    expect(to("https://slopscupper.com/auth/github?next=/me")).toBe("https://slopscore.org/auth/github?next=/me");
   });
 
   it("leaves dev, preview deploys and the test environment as themselves", () => {
-    expect(at("http://localhost:8787/").href).toBe("http://localhost:8787/");
-    expect(at("https://slopscore.workers.dev/").href).toBe("https://slopscore.workers.dev/");
-    expect(at("https://test.slopscore.org/").href).toBe("https://test.slopscore.org/");
+    expect(to("http://localhost:8787/")).toBeNull();
+    expect(to("https://slopscore.workers.dev/")).toBeNull();
+    expect(to("https://test.slopscore.org/")).toBeNull();
   });
 
   it("does nothing at all when PRIMARY_HOST is unset", () => {
-    const r = onPrimaryHost(new Request("https://slopscupper.com/x"), {});
-    expect(new URL(r.url).hostname).toBe("slopscupper.com");
+    expect(homeUrl(new Request("https://slopscupper.com/x"), {})).toBeNull();
     expect(primaryHost({})).toBe("");
     expect(isSecondaryHost("slopscupper.com", "")).toBe(false);
   });
 
   it("is the one thing that has to change to move the site", () => {
-    const moved = new URL(onPrimaryHost(new Request("https://slopscore.org/r/a/b"), { PRIMARY_HOST: "slopscupper.com" }).url);
-    expect(moved.href).toBe("https://slopscupper.com/r/a/b");
+    expect(homeUrl(new Request("https://slopscore.org/r/a/b"), { PRIMARY_HOST: "slopscupper.com" }))
+      .toBe("https://slopscupper.com/r/a/b");
+  });
+
+  it("redirects temporarily, so a swap can never strand somebody in a cached loop", () => {
+    expect(SECONDARY_REDIRECT).toBe(302);
   });
 });

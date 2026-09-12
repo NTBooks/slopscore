@@ -35,7 +35,7 @@ export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
       <span class="score" title={flagOn("fuzz") ? "weighted, lightly fuzzed" : "weighted"}>{flagOn("fuzz") ? fuzz(repo.score, repo.id) : repo.score}</span>
       <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote"><Caret dir="down" /></button>
       {flagOn("crowd") && (crowd !== 0 || !user) ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
-      {repo.critic_up ? <a class="crowd" href="/about#critics" title="upvotes from SlopScupper's disclosed agent critics (accounts on this site, not GitHub accounts), at half weight; awards ignore them">incl. {repo.critic_up} critic{repo.critic_up === 1 ? "" : "s"}</a> : null}
+      {repo.critic_up ? <a class="crowd" href="/about#critics" title="upvotes from SlopScore's disclosed agent critics (accounts on this site, not GitHub accounts), at half weight; awards ignore them">incl. {repo.critic_up} critic{repo.critic_up === 1 ? "" : "s"}</a> : null}
     </form>
   );
 };

@@ -206,7 +206,7 @@ const StatusBox: FC<{ r: RepoRow; scan: ScanReport | null }> = ({ r, scan }) => 
 const ClaimBox: FC<{ r: RepoRow; user: SessionUser | null }> = ({ r, user }) => (
   <div class="owner claim">
     <h3>I'm not calling your project slop! Geeze, it's a joke... Do you own this repo?</h3>
-    <p>Log in with GitHub as <strong>{r.owner}</strong>. There's no account to make: SlopScupper only asks GitHub who you are (read:user), never sees your code, and keeps just your id, login and avatar. Then you can:</p>
+    <p>Log in with GitHub as <strong>{r.owner}</strong>. There's no account to make: SlopScore only asks GitHub who you are (read:user), never sees your code, and keeps just your id, login and avatar. Then you can:</p>
     <ul>
       <li><strong>Keep it, on your terms.</strong> Commit your own <code>slopscore.md</code> (<a href="/spec">spec</a>) and press Refresh. Your paperwork replaces the Cap'm's, and you can submit it for Slop of the Day.</li>
       <li><strong>Take it down.</strong> One click on Remove. It stays gone; the trawl never brings it back.</li>
@@ -257,11 +257,11 @@ const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
  * reader of that repo back here. So it goes at the top of the owner box with a copy button, not in a footnote.
  */
 const BadgeBox: FC<{ r: RepoRow }> = ({ r }) => {
-  const md = `[![SlopScupper](https://slopscore.org/badge/${r.full_name}.svg)](https://slopscore.org/r/${r.full_name})`;
+  const md = `[![SlopScore](https://slopscore.org/badge/${r.full_name}.svg)](https://slopscore.org/r/${r.full_name})`;
   return (
     <div class="badgebox">
       <span class="label">Badge for your README</span>
-      <img src={`/badge/${r.full_name}.svg`} alt={`SlopScupper badge for ${r.full_name}`} height="20" class="badge-preview" />
+      <img src={`/badge/${r.full_name}.svg`} alt={`SlopScore badge for ${r.full_name}`} height="20" class="badge-preview" />
       <div class="badge-copy">
         <input type="text" readonly value={md} onclick="this.select()" aria-label="Badge markdown" />
         <button type="button" class="secondary" onclick={COPY_JS}>copy</button>

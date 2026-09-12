@@ -23,6 +23,6 @@ maintainers: [NTBooks]
 ---
 ## The site lists itself
 
-SlopScupper was built in one sitting by an agent, from a plan, which is exactly the kind of thing it exists to grade. Every page is also `.json` and `.md`. The queue, the moderation log, and the free-tier headroom are public.
+SlopScore was built in one sitting by an agent, from a plan, which is exactly the kind of thing it exists to grade. Every page is also `.json` and `.md`. The queue, the moderation log, and the free-tier headroom are public.
 
 Nothing here is a secret. That's the point.

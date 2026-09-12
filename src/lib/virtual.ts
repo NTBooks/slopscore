@@ -182,7 +182,7 @@ export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string): 
     "x-virtual: true",
     "---",
     "",
-    `**The Cap'm wrote this paperwork, not the owner.** This repo never submitted itself to SlopScupper. ${curated ? `The Cap'm picked it by hand: ${curated.replace(/\.$/, "")}` : `The Cap'm hauled it in on a truffle trawl because it ${why}`}. It carries the ${g.license?.spdx_id ?? "unknown"} license. The disclosures above are his best guess from what GitHub shows.`,
+    `**The Cap'm wrote this paperwork, not the owner.** This repo never submitted itself to SlopScore. ${curated ? `The Cap'm picked it by hand: ${curated.replace(/\.$/, "")}` : `The Cap'm hauled it in on a truffle trawl because it ${why}`}. It carries the ${g.license?.spdx_id ?? "unknown"} license. The disclosures above are his best guess from what GitHub shows.`,
     "",
     "Is this yours? Commit a real `slopscore.md` and press Refresh to replace this, or remove the listing in one click. There's no account to make: you log in with GitHub.",
     "",
@@ -191,7 +191,7 @@ export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string): 
 
 /** Server-side checks for a hand-vetted pick: the curator's reading replaces the keyword signals, the hard rules stay. Null = OK. */
 export function curatedCheck(g: GhRepo, o: { known: Set<string>; deny: DenyRow[] }): string | null {
-  if (o.known.has(g.full_name.toLowerCase())) return "already on SlopScupper, or removed and remembered";
+  if (o.known.has(g.full_name.toLowerCase())) return "already on SlopScore, or removed and remembered";
   if (g.private || g.fork || g.archived || g.disabled || g.is_template) return "private, fork, archived, disabled or template";
   if (g.owner.type !== "User") return "org-owned: nobody can log in as the repo owner";
   const spdx = g.license?.spdx_id ?? "";

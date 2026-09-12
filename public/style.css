@@ -1,4 +1,4 @@
-/* SlopScupper — old.reddit density, warm paper, one accent (slop orange), goo green for the pig's dinner. */
+/* SlopScore — old.reddit density, warm paper, one accent (slop orange), goo green for the pig's dinner. */
 :root {
   /* retro pig: pink + brown. */
   --bg: #fdf6f7; --fg: #2a1a14; --muted: #7a6560; --line: #ecd9dc; --panel: #f9e9ec; --panel-2: #f3dde2;
@@ -194,6 +194,16 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
 @media (max-height: 520px) { .foot { position: static; } }
 /* On a phone the bar is one scrollable line of links: the motto and the note would cost three of them. */
 @media (max-width: 600px) { .foot strong, .foot p.muted { display: none; } .foot { padding: 4px 10px; text-align: left; } }
+
+/* The agent strip: the one URL an agent needs, under the header, on every page. Desktop only — nobody runs
+   a coding agent on a phone, and a line of monospace would eat the top of the first screen there. */
+.agentbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 5px 12px;
+  background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.agentbar .tag { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; color: var(--accent-2); }
+.agentbar code { font-family: var(--mono); font-size: 12px; color: var(--fg); }
+.agentbar a { color: inherit; } .agentbar a:hover code { color: var(--accent-2); }
+.agentbar .more { margin-left: auto; white-space: nowrap; }
+@media (max-width: 700px) { .agentbar { display: none; } }
 .notice { background: var(--warn); border: 1px solid var(--line); padding: 6px 10px; border-radius: 4px; margin: 6px 0; }
 
 /* mobile */

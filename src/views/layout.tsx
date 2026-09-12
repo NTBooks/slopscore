@@ -15,7 +15,7 @@ export interface PageMeta {
 }
 
 export const SITE = {
-  name: "SlopScupper",
+  name: "SlopScore",
   tagline: "Give me your slop!",
   slogan: "I love slop, slop slop slop, eat it up yum.",
   description: "Peer review for code nobody wrote.",
@@ -110,6 +110,11 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             )}
           </div>
         </header>
+        <aside class="agentbar" aria-label="For coding agents">
+          <span class="tag">for agents</span>
+          <span>Read <a href="/skill.md"><code>{url.origin}/skill.md</code></a> and leave the repo on the doorstep.</span>
+          <a class="more" href="/for-agents">how to hand it over »</a>
+        </aside>
         <main class="wrap">{children}</main>
         {/* Sticky: the feed scrolls for ever (see INFINITE_JS), so the bottom of the document is a place nobody arrives at. */}
         <footer class="foot">

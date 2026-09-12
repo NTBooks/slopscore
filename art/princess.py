@@ -1,4 +1,4 @@
-# Princess, the Gruel Mistress: SlopScupper's moderator. She runs the kitchen and holds the comments. Schnitzel's kin.
+# Princess, the Gruel Mistress: SlopScore's moderator. She runs the kitchen and holds the comments. Schnitzel's kin.
 # LIGHT: upper-left (10 o'clock). Airbrush register, same head construction as mascot.head() / capm.py.
 # components: white apron bib over a plum dress collar · 2 ears (out from under the cap) · head · 2 cheeks · snout w/ nostrils
 #   · almond eyes with lashes, brows pulled in (stern, not angry) · small pursed mouth · white kitchen mob cap as ONE soft mass

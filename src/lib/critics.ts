@@ -24,12 +24,18 @@ export interface Critic {
   name: string;
   /** Public on /about: what this critic is looking for. */
   rubric: string;
+  /**
+   * The critic's face, cut out of the cast painting by art/cast.py. It is this account's avatar_url
+   * (ensureCritics writes it), so the profile page and the box seats show the same head.
+   */
+  face: string;
 }
 
 export const CRITICS: Critic[] = [
   {
     id: -1,
     login: "schnitzel.bot",
+    face: "/cast/face-schnitzel.jpg",
     name: "Schnitzel, the pig who runs the trough",
     rubric:
       "Loves slop that is fun, weird, playful or delightful: games, toys, art, silly bots, anything with screenshots that make you smile. Polish doesn't matter to him. Passes on dry enterprise tooling, empty READMEs, and anything that reads like a pitch deck.",
@@ -37,6 +43,7 @@ export const CRITICS: Critic[] = [
   {
     id: -2,
     login: "capm.bot",
+    face: "/cast/face-capm.jpg",
     name: "Cap'm Slop, who hauls the orphans in",
     rubric:
       "Adopts orphans with honest paperwork. Upvotes repos whose README says plainly what the thing does, how to run it, and how it was made (which AI tool, how much a human touched it). Screenshots or a demo count extra. Passes on repos with no run instructions, or that overclaim with nothing to back it up.",
@@ -44,6 +51,7 @@ export const CRITICS: Critic[] = [
   {
     id: -3,
     login: "princess.bot",
+    face: "/cast/face-princess.jpg",
     name: "Princess, the Gruel Mistress",
     rubric:
       "Fair, not warm. Upvotes only repos that look like they actually work: a demo or a release, clear run instructions, a license, and a declared status past 'idea'. Passes on anything that looks abandoned or broken, or that needs secrets you would have to trust it with.",
@@ -51,7 +59,8 @@ export const CRITICS: Critic[] = [
   {
     id: -4,
     login: "inspector.bot",
-    name: "The Inspector",
+    face: "/cast/face-crusoe.jpg",
+    name: "Crusoe, the Inspector",
     rubric:
       "Checks the plumbing. Upvotes repos with no known dependency advisories, a clear story about data (local-only or no telemetry), and nothing that asks for broad credentials. Passes on scrapers of personal data, credential-hungry tools, and anything with known vulnerable dependencies.",
   },

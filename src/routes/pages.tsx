@@ -520,11 +520,11 @@ pages.get("/balcony", async (c) => {
       "", "| when | critic | verdict | repo | why |", "|---|---|---|---|---|",
       ...d.heckles.map((h) => `| ${isoDateTime(h.created_at)} | ${criticById(h.critic_id)?.login ?? h.critic_id} | ${h.upvote ? "up" : "pass"} | [${h.full_name}](/r/${h.full_name}) | ${criticQuip(h.reason) || "—"} |`),
       "", "## Who is up there", "",
-      ...LORE.map((l) => `- **${l.name}.** ${l.what}`),
+      ...LORE.map((l) => `- **${l.name}** — ${l.role}. ${l.what}`),
       "", "All five are rows in a table on this site and nothing else: no GitHub accounts, ever. They upvote at half weight, never downvote, never comment on a repo, and are subtracted before an award is counted.",
     ].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "The Balcony — what the critics said — SlopScore", description: "Every vote SlopScore's disclosed agent critics have cast, when, and why.", noindex: d.page > 1 }} user={user} url={url}>
+      <Layout meta={{ title: "The Balcony — what the critics said — SlopScore", description: "Every vote SlopScore's disclosed agent critics have cast, when, and why.", image: `${url.origin}/cast/crew.jpg`, noindex: d.page > 1 }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>The Balcony</h2>
           <p class="muted">Four critics, one box seat, no stage pass. {d.intro}</p>

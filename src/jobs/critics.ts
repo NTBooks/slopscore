@@ -31,9 +31,9 @@ export async function ensureCritics(db: D1Database): Promise<void> {
     CRITICS.map((c) =>
       db.prepare(
         `INSERT INTO users (id, login, avatar_url, gh_created_at, public_repos, followers, trust, bot, bio)
-         VALUES (?, ?, NULL, NULL, 0, 0, 0, 1, ?)
-         ON CONFLICT(id) DO UPDATE SET login = excluded.login, bio = excluded.bio, bot = 1`,
-      ).bind(c.id, c.login, c.rubric),
+         VALUES (?, ?, ?, NULL, 0, 0, 0, 1, ?)
+         ON CONFLICT(id) DO UPDATE SET login = excluded.login, avatar_url = excluded.avatar_url, bio = excluded.bio, bot = 1`,
+      ).bind(c.id, c.login, c.face, c.rubric),
     ),
   );
 }

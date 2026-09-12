@@ -129,6 +129,8 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         {raw(VOTE_JS)}
         {raw(INFINITE_JS)}
         <script src="/schnitzel.js" defer></script>
+        {/* The cast lockets on /balcony. It finds nothing to do on every other page and stops. */}
+        <script src="/lockets.js" defer></script>
       </body>
     </html>
   );

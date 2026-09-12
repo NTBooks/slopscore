@@ -134,6 +134,8 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <script src="/schnitzel.js" defer></script>
         {/* The cast lockets on /balcony. It finds nothing to do on every other page and stops. */}
         <script src="/lockets.js" defer></script>
+        {/* The rail's chat and chart. Same deal: no rail on this page, and it stops in three lines. */}
+        <script src="/rail.js" defer></script>
       </body>
     </html>
   );

@@ -18,7 +18,7 @@ import { orphanage } from "./routes/orphanage";
 import { agents } from "./routes/agents";
 import { disclosure } from "./routes/disclosure";
 import { quiz } from "./routes/quiz";
-import { setFlags } from "./lib/flags";
+import { flagOn, setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
@@ -27,8 +27,9 @@ import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
 import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
+import { CRITIC_SLOT, criticForSlot, inFrenzy } from "./lib/critics";
 import { snapshotTrends } from "./jobs/trends";
-import { recordCron, noteRun, type AnyJob } from "./lib/crawlclock";
+import { recordCron, noteRun, everySeconds, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
 import { sweepTripwire } from "./lib/tripwire";
 import { indexNowKey } from "./lib/indexnow";
@@ -208,11 +209,30 @@ async function step<T>(env: AppEnv["Bindings"], job: AnyJob, fn: () => Promise<T
 }
 
 /** The 00:05 UTC round, shared with the test environment's combined tick so the two cannot drift apart. */
+/**
+ * The critics' turn on a sweep tick.
+ *
+ * One critic at a time, rotating, so the balcony has something new every quarter of an hour instead of
+ * twenty verdicts at midnight and silence after. In the last hour of the UTC day the rota is suspended
+ * and the whole cast reads on every tick, which is what spends an allowance that would otherwise expire
+ * unused — a review not written today cannot be written tomorrow, because tomorrow has its own cap.
+ *
+ * `every` is the deployed cron's own interval, so the test environment's half-hour tick still gives all
+ * four a turn rather than the same two for ever.
+ */
+async function criticTurn(env: AppEnv["Bindings"], cron: string): Promise<unknown> {
+  const at = Math.floor(Date.now() / 1000);
+  const only = inFrenzy(at) ? undefined : [criticForSlot(at, everySeconds(cron) ?? CRITIC_SLOT).login];
+  return step(env, "critics", () => runCritics(env, { only }));
+}
+
 async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unknown>> {
   return {
     awards: await step(env, "awards", () => awards(env)),
     trawl: await step(env, "trawl", () => trawlDaily(env)),
-    critics: await step(env, "critics", () => runCritics(env)),
+    // With `frenzy` on the cast has been reading all day and this would only find its caps spent.
+    // Off, this is the whole of it, exactly as it was before the rota existed.
+    critics: flagOn("frenzy") ? "per-tick" : await step(env, "critics", () => runCritics(env)),
     trends: await step(env, "trends", () => snapshotTrends(env)),
     tripwire: await step(env, "tripwire", () => sweepTripwire(env.DB).then(() => "swept")),
   };
@@ -227,7 +247,12 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
     switch (cron) {
       // The sweep tick carries the lookout: the most frequent reliable cron, so a stalled job is noticed
       // within 15 minutes rather than at the next daily round.
-      case "*/15 * * * *": result = { sweep: await step(env, "sweep", () => sweep(env)), lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })) }; break;
+      // Sweep first, and the critics after: a model call that hangs must never hold up the sweep's writes.
+      case "*/15 * * * *": result = {
+        sweep: await step(env, "sweep", () => sweep(env)),
+        critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
+        lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
+      }; break;
       case "*/5 * * * *": result = await step(env, "scan", () => scanQueue(env, opts.n ?? undefined)); break;
       case "*/10 * * * *": result = await step(env, "recrawl", () => recrawl(env)); break;
       case "5 0 * * *": result = await dailyRound(env); break;
@@ -244,6 +269,7 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
           sweep: await step(env, "sweep", () => sweep(env)),
           scan: await step(env, "scan", () => scanQueue(env)),
           recrawl: await step(env, "recrawl", () => recrawl(env)),
+          critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
           ...(daily ? await dailyRound(env) : { daily: "skipped" }),
           lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
         };

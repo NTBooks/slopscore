@@ -501,3 +501,50 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
   .sloptest .tierbox h1 { font-size: 21px; }
   .sloptest .opt { font-size: 13px; }
 }
+
+/* the balcony chat and the Sloptrawler's chart: the two atmosphere boxes at the foot of the rail.
+   Both are progressive enhancement over something that is already true without a line of JavaScript —
+   a thread of real verdicts with real times, and a chart with the boat at her mooring. */
+.balconychat .thread { list-style: none; padding: 0; margin: 6px 0 8px; }
+.balconychat .msg { display: grid; grid-template-columns: 32px 1fr; gap: 7px; margin: 0 0 9px; align-items: start; }
+.balconychat .mug { border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); }
+.balconychat .who { font-family: var(--serif); font-weight: bold; }
+.balconychat .verdict { font-size: 11px; }
+.balconychat .bubble { margin: 3px 0 2px; padding: 6px 9px; border-radius: 10px 10px 10px 2px;
+  background: var(--panel-2); border: 1px solid var(--line); font-family: var(--serif); font-style: italic; }
+.balconychat .msg.up .bubble { border-left: 3px solid var(--up); }
+.balconychat .re { font-size: 11px; font-family: var(--mono); }
+.balconychat .when { font-size: 11px; }
+.balconychat .when::before { content: " · "; }
+.balconychat .typing { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.balconychat .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); opacity: .25; }
+.balconychat .typing span { flex: 1 1 100%; }
+
+.seachart .chart-svg { display: block; width: 100%; height: auto; margin: 2px 0 4px; }
+.seachart .water { fill: var(--panel-2); stroke: var(--line); stroke-width: 1; }
+.seachart .track { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 3 4; opacity: .3; }
+.seachart .track.on { opacity: .85; stroke: var(--accent); }
+.seachart .ground circle { fill: var(--bg); stroke: var(--muted); stroke-width: 1.2; }
+.seachart .ground text { font-family: var(--serif); font-size: 8px; fill: var(--muted); }
+.seachart .ground.on circle { fill: var(--accent); stroke: var(--accent-2); }
+.seachart .ground.on text { fill: var(--fg); font-weight: bold; }
+.seachart .corner text { font-family: var(--serif); font-size: 9px; font-style: italic; fill: var(--muted); }
+/* The register from art/icons.py, scaled: currentColor, round ends, no fill. */
+.seachart .hull { fill: none; stroke: currentColor; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; color: var(--fg); }
+.seachart .say { font-family: var(--serif); font-style: italic; margin: 2px 0 4px; }
+
+/* The only moving parts in the rail. The position of the boat is JavaScript, because it follows a clock;
+   the bob and the dots are CSS, because asking for an animation frame to rock a boat would be silly.
+   Nothing here hides anything: rail.js sets the hidden state for the reveal, so a script that never
+   arrives leaves every bubble on the page. */
+@keyframes ss-bob { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(-1.6px) rotate(1.5deg); } }
+@keyframes ss-dots { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.seachart .bob { animation: ss-bob 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.balconychat .typing i { animation: ss-dots 1.4s ease-in-out infinite; }
+.balconychat .typing i:nth-child(2) { animation-delay: .18s; }
+.balconychat .typing i:nth-child(3) { animation-delay: .36s; }
+.balconychat .msg { transition: opacity .22s ease, transform .22s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .seachart .bob, .balconychat .typing i { animation: none; }
+  .balconychat .msg { transition: none; }
+}

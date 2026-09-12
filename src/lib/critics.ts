@@ -66,8 +66,27 @@ export const CRITICS: Critic[] = [
   },
 ];
 
-export const CRITIC_PER_RUN = 5;
-export const CRITIC_DAILY_CAP = 25;
+/**
+ * Reviews one critic may write in a UTC day.
+ *
+ * Raised from 25 when the cast moved off the single nightly batch and onto a turn every hour. The
+ * supply is what sets this, not the money: a critic can only ever read repos it has never read, so
+ * the cast's lifetime material is four times the listed count, and the trawl lands up to
+ * TRAWL_PER_DAY new ones a day. Fifty each keeps the four of them level with that inflow. Raise it
+ * past that and the balcony only empties the backlog sooner and then has nothing to say.
+ */
+export const CRITIC_DAILY_CAP = 50;
+
+/** How often a critic takes the stand: one per sweep tick, the cast rotating through the slots. */
+export const CRITIC_SLOT = 900;
+
+/** Most a critic reads in one turn, so the last hour's catch-up spreads over its four ticks
+ *  instead of putting a whole day's allowance of model calls inside one cron invocation. */
+export const PER_TURN_MAX = 10;
+
+/** The stretch of the UTC day after which a critic stops pacing and spends everything it still owes. */
+export const FRENZY_FROM = 23 / 24;
+
 export const CRITICS_MODEL_DEFAULT = "anthropic/claude-haiku-4.5";
 
 /** The only shape the model may answer in. Anything else counts as "no". */
@@ -85,6 +104,63 @@ export const criticShortName = (c: Critic): string => c.name.split(",")[0].trim(
 
 /** Start of the UTC day, for the per-critic daily cap. */
 export const dayStart = (at: number): number => Math.floor(at / 86400) * 86400;
+
+/**
+ * Whose turn it is in the slot containing `at`.
+ *
+ * `every` is the interval of the cron actually deployed (everySeconds, src/lib/crawlclock.ts), not a
+ * constant: production drives this from a 15-minute sweep and the test environment from one 30-minute
+ * tick, and hardcoding 900 would silently give two of the four critics every turn on test for ever.
+ *
+ * The day term is why the rota walks. Four critics divide evenly into a day of slots, so on the slot
+ * alone Schnitzel would open every single hour of every single day; adding the day number moves
+ * everyone along one seat at midnight.
+ */
+export function criticForSlot(at: number, every: number = CRITIC_SLOT): Critic {
+  const step = every > 0 ? every : CRITIC_SLOT;
+  const slot = Math.floor(at / step) + Math.floor(at / 86400);
+  const n = CRITICS.length;
+  return CRITICS[((slot % n) + n) % n];
+}
+
+/**
+ * True in the last stretch of the UTC day, when the whole box takes the stand on every tick instead
+ * of one critic at a time.
+ *
+ * This is what makes the frenzy a frenzy rather than a rounding-up. On the ordinary rota a critic
+ * gets one turn an hour, so a critic that fell behind — an outage, a rate limit, a thin pool — could
+ * never win its allowance back before midnight at PER_TURN_MAX a turn. In the last hour the rota is
+ * suspended, all four read on every tick, and the balcony is at its loudest exactly as the day closes.
+ */
+export const inFrenzy = (at: number): boolean => (at - dayStart(at)) / 86400 >= FRENZY_FROM;
+
+/** The unix second the next slot begins, strictly after `at`. */
+export function nextSlot(at: number, every: number = CRITIC_SLOT): number {
+  const step = every > 0 ? every : CRITIC_SLOT;
+  return (Math.floor(at / step) + 1) * step;
+}
+
+/**
+ * How many repos this critic may read on this turn.
+ *
+ * Paced across the UTC day so the balcony talks all day instead of spending its allowance before
+ * breakfast — then, once the day is nearly out, everything it still owes, because an allowance not
+ * spent today is worth nothing tomorrow. Both halves are bounded by what is actually left, so no
+ * arrangement of turns can take a critic past the daily cap.
+ *
+ * With the frenzy switched off this is still the rule that enforces the cap: a single nightly batch
+ * runs at the very end of a day's pacing, which is the frenzy branch, which hands back the whole
+ * remainder — exactly the one-batch-a-day behaviour it replaced.
+ */
+export function criticBudget(done: number, at: number, cap: number = CRITIC_DAILY_CAP): number {
+  const left = cap - Math.max(0, done);
+  if (left <= 0) return 0;
+  // In the frenzy every critic reads on every tick (inFrenzy), so PER_TURN_MAX here is a bound on one
+  // cron invocation, not on the catch-up: four ticks of the last hour can win back forty apiece.
+  if (inFrenzy(at)) return Math.min(left, PER_TURN_MAX);
+  const frac = (at - dayStart(at)) / 86400;
+  return Math.max(0, Math.min(Math.ceil(cap * frac) - Math.max(0, done), left, PER_TURN_MAX));
+}
 
 /** Strip the delimiter and cap the length: nothing from a stranger's repo may end the data block early. */
 const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\/?repo>/gi, "").slice(0, n);
@@ -165,4 +241,124 @@ export function criticQuip(reason: string | null | undefined): string {
   const words = flat.toLowerCase().match(/[a-z']+/g) ?? [];
   if (words.some((w) => PROFANITY.has(w))) return "";
   return flat;
+}
+
+// ---- the rail's chat ----
+//
+// The balcony as an instant-message thread in the rail, which is a different job from /balcony. That
+// page is the record: every verdict, in order, including the ones with nothing quotable in them. This
+// is atmosphere on the front door, so it carries only lines worth reading and shows each reader ones
+// they have not been shown before. It is not a live feed and does not pretend to be — with several
+// hundred verdicts nobody has read yet, "new" can simply mean new to you.
+
+/** One critic_reviews row joined to the repo it is about. */
+export interface CriticReviewRow {
+  critic_id: number;
+  upvote: number;
+  reason: string | null;
+  created_at: number;
+  full_name: string;
+  title: string | null;
+}
+
+/** One line in the rail's chat. `quip` has already been through criticQuip. */
+export interface ChatLine {
+  critic_id: number;
+  login: string;
+  short: string;
+  face: string;
+  upvote: 0 | 1;
+  quip: string;
+  at: number;
+  full_name: string;
+  title: string | null;
+}
+
+/**
+ * The rows the rail may show, newest first.
+ *
+ * Cleaning happens here, at the edge of the database, and not at render: the pool is cached, so an
+ * uncleaned sentence would otherwise sit in the cache in every data centre for hours, and every
+ * consumer would have to remember to launder it. A row whose quip cleans away to nothing is dropped
+ * rather than shown as a blank bubble — /balcony keeps those, because it has somewhere honest to put
+ * them, and a chat does not.
+ */
+export function chatLines(rows: CriticReviewRow[], limit = rows.length): ChatLine[] {
+  const out: ChatLine[] = [];
+  for (const r of rows) {
+    if (out.length >= limit) break;
+    const c = criticById(r.critic_id);
+    if (!c) continue;                       // a critic that no longer exists says nothing at all
+    const quip = criticQuip(r.reason);
+    if (!quip) continue;
+    out.push({
+      critic_id: c.id, login: c.login, short: criticShortName(c), face: c.face,
+      upvote: r.upvote ? 1 : 0, quip, at: r.created_at, full_name: r.full_name, title: r.title,
+    });
+  }
+  return out;
+}
+
+export interface ChatCursor {
+  /** The newest `at` this reader has ever been shown. Anything above it is news. */
+  seen: number;
+  /** The oldest `at` they have been shown while walking back through the archive. */
+  back: number;
+}
+
+export interface ChatWindow {
+  /** Oldest first, so the box reads top to bottom the way a thread does. */
+  lines: ChatLine[];
+  cursor: ChatCursor;
+  /** True when the reader has reached the end of the pool and is being shown the newest of it again. */
+  caughtUp: boolean;
+}
+
+/** "<seen>.<back>" out of a cookie. Anything unparseable is a reader we have never met. */
+export function parseChatCursor(raw: string | undefined | null): ChatCursor {
+  const [a, b] = String(raw ?? "").split(".");
+  const seen = Number(a);
+  const back = Number(b);
+  return {
+    seen: Number.isFinite(seen) && seen > 0 ? Math.floor(seen) : 0,
+    back: Number.isFinite(back) && back > 0 ? Math.floor(back) : 0,
+  };
+}
+
+export const formatChatCursor = (c: ChatCursor): string => `${c.seen}.${c.back}`;
+
+/**
+ * The slice of the pool this reader has not been shown yet.
+ *
+ * Two marks, not one, and the second is the whole point. `seen` is the newest verdict they have ever
+ * been given; `back` is how far down the archive they have already read. News comes first — anything
+ * above `seen` is shown newest-first, because a reader returning after the cast has been talking
+ * wants what it said. With no news, the window walks backwards below `back` instead, which is what
+ * makes a second look at the same page worth taking: there are several hundred verdicts nobody has
+ * read, so "new" can simply mean new to you.
+ *
+ * A single high-water mark cannot do this. Handed one, the window jumps to the newest line and
+ * treats everything beneath it as read, so a reader sees six verdicts once and the box is spent.
+ *
+ * A reader who has reached the bottom gets the newest `size` again with caughtUp set, rather than an
+ * empty box: showing nothing to somebody who has read everything is a worse answer than showing them
+ * the best of it twice. A cursor from the future, from a cleared cache, or from before the pool's
+ * oldest row all land on that same branch, which is why none of them need handling of their own.
+ */
+export function unseenWindow(pool: ChatLine[], cursor: ChatCursor, size: number): ChatWindow {
+  const pick = (rows: ChatLine[]): ChatWindow => ({
+    lines: [...rows].reverse(),
+    cursor: { seen: Math.max(cursor.seen, rows[0].at), back: Math.min(cursor.back || rows[rows.length - 1].at, rows[rows.length - 1].at) },
+    caughtUp: false,
+  });
+  if (!pool.length) return { lines: [], cursor, caughtUp: false };
+
+  const news = pool.filter((l) => l.at > cursor.seen).slice(0, size);
+  if (news.length) return pick(news);
+
+  const older = pool.filter((l) => l.at < (cursor.back || cursor.seen)).slice(0, size);
+  if (older.length) return pick(older);
+
+  // The bottom of the archive. Start them round again at the top rather than showing an empty box.
+  return { lines: [...pool.slice(0, size)].reverse(), cursor, caughtUp: true };
 }

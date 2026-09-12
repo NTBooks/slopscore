@@ -10,6 +10,8 @@
 // `last_ok` rather than `last_fail` -- an invocation the runtime kills throws nothing, so a job that stops
 // reporting success is the signal that catches what a try/catch cannot.
 
+import { flagOn } from "./flags";
+
 /** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons. */
 export const JOBS = ["sweep", "scan", "recrawl"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
@@ -27,7 +29,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   recrawl: { label: "next recrawl", does: "re-checks listed repos for pushes" },
   awards: { label: "next awards", does: "picks the day's truffles" },
   trawl: { label: "next trawl release", does: "moves backlog picks into the queue" },
-  critics: { label: "next critics round", does: "the cast reads a few listings and votes" },
+  critics: { label: "next critics turn", does: "one of the cast reads a listing or two and votes" },
   trends: { label: "next trends count", does: "counts the corpus for /trends" },
   tripwire: { label: "next tripwire sweep", does: "expires blocks and prunes the probe counters" },
 };
@@ -43,6 +45,23 @@ export const CRON_JOBS: Record<string, AnyJob[]> = {
   "*/30 * * * *": ["sweep", "scan", "recrawl"],
 };
 
+/**
+ * The jobs this tick actually drives.
+ *
+ * Almost always just CRON_JOBS, but the critics are the exception: with `frenzy` on they take a turn
+ * every sweep tick instead of once in the daily round, so which cron owns them is a runtime question.
+ * It has to be answered here rather than left as a constant, because this is what writes `critics:cron`
+ * — and that is what the countdown on /queue prints and what healthOf calls the job late against. Get it
+ * wrong and the page says "once a day" about something running every quarter of an hour.
+ */
+export function cronJobs(cron: string): AnyJob[] {
+  const base = CRON_JOBS[cron];
+  if (!base) return [];
+  if (!flagOn("frenzy")) return base;
+  if (cron === "*/15 * * * *" || cron === "*/30 * * * *") return [...base, "critics"];
+  return base.filter((j) => j !== "critics");
+}
+
 /** Seconds a mod must wait between manual runs of the same job (GitHub code search allows ~30 calls a minute). */
 export const MANUAL_COOLDOWN = 60;
 
@@ -51,8 +70,8 @@ const LATE_GRACE = 300;
 
 /** Record the schedule behind this tick. The WHERE makes an unchanged value a zero-row write. */
 export async function recordCron(db: D1Database, cron: string): Promise<void> {
-  const jobs = CRON_JOBS[cron];
-  if (!jobs) return;
+  const jobs = cronJobs(cron);
+  if (!jobs.length) return;
   await db.batch(jobs.map((j) =>
     db.prepare("INSERT INTO crawl_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE value != excluded.value").bind(`${j}:cron`, cron),
   ));

@@ -184,10 +184,17 @@ export async function trawlDaily(env: Env): Promise<{ queued: string[]; skipped:
   const done = Number((await getState(db, `trawl:${day}`)) ?? 0);
   const budget = Number(env.TRAWL_PER_DAY || 50) - done;
   if (budget <= 0) return { queued: [], skipped: [], left: 0, note: `today's releases are done (or paused): trawl:${day} = ${done}` };
+  // She has put to sea. Recorded before the work, not after, so a rate limit halfway through still says
+  // she sailed — and recorded only past the two returns above, which are the days she did not. This is
+  // the one timestamp the rail's chart steers by; until now only the manual trawl() ever wrote it.
+  await setState(db, "trawl:last_run", String(now()));
   const res = await releaseBacklog(env, budget);
   const left = budget - res.queued.length;
   const auto = left > 0 ? await autoTrawl(env, left) : undefined;
   await setState(db, `trawl:${day}`, String(done + res.queued.length + res.skipped.length + (auto?.queued.length ?? 0)));
+  // Unconditional: a night that caught nothing still moved the chart, and releaseBacklog/autoTrawl only
+  // mark dirty when they queued something.
+  await markDirty(db);
   return { ...res, auto };
 }
 

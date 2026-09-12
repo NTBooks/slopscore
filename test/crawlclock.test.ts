@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { nextFire, everySeconds, untilText, parseManual, parseFail, intervalOf, healthOf, CRON_JOBS, DAILY_JOBS } from "../src/lib/crawlclock";
+import { nextFire, everySeconds, untilText, parseManual, parseFail, intervalOf, healthOf, cronJobs, CRON_JOBS, DAILY_JOBS } from "../src/lib/crawlclock";
+import { setFlags } from "../src/lib/flags";
 
 const at = (iso: string) => Date.parse(iso) / 1000;
 
@@ -106,5 +107,32 @@ describe("healthOf", () => {
 
   it("clears once a later run succeeds", () => {
     expect(healthOf({ cron: daily, last_ok: t - 60, last_fail: { at: t - 3600, why: "boom" }, last_run: null }, t)).toBe("ok");
+  });
+});
+
+// recordCron writes `critics:cron` from this, and that is what /queue's countdown prints and what
+// healthOf calls the job late against. The critics are the one job whose owning cron moves.
+describe("which cron owns the critics follows the flag that moves them", () => {
+  it("leaves them in the daily round when the frenzy is off", () => {
+    setFlags("all,-frenzy");
+    expect(cronJobs("*/15 * * * *")).toEqual(["sweep"]);
+    expect(cronJobs("5 0 * * *")).toEqual([...DAILY_JOBS]);
+  });
+  it("moves them onto the sweep tick when it is on, and out of the daily round", () => {
+    setFlags("all");
+    expect(cronJobs("*/15 * * * *")).toContain("critics");
+    expect(cronJobs("5 0 * * *")).not.toContain("critics");
+    expect(cronJobs("*/30 * * * *")).toContain("critics");   // the test environment's combined tick
+  });
+  it("never claims a cron drives a job twice, or one that does not exist", () => {
+    for (const spec of ["all", "all,-frenzy"]) {
+      setFlags(spec);
+      for (const cron of Object.keys(CRON_JOBS)) {
+        const jobs = cronJobs(cron);
+        expect(new Set(jobs).size).toBe(jobs.length);
+      }
+      expect(cronJobs("0 3 1 1 *")).toEqual([]);
+    }
+    setFlags(undefined);
   });
 });

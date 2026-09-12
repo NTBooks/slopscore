@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  CRITICS, CRITIC_DAILY_CAP, criticRepoData, criticSystemPrompt, criticUserPrompt, criticById, criticQuip,
-  criticShortName, dayStart, parseVerdict,
+  CRITICS, CRITIC_DAILY_CAP, CRITIC_SLOT, PER_TURN_MAX, criticRepoData, criticSystemPrompt, criticUserPrompt,
+  criticById, criticQuip, criticShortName, dayStart, parseVerdict,
+  criticForSlot, nextSlot, criticBudget, inFrenzy, chatLines, unseenWindow, parseChatCursor, formatChatCursor, type CriticReviewRow,
 } from "../src/lib/critics";
 import type { RepoRow } from "../src/lib/db";
 
@@ -82,36 +83,177 @@ describe("caps", () => {
   it("counts a day from UTC midnight", () => {
     expect(dayStart(Date.parse("2026-09-12T13:45:00Z") / 1000)).toBe(Date.parse("2026-09-12T00:00:00Z") / 1000);
   });
-  it("keeps the daily cap modest", () => {
-    expect(CRITIC_DAILY_CAP).toBeLessThanOrEqual(25);
+  it("keeps the daily cap to what the site can actually feed", () => {
+    // A critic only ever reads repos it has never read, so the cast's whole material is four times the
+    // listed count plus whatever the trawl lands (TRAWL_PER_DAY, 50 a day => 200 pairs). Four critics at
+    // fifty each is level with that inflow. Past it the balcony just empties the backlog sooner and then
+    // has nothing to say, so raising this is a decision about supply, not about money.
+    expect(CRITIC_DAILY_CAP).toBeLessThanOrEqual(50);
   });
 });
 
-// What the balcony publishes. The quip is a model's sentence about a stranger's README, so the page gets a
-// cleaned version or nothing: the worst a hostile README can do is cost itself a quote.
-describe("quips fit to publish", () => {
-  it("passes an ordinary verdict through as written", () => {
-    expect(criticQuip("Fun, it runs, and the screenshots made me smile.")).toBe("Fun, it runs, and the screenshots made me smile.");
+const DAY = Date.parse("2026-09-12T00:00:00Z") / 1000;
+const hour = (h: number) => DAY + Math.round(h * 3600);
+
+describe("the critics take the stand in turn", () => {
+  it("gives four consecutive slots to four different critics", () => {
+    const seats = [0, 1, 2, 3].map((i) => criticForSlot(hour(9) + i * CRITIC_SLOT).login);
+    expect(new Set(seats).size).toBe(CRITICS.length);
   });
-  it("never publishes a link or a handle", () => {
-    expect(criticQuip("great, see https://evil.example/pwn for more")).toBe("great, see for more");
-    expect(criticQuip("as @octocat said, good")).toBe("as said, good");
-    expect(criticQuip("visit www.evil.example now")).toBe("visit now");
+  it("names the same critic every time for the same instant", () => {
+    expect(criticForSlot(hour(9))).toBe(criticForSlot(hour(9) + 60));
   });
-  it("never publishes markup or control characters", () => {
-    expect(criticQuip("<script>alert(1)</script> nice repo")).toBe("script alert(1) /script nice repo");
-    expect(criticQuip("nice\u0000\u200b repo")).toBe("nice repo");
-    expect(criticQuip("[click here](https://evil.example)")).toBe("click here");
+  it("moves everyone along a seat each day, so nobody always opens the hour", () => {
+    // Four critics divide evenly into a day of slots: on the slot alone, whoever opens midnight opens
+    // every hour of every day for ever.
+    expect(criticForSlot(DAY).login).not.toBe(criticForSlot(DAY + 86400).login);
+    expect(criticForSlot(hour(9)).login).not.toBe(criticForSlot(hour(9) + 86400).login);
   });
-  it("stays one short line", () => {
-    expect(criticQuip("a".repeat(400)).length).toBe(200);
-    expect(criticQuip("line one\nline two")).toBe("line one line two");
+  it("gives every critic the same number of turns in a UTC day", () => {
+    const turns: Record<string, number> = {};
+    for (let t = DAY; t < DAY + 86400; t += CRITIC_SLOT) {
+      const who = criticForSlot(t).login;
+      turns[who] = (turns[who] ?? 0) + 1;
+    }
+    expect(Object.keys(turns).length).toBe(CRITICS.length);
+    expect(new Set(Object.values(turns)).size).toBe(1);
   });
-  it("says nothing rather than something unpublishable", () => {
-    for (const junk of ["", null, undefined, "  ", "https://evil.example"]) expect(criticQuip(junk)).toBe("");
+  it("shares the turns out on the test environment's half-hour tick too", () => {
+    // test runs one combined */30 cron. A hardcoded 900 here would hand two of the four every turn for ever.
+    const seats = new Set<string>();
+    for (let t = DAY; t < DAY + 86400; t += 1800) seats.add(criticForSlot(t, 1800).login);
+    expect(seats.size).toBe(CRITICS.length);
   });
-  it("gives every critic a short name for the box seats", () => {
-    expect(criticShortName(CRITICS[0])).toBe("Schnitzel");
-    for (const c of CRITICS) expect(criticShortName(c).length).toBeLessThan(20);
+  it("lands the next turn on a slot boundary strictly after now", () => {
+    expect(nextSlot(hour(9))).toBe(hour(9) + CRITIC_SLOT);
+    expect(nextSlot(hour(9) + 1)).toBe(hour(9) + CRITIC_SLOT);
+    expect(nextSlot(hour(9) + CRITIC_SLOT - 1)).toBe(hour(9) + CRITIC_SLOT);
+  });
+});
+
+describe("a critic spends the day's allowance and never more", () => {
+  it("never hands out more than is left, and never a negative", () => {
+    for (let h = 0; h < 24; h += 0.25) {
+      for (const done of [0, 7, 49, 50, 80]) {
+        const b = criticBudget(done, hour(h));
+        expect(b).toBeGreaterThanOrEqual(0);
+        expect(b).toBeLessThanOrEqual(Math.max(0, CRITIC_DAILY_CAP - done));
+        expect(b).toBeLessThanOrEqual(PER_TURN_MAX);
+      }
+    }
+  });
+  it("spends the day out to exactly the cap and stops", () => {
+    let done = 0;
+    for (let t = DAY; t < DAY + 86400; t += CRITIC_SLOT) done += criticBudget(done, t);
+    expect(done).toBe(CRITIC_DAILY_CAP);
+  });
+  it("paces, so the balcony is not empty by breakfast", () => {
+    expect(criticBudget(0, hour(1))).toBeLessThan(CRITIC_DAILY_CAP / 2);
+    expect(criticBudget(0, hour(6))).toBeLessThanOrEqual(criticBudget(0, hour(12)));
+  });
+});
+
+describe("nothing is left on the table when the day ends", () => {
+  it("suspends the rota in the last hour so the whole box reads at once", () => {
+    expect(inFrenzy(hour(22.5))).toBe(false);
+    expect(inFrenzy(hour(23))).toBe(true);
+    expect(inFrenzy(hour(23.99))).toBe(true);
+  });
+  it("wins back a whole day's allowance over the last hour's four ticks", () => {
+    let done = 0;                                           // a critic that managed nothing all day
+    for (let t = hour(23); t < DAY + 86400; t += CRITIC_SLOT) done += criticBudget(done, t);
+    expect(done).toBe(Math.min(CRITIC_DAILY_CAP, 4 * PER_TURN_MAX));
+  });
+  it("hands nothing to a critic already at its cap", () => {
+    expect(criticBudget(CRITIC_DAILY_CAP, hour(23.5))).toBe(0);
+  });
+  it("gives back the old nightly batch when the frenzy is switched off", () => {
+    // With -frenzy the cast runs once, at the end of a day of pacing nobody did: that is this branch.
+    expect(criticBudget(0, hour(23.9))).toBe(PER_TURN_MAX);
+  });
+});
+
+const line = (at: number, over: Partial<CriticReviewRow> = {}): CriticReviewRow => ({
+  critic_id: -1, upvote: 1, reason: "Fun, it runs, and the screenshots made me smile.",
+  created_at: at, full_name: "alice/snackbot", title: "Snackbot", ...over,
+});
+
+describe("the rail's chat carries only lines worth quoting", () => {
+  it("drops a verdict whose sentence the cleaner swallowed", () => {
+    expect(chatLines([line(10, { reason: "https://evil.example" }), line(9)])).toHaveLength(1);
+    expect(chatLines([line(10, { reason: null })])).toHaveLength(0);
+  });
+  it("drops a verdict from a critic that no longer exists", () => {
+    // Never "critic -99": a name the page cannot resolve is not a heckle, it is a database row.
+    expect(chatLines([line(10, { critic_id: -99 })])).toHaveLength(0);
+  });
+  it("carries the cleaned sentence and the critic's own face, not the model's words", () => {
+    const [l] = chatLines([line(10, { reason: "great, see https://evil.example/pwn for more" })]);
+    expect(l.quip).toBe("great, see for more");
+    expect(l.short).toBe("Schnitzel");
+    expect(l.face).toBe(criticById(-1)!.face);
+  });
+  it("keeps the newest first and never more than it was asked for", () => {
+    expect(chatLines([line(30), line(20), line(10)], 2).map((r) => r.at)).toEqual([30, 20]);
+  });
+});
+
+describe("every visit shows the reader something they have not been shown", () => {
+  const pool = chatLines([50, 40, 30, 20, 10].map((at) => line(at)));
+  const FRESH = parseChatCursor(null);
+
+  it("reads oldest first, the way a thread does", () => {
+    expect(unseenWindow(pool, FRESH, 2).lines.map((l) => l.at)).toEqual([40, 50]);
+  });
+  it("opens on the newest, not on the bottom of the archive", () => {
+    expect(unseenWindow(pool, FRESH, 2).lines.map((l) => l.at)).toContain(50);
+  });
+  it("walks backwards on a second look, and shares no line with the first", () => {
+    const first = unseenWindow(pool, FRESH, 2);
+    const second = unseenWindow(pool, first.cursor, 2);
+    expect(second.lines.filter((l) => first.lines.some((f) => f.at === l.at))).toHaveLength(0);
+    expect(second.lines.map((l) => l.at)).toEqual([20, 30]);
+  });
+  it("walks the whole pool exactly once and then says so", () => {
+    // The bug this pins: one high-water mark jumps to the newest line, counts everything under it as
+    // read, and the box is spent after a single look.
+    let cursor = FRESH;
+    const seen: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const w = unseenWindow(pool, cursor, 2);
+      if (w.caughtUp) break;
+      seen.push(...w.lines.map((l) => l.at));
+      cursor = w.cursor;
+    }
+    expect(seen.sort((a, b) => a - b)).toEqual([10, 20, 30, 40, 50]);
+    expect(unseenWindow(pool, cursor, 2).caughtUp).toBe(true);
+  });
+  it("puts news above the archive when the cast has spoken since the last visit", () => {
+    let cursor = unseenWindow(pool, FRESH, 2).cursor;
+    cursor = unseenWindow(pool, cursor, 2).cursor;          // reader is partway down
+    const later = chatLines([70, 60].map((at) => line(at))).concat(pool);
+    expect(unseenWindow(later, cursor, 2).lines.map((l) => l.at)).toEqual([60, 70]);
+  });
+  it("shows the newest again rather than an empty box to a reader who reached the bottom", () => {
+    const w = unseenWindow(pool, { seen: 999, back: 1 }, 2);
+    expect(w.caughtUp).toBe(true);
+    expect(w.lines.map((l) => l.at)).toEqual([40, 50]);
+  });
+  it("never walks a reader backwards into lines they have already read", () => {
+    for (const seen of [0, 25, 50, 999, 1_800_000_000]) {
+      expect(unseenWindow(pool, { seen, back: 0 }, 2).cursor.seen).toBeGreaterThanOrEqual(seen);
+    }
+  });
+  it("says nothing at all when there is nothing at all", () => {
+    expect(unseenWindow([], FRESH, 6)).toEqual({ lines: [], cursor: FRESH, caughtUp: false });
+  });
+  it("survives a cookie written by somebody other than us", () => {
+    for (const junk of [null, undefined, "", "nonsense", "-1.-1", "NaN.NaN", "1e999.0"]) {
+      const c = parseChatCursor(junk);
+      expect(c.seen).toBeGreaterThanOrEqual(0);
+      expect(c.back).toBeGreaterThanOrEqual(0);
+      expect(unseenWindow(pool, c, 2).lines.length).toBe(2);
+    }
+    expect(parseChatCursor(formatChatCursor({ seen: 50, back: 40 }))).toEqual({ seen: 50, back: 40 });
   });
 });

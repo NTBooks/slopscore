@@ -1,15 +1,24 @@
 import type { FC } from "hono/jsx";
 import { MINIMAL_EXAMPLE, SAMPLE_BUCKETS } from "../lib/slopmd";
 import { Mascot, StepIcon } from "./art";
+import type { ChatLine, ChatWindow } from "../lib/critics";
+import { BalconyChat, QuietBalcony } from "./balconychat";
+import { SeaChart } from "./sea";
+import { flagOn } from "../lib/flags";
 import { SITE } from "./layout";
 
 export interface RailData {
   stats: { listed: number; queued: number; users: number; votes: number; comments: number };
   tools: { value: string; n: number; mean: number }[];
   tags: { slug: string; title: string; blurb: string | null; n: number }[];
+  /** A pool, not a screenful: each reader's window is sliced out of it at render time. Empty with -chatter. */
+  chat?: ChatLine[];
+  /** The Sloptrawler's log, or null with -chart. */
+  sea?: { last_run: number | null; cursor: number; lane: number; hauled: number } | null;
 }
 
-export const Rail: FC<{ data: RailData }> = ({ data }) => (
+/** `chat` is the reader's own window into data.chat, sliced per request by the route (chatFor). */
+export const Rail: FC<{ data: RailData; chat?: ChatWindow | null }> = ({ data, chat }) => (
   <aside class="rail">
     <div class="box">
       <figure class="mascot"><Mascot size={180} /><figcaption>Schnitzel · b. 2026-09-10</figcaption></figure>
@@ -54,6 +63,10 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
       </table>
       <p class="muted"><a href="/stats">more stats</a> · <a href="/log">mod log</a> · <a href="/balcony">balcony</a></p>
     </div>
+    {/* Atmosphere, so it sits under the numbers rather than over them. Both boxes are behind their own
+        flag; with one retracted the other still stands on its own. */}
+    {flagOn("chatter") ? (chat?.lines.length ? <BalconyChat chat={chat} /> : <QuietBalcony />) : null}
+    {flagOn("chart") && data.sea ? <SeaChart sea={data.sea} /> : null}
     <div class="box manifesto">
       <h3>Why public?</h3>
       <p>{SITE.manifesto}</p>

@@ -11,10 +11,14 @@
 //   tripwire   requests shaped like an attack are counted, and one email a day goes out (lib/tripwire.ts)
 //   tripblock  a targeted probe also shuts that source out for 24 hours. Needs tripwire. Verified search
 //              crawlers and logged-in admins are never blocked; off = counted and emailed, nobody locked out
+//   frenzy  the critics take the stand a few at a time all day and spend what the day's allowance still
+//           owes them in its last hour (off = the one nightly batch at 00:05, which is all this ever was)
+//   chatter the critics' verdicts as a chat in the rail, a window at a time, newest the reader hasn't read
+//   chart   the Sloptrawler's chart of the Slop Triangle in the rail
 // The last four name a feed sort each: rising, controversial, updated, upcoming. Off = that sort is gone —
 // no tab, no chip, no /upcoming page, and ?sort=/the API fall back to hot. The rows and the ranking maths
 // stay put; only the view is withdrawn.
-export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "tripwire", "tripblock", "rising", "controversial", "updated", "upcoming"] as const;
+export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "tripwire", "tripblock", "frenzy", "chatter", "chart", "rising", "controversial", "updated", "upcoming"] as const;
 export type Flag = (typeof ALL_FLAGS)[number];
 
 let current: Set<Flag> = new Set(ALL_FLAGS);

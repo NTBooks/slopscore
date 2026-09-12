@@ -3,7 +3,10 @@ import { cached } from "../lib/cache";
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import { adminLogins } from "../env";
-import { CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName } from "../lib/critics";
+import {
+  CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName,
+  chatLines, unseenWindow, parseChatCursor, formatChatCursor, type ChatLine, type CriticReviewRow,
+} from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
   getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, parseSort, parsePage, sortOn, visibleSorts, type RepoRow,
@@ -12,9 +15,10 @@ import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { recordView } from "../lib/views";
 import { anonId, castAnonVote } from "../lib/anon";
 import { ledger } from "../lib/rush";
+import { getCookie, setCookie } from "hono/cookie";
 import { flagOn, flagsSnapshot } from "../lib/flags";
 import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
-import { respond } from "../lib/negotiate";
+import { respond, wantedFormat } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
@@ -45,17 +49,83 @@ import { BoxSeats, Heckles, Lore, LORE, type Heckle, type Seat } from "../views/
 export const pages = new Hono<AppEnv>();
 
 /** The rail is on every page; it is served from cache until the data version bumps. */
+/** How many cleaned verdicts the chat keeps to window over: about half a day of them at the new cadence,
+ *  which is enough for a reader to walk back through on several visits before they reach the bottom. */
+const CHAT_POOL = 48;
+
 async function railData(db: D1Database): Promise<RailData> {
-  return cached(db, "rail", async () => {
-    const [stats, tags, tools] = await Promise.all([
+  // The flags are in the key, not just the data. cached() keys on data_version, which a deploy does not
+  // bump and a flag flip certainly does not, so a shared key would keep serving the retracted shape for
+  // the rest of the six-hour TTL after somebody turned a box on.
+  const key = `rail:${flagOn("chatter") ? "c" : ""}${flagOn("chart") ? "s" : ""}`;
+  return cached(db, key, async () => {
+    const [stats, tags, tools, chat, sea] = await Promise.all([
       siteStats(db),
       curatedTags(db),
       db.prepare(
         "SELECT rt.value, count(*) AS n, avg(r.score) AS mean FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE rt.facet = 'built_with' AND r.status = 'listed' GROUP BY rt.value ORDER BY mean DESC, n DESC LIMIT 8",
       ).all<{ value: string; n: number; mean: number }>().then((r) => r.results ?? []),
+      // A retracted box costs nothing, not even the read.
+      flagOn("chatter")
+        ? db.prepare(
+            // 'listed', not /balcony's "!= hidden": every bubble in the rail is a link on the front page,
+            // so it must never point at something that has since been delisted.
+            `SELECT cr.critic_id, cr.upvote, cr.reason, cr.created_at, r.full_name, r.title
+               FROM critic_reviews cr JOIN repos r ON r.id = cr.repo_id
+              WHERE r.status = 'listed'
+              ORDER BY cr.created_at DESC, cr.repo_id DESC LIMIT ?`,
+          ).bind(CHAT_POOL).all<CriticReviewRow>().then((r) => chatLines(r.results ?? []))
+        : Promise.resolve([] as ChatLine[]),
+      flagOn("chart") ? seaData(db) : Promise.resolve(null),
     ]);
-    return { stats, tools, tags };
+    return { stats, tools, tags, chat, sea };
   });
+}
+
+const CHAT_COOKIE = "ss_balcony";
+const CHAT_WINDOW = 6;
+
+/**
+ * The reader's own window into the chat pool, and the cursor written back for next time.
+ *
+ * The pool is shared and cached; the window is personal and costs nothing, because cached() caches the
+ * rows and this page is rendered fresh on every request anyway. The cursor is two integers in a cookie:
+ * not an identifier, joinable to nothing, and needing no row anywhere. Keyed by IP it would collide for
+ * everyone behind one office; kept in a table it would be a read and a write on every page view of the
+ * site, to arrive at exactly the same answer.
+ *
+ * HTML only. An agent polling /best.json must not walk a human's window on for them.
+ */
+function chatFor(c: Context<AppEnv>, rail: RailData) {
+  if (!flagOn("chatter") || !rail.chat?.length) return null;
+  const html = wantedFormat(c) === "html";
+  const w = unseenWindow(rail.chat, parseChatCursor(html ? getCookie(c, CHAT_COOKIE) : undefined), CHAT_WINDOW);
+  if (html) {
+    setCookie(c, CHAT_COOKIE, formatChatCursor(w.cursor), {
+      path: "/", sameSite: "Lax", maxAge: 365 * 86400, secure: new URL(c.req.url).protocol === "https:",
+    });
+  }
+  return w;
+}
+
+/** The Sloptrawler's log: stable facts only. Where she is now is worked out from these by the reader's
+ *  own clock, because this whole object is cached and "in 7 minutes" would not survive the caching. */
+async function seaData(db: D1Database): Promise<RailData["sea"]> {
+  const [state, counts] = await Promise.all([
+    db.prepare("SELECT key, value FROM crawl_state WHERE key IN ('trawl:last_run', 'trawl:cursor')").all<{ key: string; value: string }>(),
+    db.prepare(
+      `SELECT (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'discovered') AS lane,
+              (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'listed')     AS hauled`,
+    ).first<{ lane: number; hauled: number }>(),
+  ]);
+  const st = new Map((state.results ?? []).map((r) => [r.key, r.value]));
+  const last = Number(st.get("trawl:last_run"));
+  return {
+    last_run: Number.isFinite(last) && last > 0 ? last : null,
+    cursor: Number(st.get("trawl:cursor")) || 0,
+    lane: counts?.lane ?? 0,
+    hauled: counts?.hauled ?? 0,
+  };
 }
 
 const feedJson = (rows: RepoRow[], page: number, hasMore: boolean) => ({
@@ -137,7 +207,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
           ) : null}
           <FeedList rows={d.rows} page={d.page} hasMore={d.hasMore} votes={d.votes} user={user} baseUrl={opts.hideSorts ? opts.baseUrl : opts.baseUrl + (opts.baseUrl.includes("?") ? "&" : "?") + `sort=${opts.sort}${opts.t ? `&t=${opts.t}` : ""}`} empty={opts.empty} showStatus={opts.showStatus} markTrawl={!opts.upvotedBy} />
         </section>
-        <Rail data={rail} />
+        <Rail data={rail} chat={chatFor(c, rail)} />
       </Layout>
     ),
   });
@@ -393,7 +463,7 @@ pages.get("/queue", async (c) => {
           ) : <h3>{st}</h3>}
           <FeedList rows={d.other} page={st ? d.page : 1} hasMore={d.otherMore} votes={votes} user={user} baseUrl={`/queue${st ? `?status=${st}` : ""}`} empty="Nothing here. Suspicious." showStatus />
         </section>
-        <Rail data={rail} />
+        <Rail data={rail} chat={chatFor(c, rail)} />
       </Layout>
     ),
   });
@@ -424,7 +494,7 @@ pages.get("/best", async (c) => {
             </>
           ))}
         </section>
-        <Rail data={rail} />
+        <Rail data={rail} chat={chatFor(c, rail)} />
       </Layout>
     ),
   });
@@ -725,11 +795,14 @@ pages.get("/r/:owner/:name", async (c) => {
   if (hideFromSearch) c.header("X-Robots-Tag", "noindex, follow");
   c.executionCtx.waitUntil(freshen(c.env, r));
   c.executionCtx.waitUntil(recordView(c.env.DB, r.id, Number(c.env.VIEW_SAMPLE || 1)).catch(() => {}));
-  const [tags, cs, awards, versions, mine, critics] = await Promise.all([
+  const [tags, cs, awards, versions, mine, critics, rail] = await Promise.all([
     repoTags(c.env.DB, r.id), loadComments(c.env.DB, r.id), awardsFor(c.env.DB, r.id),
     c.env.DB.prepare("SELECT md_sha, seen_at, stars FROM repo_versions WHERE repo_id = ? ORDER BY seen_at DESC LIMIT 20").bind(r.id).all<{ md_sha: string | null; seen_at: number; stars: number | null }>().then((x) => x.results ?? []),
     user ? userVote(c.env.DB, user.id, r.id) : Promise.resolve(0),
     c.env.DB.prepare("SELECT critic_id, upvote, reason, created_at FROM critic_reviews WHERE repo_id = ? ORDER BY upvote DESC, created_at ASC").bind(r.id).all<RepoVerdict>().then((x) => x.results ?? []),
+    // This page used to hand <Rail> a hand-built object of zeroes, so its Numbers box read 0 listed, 0
+    // votes, 0 everything on every repo page on the site.
+    railData(c.env.DB),
   ]);
   const data: RepoPageData = { repo: r, tags, comments: cs, awards, versions, mine, critics, user, isOwner: isOwnerOf(r, user?.login, user?.id), flash: c.req.query("flash") ?? null, donated: c.req.query("donated") === "1" };
   return respond(c, data, {
@@ -740,7 +813,7 @@ pages.get("/r/:owner/:name", async (c) => {
     html: (d) => (
       <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || hideFromSearch, jsonLd: hideFromSearch ? undefined : repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />
-        <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
+        <Rail data={rail} chat={chatFor(c, rail)} />
       </Layout>
     ),
   });

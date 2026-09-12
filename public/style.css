@@ -47,7 +47,7 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .tabs { display: flex; flex-wrap: wrap; gap: 2px; } .tabs a { text-transform: lowercase; padding: 3px 7px; color: var(--muted); border-bottom: 2px solid transparent; } .tabs a.on { color: var(--accent); font-weight: bold; border-bottom-color: var(--accent); }
 .onphone { display: none; }
 .search { display: flex; gap: 4px; flex: 1; min-width: 220px; } .search input { flex: 1; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); font: inherit; }
-.search button, .btn, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--accent); color: var(--btn-fg); text-shadow: var(--btn-sh); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
+.search button, .btn, .btn:visited, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--accent); color: var(--btn-fg); text-shadow: var(--btn-sh); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
 .btn.secondary, form.owner button.secondary { background: var(--panel); color: var(--fg); border-color: var(--line); font-weight: normal; }
 .btn[disabled], form.owner button[disabled] { opacity: .5; cursor: not-allowed; }
 .who { display: flex; gap: 10px; align-items: center; margin-left: auto; } .avatar { width: 18px; height: 18px; border-radius: 3px; vertical-align: middle; }

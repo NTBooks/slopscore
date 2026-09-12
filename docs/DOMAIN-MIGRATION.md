@@ -14,8 +14,12 @@ Written 2026-09-12, when the site was renamed to **SlopScupper** and started ans
   the GitHub OAuth app has a single registered callback and the state cookie has to be set on the host GitHub
   returns to. A visitor browsing `slopscupper.com` therefore looks logged out: session cookies belong to
   `slopscore.org`. That resolves itself when the primary flips.
-- **Trawled listings are indexed** (`TRAWL_INDEX=on`, all environments), the same as opted-in ones: repo
-  pages, owner pages, the sitemap and IndexNow. Turning it to anything else takes all four back out.
+- **Trawled repo listings are indexed** (`TRAWL_INDEX=on`, all environments), the same as opted-in ones:
+  repo pages, the sitemap and IndexNow.
+- **Pages under a GitHub handle are not.** `TRAWL_OWNER_INDEX` is a separate switch and it is `off`:
+  `/u/{login}` is noindex and out of the sitemap for anyone we only know about because the trawl found
+  them. Committing a `slopscore.md` on any repo indexes that owner's page, because that is consent. A repo
+  page is about a project; a handle is a person, and the two do not get one switch between them.
 - **The name changed, the file did not.** The site is SlopScupper. The marker file is still `slopscore.md`,
   the version key is still `slopscore: 2`, and the score is still a slopscore. Do not change any of those:
   `slopscore.md` is the one search term nobody else owns, and every committed file in the wild names it.
@@ -125,8 +129,9 @@ its canonical at the primary host, so Google indexes one copy and attributes it 
 
 ### While you are in there
 
-With `TRAWL_INDEX=on` the sitemap carries every listing, trawled included, so it went from about a dozen URLs
-to a couple of hundred. Two things follow:
+With `TRAWL_INDEX=on` the sitemap carries every repo listing, trawled included, so it went from about a dozen
+URLs to a couple of hundred. Owner pages are not in that number: `TRAWL_OWNER_INDEX` is off, so the sitemap's
+`/u/` entries stay limited to people who opted in. Two things follow:
 
 - A good share of those will sit in **"Crawled — currently not indexed"** for a while. A trawled page's body is
   largely the repo's own README, and Google is slow to index text it can already find on github.com. This is

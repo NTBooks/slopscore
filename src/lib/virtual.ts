@@ -23,6 +23,19 @@ export function trawlIndexed(env: { TRAWL_INDEX?: string }): boolean {
   return (env.TRAWL_INDEX ?? "").trim().toLowerCase() === "on";
 }
 
+/**
+ * Whether a page under somebody's GitHub handle is indexed when that person never opted in.
+ *
+ * Deliberately a separate switch from TRAWL_INDEX, and deliberately off. A repo page is about a project
+ * somebody published; a page at /u/{login} is about a person, and it is the page a search for their name
+ * is most likely to find. Indexing a repo is commentary on a thing. Indexing a handle is a profile of
+ * someone who never asked for one. An owner who has opted in on any repo is indexed either way: that is
+ * consent, and it does not need a flag.
+ */
+export function trawlOwnerIndexed(env: { TRAWL_OWNER_INDEX?: string }): boolean {
+  return (env.TRAWL_OWNER_INDEX ?? "").trim().toLowerCase() === "on";
+}
+
 export const MIN_STARS = 5;
 /** Famous repos aren't the audience, and they're the likeliest to mind. */
 export const MAX_STARS = 2000;

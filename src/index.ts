@@ -126,6 +126,8 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/search?q=   full-text + operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner:  (prefix - to exclude)
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)
 - ${origin}/scan        same thing as a form for logged-in humans; POST {repo} with a session or bearer token, answers in words why the repo was or was not queued
+- ${origin}/feed.xml    RSS of new opted-in listings (?sort=updated for ones whose file changed)
+- ${origin}/trawl.xml   RSS of the trawl alone: repos the Cap'm found rather than ones that were submitted. Kept out of /feed.xml on purpose, so watching the hauls does not mean taking the whole feed
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
 - ${origin}/for-agents  how to hand SlopScupper to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't

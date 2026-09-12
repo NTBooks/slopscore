@@ -18,6 +18,9 @@
     "SITE_URL": "http://localhost:8787",
     // Local dev mirrors production so the indexing behaviour can be checked before it ships.
     "TRAWL_INDEX": "on",
+    // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
+    // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.
+    "TRAWL_OWNER_INDEX": "off",
     "PLAN_MODE": "free",
     "CONTACT_EMAIL": "hello@slopscore.org",
     "ABUSE_EMAIL": "abuse@slopscore.org",
@@ -50,6 +53,9 @@
         "SITE_URL": "https://test.slopscore.org",
         "PRIMARY_HOST": "test.slopscore.org",
         "TRAWL_INDEX": "on",
+        // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
+        // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.
+        "TRAWL_OWNER_INDEX": "off",
     "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",
@@ -94,6 +100,9 @@
         // indexed the way every other mirror and aggregator indexes them, with a takedown that needs no account.
         // "off" keeps them readable, linkable and votable but invisible to search engines.
         "TRAWL_INDEX": "on",
+        // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
+        // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.
+        "TRAWL_OWNER_INDEX": "off",
     "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",

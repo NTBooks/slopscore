@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { GhRepo } from "../src/lib/github";
 import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
-import { claimSnippet, autoReason, trawlIndexed } from "../src/lib/virtual";
+import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed } from "../src/lib/virtual";
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
@@ -169,5 +169,17 @@ describe("TRAWL_INDEX is the switch, and only 'on' is on", () => {
     for (const v of [undefined, "", "off", "true", "1", "yes", "onn"]) {
       expect(trawlIndexed({ TRAWL_INDEX: v })).toBe(false);
     }
+  });
+});
+
+describe("a handle is a person: owner indexing is its own switch", () => {
+  it("is off unless TRAWL_OWNER_INDEX says on", () => {
+    expect(trawlOwnerIndexed({ TRAWL_OWNER_INDEX: "on" })).toBe(true);
+    for (const v of [undefined, "", "off", "true", "1"]) expect(trawlOwnerIndexed({ TRAWL_OWNER_INDEX: v })).toBe(false);
+  });
+  it("does not follow TRAWL_INDEX: repo pages can be indexed while handles are not", () => {
+    const env: { TRAWL_INDEX?: string; TRAWL_OWNER_INDEX?: string } = { TRAWL_INDEX: "on" };
+    expect(trawlIndexed(env)).toBe(true);
+    expect(trawlOwnerIndexed(env)).toBe(false);
   });
 });

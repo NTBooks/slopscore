@@ -5,7 +5,7 @@ import { feed, sortOn, visibleSorts, type RepoRow, type Sort } from "../lib/db";
 import { escapeHtml } from "../lib/markdown";
 import { isoDateTime } from "../lib/time";
 import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
-import { trawlIndexed } from "../lib/virtual";
+import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
 
 export const feeds = new Hono<AppEnv>();
 
@@ -41,6 +41,17 @@ feeds.get("/feed.xml", async (c) => {
   return send(c, rss(origin, sort === "updated" ? "SlopScupper — updated slop" : "SlopScupper — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
 });
 
+// The trawl gets a channel of its own rather than a share of /feed.xml. Anyone who wants to write about what
+// the Cap'm dragged in can watch exactly that, and the main feed stays what it is: repos whose owners opted in,
+// not buried under a hundred that did not. This is also the feed to hand a third party: everything in it is a
+// public repo whose owner said in public that a model wrote it, and every item links a listing that can be
+// taken down without an account.
+feeds.get("/trawl.xml", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const { rows } = await feed(c.env.DB, { sort: "new", page: 1, source: "trawl" });
+  return send(c, rss(origin, "SlopScupper — the Cap'm's hauls", "/trawl", "Repos the trawl found: public, AI-made by their owner's own account, and listed without being submitted. Any of them can be taken down from its page with no account.", rows));
+});
+
 feeds.get("/b/:file", async (c, next) => {
   if (!c.req.param("file").endsWith(".xml")) return next();
   const origin = new URL(c.req.url).origin;
@@ -72,10 +83,12 @@ feeds.get("/sitemap.xml", async (c) => {
   const indexed = trawlIndexed(c.env);
   const onlyOptedIn = indexed ? "" : " AND source = 'marker'";
   const onlyOptedInR = indexed ? "" : " AND r.source = 'marker'";
+  // Owner pages answer to their own switch (see trawlOwnerIndexed): a handle is a person, not a project.
+  const onlyOptedInOwners = trawlOwnerIndexed(c.env) ? onlyOptedIn : " AND source = 'marker'";
   const repos = await c.env.DB.prepare(`SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed'${onlyOptedIn} ORDER BY listed_at DESC LIMIT 5000`).all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
   // owner pages: someone searching their own GitHub handle should land on their listings
-  const owners = await c.env.DB.prepare(`SELECT DISTINCT owner FROM repos WHERE status = 'listed'${onlyOptedIn} ORDER BY owner LIMIT 2000`).all<{ owner: string }>().then((r) => r.results ?? []);
+  const owners = await c.env.DB.prepare(`SELECT DISTINCT owner FROM repos WHERE status = 'listed'${onlyOptedInOwners} ORDER BY owner LIMIT 2000`).all<{ owner: string }>().then((r) => r.results ?? []);
   // Facet feeds are the long tail: "claude code slop", "python slop" and the like are what people actually
   // type, and each one is a real page with its own rows. Only facets with enough repos to be worth a visit.
   const facets = await c.env.DB.prepare(

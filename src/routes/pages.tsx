@@ -17,7 +17,7 @@ import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
-import { trawlIndexed } from "../lib/virtual";
+import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
 import { Layout, SITE } from "../views/layout";
 import { FeedList, ogImage } from "../views/feed";
 import { Rail, type RailData } from "../views/rail";
@@ -237,9 +237,10 @@ pages.get("/u/:login", async (c) => {
   const login = c.req.param("login");
   const u = await getUserByLogin(c.env.DB, login);
   const bot = u?.bot === 1;
-  // A page under someone's handle is the most name-searchable page here, so it follows TRAWL_INDEX: with the
-  // switch off, only an owner who opted in on a repo is indexed; with it on, every listed owner is.
-  const optedIn = bot || trawlIndexed(c.env) || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
+  // A handle is a person, so this page has its own switch (TRAWL_OWNER_INDEX, off) rather than following the
+  // one that governs repo pages. Committing a slopscore.md on any repo is consent and indexes this page
+  // regardless; without that, an owner we only know about because the trawl found them stays out of search.
+  const optedIn = bot || trawlOwnerIndexed(c.env) || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
     noindex: !optedIn,
     title: `${login} — SlopScupper`, heading: bot ? `${login} — a SlopScupper critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),

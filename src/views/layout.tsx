@@ -117,7 +117,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             <strong>Nothing here is a secret. That's the point.</strong>
             <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/disclosure">disclosure</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
             · <a href="/for-agents">for agents</a>: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
-            · <a href="/feed.xml">rss</a>
+            · <a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a>
           </p>
           <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does. Made by slopsmiths, for slopsmiths.</p>
         </footer>

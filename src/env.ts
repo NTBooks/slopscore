@@ -8,6 +8,8 @@ export interface Env {
   PRIMARY_HOST?: string;
   /** "on" puts trawled listings in search and the sitemap; anything else keeps them readable but unindexed (src/lib/virtual.ts). */
   TRAWL_INDEX?: string;
+  /** "on" also indexes /u/{login} for owners who never opted in. Separate from TRAWL_INDEX and off by default: a handle is a person. */
+  TRAWL_OWNER_INDEX?: string;
   PLAN_MODE?: string; // free | paid
   ADMIN_LOGINS: string;
   MIN_ACCOUNT_AGE_DAYS: string;

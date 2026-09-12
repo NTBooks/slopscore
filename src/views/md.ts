@@ -3,6 +3,7 @@ import type { RepoRow, CommentRow } from "../lib/db";
 import type { TagRow } from "../lib/slopmd";
 import { ago, isoDate } from "../lib/time";
 import { stripHtml } from "../lib/markdown";
+import { criticById, criticQuip, criticShortName } from "../lib/critics";
 
 export function feedMd(title: string, rows: RepoRow[], page: number, hasMore: boolean, intro?: string): string {
   const out = [`# ${title}`, ""];
@@ -20,7 +21,7 @@ export function feedMd(title: string, rows: RepoRow[], page: number, hasMore: bo
   return out.join("\n");
 }
 
-export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], awards: { kind: string; period: string; rank: number }[]): string {
+export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], awards: { kind: string; period: string; rank: number }[], critics: { critic_id: number; upvote: number; reason: string | null }[] = []): string {
   const out = [`# ${r.title ?? r.name}`, "", r.tagline ?? "", ""];
   out.push(`- GitHub: https://github.com/${r.full_name}`);
   if (r.demo_url) out.push(`- Demo: ${r.demo_url}`);
@@ -61,5 +62,17 @@ export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], award
     out.push("");
   }
   out.push("---", `Vote: \`POST /r/${r.full_name}/vote\` {value: 1|-1|0} · Comment: \`POST /r/${r.full_name}/comments\` {body} · Report: \`POST /r/${r.full_name}/report\` {reason, note}. Bearer token from \`/auth/device\`.`);
+  if (critics.length) {
+    const clapped = critics.filter((v) => v.upvote === 1);
+    const passed = critics.filter((v) => v.upvote !== 1).map((v) => criticById(v.critic_id)).filter(Boolean);
+    out.push("", `## From the balcony (${clapped.length} of ${critics.length} clapped)`, "");
+    for (const v of clapped) {
+      const c = criticById(v.critic_id);
+      if (c) out.push(`- **${criticShortName(c)}** clapped${criticQuip(v.reason) ? ` — ${criticQuip(v.reason)}` : ""}`);
+    }
+    if (passed.length) { const n = passed.map((c) => criticShortName(c!)); out.push("", `${n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}` : n[0]} read it and passed; the reasons are on /balcony.`); }
+    out.push("", "Critics are accounts on this site with no GitHub account behind them: half weight, never a downvote, subtracted before an award is counted.");
+  }
+
   return out.join("\n");
 }

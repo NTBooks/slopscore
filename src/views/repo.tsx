@@ -8,6 +8,7 @@ import type { ScanReport } from "../lib/scan";
 import { POLICY_LABELS } from "../lib/scan";
 import { ago, isoDate } from "../lib/time";
 import { VoteBox, ghUrl, Chips } from "./feed";
+import { FromTheBalcony, type RepoVerdict } from "./balcony";
 import { Icon, Caret, Flag, type IconName } from "./art";
 import { CONTAINS_LISTED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import type { VulnSummary } from "../lib/osv";
@@ -20,6 +21,7 @@ export interface RepoPageData {
   awards: { kind: string; period: string; rank: number }[];
   versions: { md_sha: string | null; seen_at: number; stars: number | null }[];
   mine: number;
+  critics: RepoVerdict[];
   user: SessionUser | null;
   isOwner: boolean;
   flash?: string | null;
@@ -129,6 +131,8 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
           {d.versions.length > 1 ? <p class="muted">{d.versions.length} versions of slopscore.md seen; last change {ago(d.versions[0].seen_at)}.</p> : null}
         </details>
       ) : null}
+
+      <FromTheBalcony rows={d.critics} />
 
       <section class="comments" id="comments">
         <h3>{r.comment_count} comments</h3>

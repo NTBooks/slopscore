@@ -48,6 +48,50 @@ export const BoxSeats: FC<{ seats: Seat[]; on: string | null }> = ({ seats, on }
 );
 
 /** One heckle per review, newest first. A quip the cleaner swallowed shows as no comment, not as nothing. */
+export interface RepoVerdict { critic_id: number; upvote: number; reason: string | null; created_at: number }
+
+/**
+ * The critics' verdicts on one repo, on that repo's page.
+ *
+ * Deliberately not comments. A comment count is a trust signal and these are not people, so they get their own
+ * block above the thread and are never counted in it. Claps are quoted; a pass is disclosed by name but its
+ * sentence is not reproduced here. Nothing is hidden by that — every reason, including every pass, is on
+ * /balcony, one link away — but a small model's sentence about why it declined somebody's project does not
+ * need to sit under that project. Rendering nothing at all when no critic has read the repo yet.
+ */
+export const FromTheBalcony: FC<{ rows: RepoVerdict[] }> = ({ rows }) => {
+  if (!rows.length) return null;
+  const clapped = rows.filter((v) => v.upvote === 1);
+  const passed = rows.filter((v) => v.upvote !== 1).map((v) => criticById(v.critic_id)).filter((c): c is Critic => Boolean(c));
+  const names = passed.map(criticShortName);
+  const passLine = names.length === 1 ? `${names[0]} read it and passed`
+    : names.length ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} read it and passed` : "";
+  return (
+    <section class="balconybox">
+      <h3>From the balcony <span class="muted">· {clapped.length} of {rows.length} clapped</span></h3>
+      <ol class="heckles">
+        {clapped.map((v) => {
+          const c = criticById(v.critic_id);
+          const quip = criticQuip(v.reason);
+          if (!c) return null;
+          return (
+            <li class="heckle up">
+              <div class="heckleline">
+                <a class="heckler" href={`/balcony?critic=${c.login}`} title={c.rubric}>{criticShortName(c)}</a>
+                <span class="verdict">clapped</span>
+                <time class="muted small when" datetime={isoDateTime(v.created_at)} title={isoDateTime(v.created_at)}>{ago(v.created_at)}</time>
+              </div>
+              {quip ? <blockquote class="quip">{quip}</blockquote> : <blockquote class="quip muted">no comment on the record</blockquote>}
+            </li>
+          );
+        })}
+      </ol>
+      {passLine ? <p class="muted small">{passLine}. <a href="/balcony">Their reasons are on the balcony</a>, with every other verdict.</p> : null}
+      <p class="muted small">Critics are accounts on this site with no GitHub account behind them. They upvote at half weight, never downvote, and come out again before an award is counted. <a href="/balcony">Who they are</a>.</p>
+    </section>
+  );
+};
+
 /**
  * Who the voices in the box actually are. It sits at the bottom of /balcony on purpose: the verdicts come
  * first and the story comes after, so nobody has to read a cast list to use the page. The last line is the

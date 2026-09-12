@@ -23,6 +23,7 @@ import { FeedList, ogImage } from "../views/feed";
 import { Rail, type RailData } from "../views/rail";
 import { Mascot, Stamp } from "../views/art";
 import { RepoPage, type RepoPageData } from "../views/repo";
+import type { RepoVerdict } from "../views/balcony";
 import { feedMd, repoMd } from "../views/md";
 import { requireUser, body, wantsJson } from "../middleware";
 import { renderMarkdown, escapeHtml } from "../lib/markdown";
@@ -533,7 +534,6 @@ pages.get("/stats", async (c) => {
       <Layout meta={{ title: "Stats — SlopScupper" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Stats</h2>
-          <p class="muted">This site runs on Cloudflare's free tier on purpose. When the "deferred" column grows day over day, the AI budget is the bottleneck and it's time to pay.</p>
           <div class={`capacity ${d.cap.mode}`}>
             <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
             <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons · <strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day} free scans left</div>
@@ -606,7 +606,6 @@ pages.get("/about", (c) => {
     "## What it is", "",
     "SlopScupper is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
-    "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits. The [source](https://github.com/NTBooks/slopscore) is public.", "",
     "## Trawled listings", "",
     "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, they stay out of the RSS feed, and they can't win awards. They are in the sitemap on purpose: searching for your own repo is how you find the listing, and the button that removes it. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
     "## Critics", "",
@@ -668,16 +667,18 @@ pages.get("/r/:owner/:name", async (c) => {
   if (hideFromSearch) c.header("X-Robots-Tag", "noindex, follow");
   c.executionCtx.waitUntil(freshen(c.env, r));
   c.executionCtx.waitUntil(recordView(c.env.DB, r.id, Number(c.env.VIEW_SAMPLE || 1)).catch(() => {}));
-  const [tags, cs, awards, versions, mine] = await Promise.all([
+  const [tags, cs, awards, versions, mine, critics] = await Promise.all([
     repoTags(c.env.DB, r.id), loadComments(c.env.DB, r.id), awardsFor(c.env.DB, r.id),
     c.env.DB.prepare("SELECT md_sha, seen_at, stars FROM repo_versions WHERE repo_id = ? ORDER BY seen_at DESC LIMIT 20").bind(r.id).all<{ md_sha: string | null; seen_at: number; stars: number | null }>().then((x) => x.results ?? []),
     user ? userVote(c.env.DB, user.id, r.id) : Promise.resolve(0),
+    c.env.DB.prepare("SELECT critic_id, upvote, reason, created_at FROM critic_reviews WHERE repo_id = ? ORDER BY upvote DESC, created_at ASC").bind(r.id).all<RepoVerdict>().then((x) => x.results ?? []),
   ]);
-  const data: RepoPageData = { repo: r, tags, comments: cs, awards, versions, mine, user, isOwner: isOwnerOf(r, user?.login, user?.id), flash: c.req.query("flash") ?? null, donated: c.req.query("donated") === "1" };
+  const data: RepoPageData = { repo: r, tags, comments: cs, awards, versions, mine, critics, user, isOwner: isOwnerOf(r, user?.login, user?.id), flash: c.req.query("flash") ?? null, donated: c.req.query("donated") === "1" };
   return respond(c, data, {
     json: (d) => ({ ...repoJson(d.repo), tags: d.tags, awards: d.awards, versions: d.versions, scan: parseJson(d.repo.scan, null), body_md: d.repo.body_md, my_vote: d.mine, is_owner: d.isOwner,
+      critics: d.critics.map((v) => ({ critic: criticById(v.critic_id)?.login ?? String(v.critic_id), upvote: v.upvote === 1, reason: criticQuip(v.reason), at: v.created_at })),
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),
-    md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards),
+    md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards, d.critics),
     html: (d) => (
       <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScupper`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || hideFromSearch, jsonLd: hideFromSearch ? undefined : repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />

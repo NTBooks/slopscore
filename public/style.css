@@ -315,6 +315,8 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .heckleline .verdict { color: var(--muted); } .heckle.up .heckleline .verdict { color: var(--up); }
 .heckleline .when { margin-left: auto; white-space: nowrap; }
 .quip { margin: 4px 0 0; font-family: var(--serif); font-size: 14px; font-style: italic; }
+/* the same verdicts, on a repo's own page: its own block, never the comment thread (src/views/balcony.tsx) */
+.balconybox { margin: 22px 0 0; } .balconybox h3 { margin-bottom: 4px; } .balconybox .heckles { margin-bottom: 8px; }
 .quip::before { content: "\201C"; } .quip::after { content: "\201D"; }
 .quip.muted { font-size: 12px; } .quip.muted::before, .quip.muted::after { content: ""; }
 @media (max-width: 600px) { .heckleline .when { margin-left: 0; width: 100%; } }

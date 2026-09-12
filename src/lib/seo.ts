@@ -37,7 +37,7 @@ export function repoJsonLd(url: URL, r: RepoRow, tags: TagRow[], comments: numbe
     {
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: "SlopScore", item: `${url.origin}/` },
+        { "@type": "ListItem", position: 1, name: "SlopScupper", item: `${url.origin}/` },
         { "@type": "ListItem", position: 2, name: r.owner, item: `${url.origin}/u/${r.owner}` },
         { "@type": "ListItem", position: 3, name: r.title ?? r.name, item: page },
       ],

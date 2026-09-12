@@ -28,7 +28,7 @@ pay.post("/r/:owner/:name/donate", requireUser, async (c) => {
       "line_items[0][quantity]": "1",
       "line_items[0][price_data][currency]": "usd",
       "line_items[0][price_data][unit_amount]": String(Math.round(usd * 100)),
-      "line_items[0][price_data][product_data][name]": `SlopScore: jump the line for ${repo.full_name}`,
+      "line_items[0][price_data][product_data][name]": `SlopScupper: jump the line for ${repo.full_name}`,
       "line_items[0][price_data][product_data][description]": "Covers the hosting bill. Buys the wait, never a gate, a vote, or an award.",
       client_reference_id: String(repo.id),
       "metadata[repo_id]": String(repo.id),
@@ -82,7 +82,7 @@ function requirements(c: { env: AppEnv["Bindings"]; req: { url: string } }, full
     network,
     maxAmountRequired: String(Math.round(usd * 1_000_000)),   // USDC has 6 decimals
     resource: `${new URL(c.req.url).origin}/r/${fullName}/rush`,
-    description: `SlopScore: jump the scan queue for ${fullName}. Buys the wait, never a gate. ${immediateMode(c.env) ? "Scans immediately." : "Front of the line for the next scan window."}`,
+    description: `SlopScupper: jump the scan queue for ${fullName}. Buys the wait, never a gate. ${immediateMode(c.env) ? "Scans immediately." : "Front of the line for the next scan window."}`,
     mimeType: "application/json",
     payTo: c.env.X402_PAY_TO,
     maxTimeoutSeconds: 120,

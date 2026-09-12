@@ -26,7 +26,7 @@ takedown.get("/:owner/:name/takedown", async (c) => {
   const error = c.req.query("error");
   const name = r?.full_name ?? `${c.req.param("owner")}/${c.req.param("name")}`;
   return c.html(
-    <Layout meta={{ title: `Takedown · ${name} — SlopScore`, noindex: true }} user={user} url={url}>
+    <Layout meta={{ title: `Takedown · ${name} — SlopScupper`, noindex: true }} user={user} url={url}>
       <section class="wrap narrow" style="padding:0">
         <h2>Takedown request</h2>
         {done && CANNED[done] ? <div class="notice">{CANNED[done]}</div> : null}

@@ -24,7 +24,7 @@ export function repoMd(r: RepoRow, tags: TagRow[], comments: CommentRow[], award
   const out = [`# ${r.title ?? r.name}`, "", r.tagline ?? "", ""];
   out.push(`- GitHub: https://github.com/${r.full_name}`);
   if (r.demo_url) out.push(`- Demo: ${r.demo_url}`);
-  out.push(`- Status on SlopScore: **${r.status}**${r.queue_reason ? ` (${r.queue_reason})` : ""} · tier: ${r.tier}`);
+  out.push(`- Status on SlopScupper: **${r.status}**${r.queue_reason ? ` (${r.queue_reason})` : ""} · tier: ${r.tier}`);
   if (r.source === "trawl") out.push(`- Trawled: the owner didn't submit this; the Cap'm wrote the paperwork. ${r.virtual_reason ?? ""}`);
   if (r.reject_reason) out.push(`- Rejected under: ${r.reject_reason}`);
   if (r.removed_reason) out.push(`- Removed: ${r.removed_reason} on ${isoDate(r.removed_at)}`);

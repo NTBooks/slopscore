@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "./env";
 import { loadUser } from "./middleware";
 import { rewriteFormat } from "./lib/negotiate";
+import { onPrimaryHost, primaryHost, isSecondaryHost } from "./lib/host";
 import { pages } from "./routes/pages";
 import { api } from "./routes/api";
 import { auth } from "./routes/auth";
@@ -15,6 +16,7 @@ import { takedown } from "./routes/takedown";
 import { scan } from "./routes/scan";
 import { orphanage } from "./routes/orphanage";
 import { agents } from "./routes/agents";
+import { disclosure } from "./routes/disclosure";
 import { setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
@@ -38,6 +40,15 @@ app.use("*", async (c, next) => {
   return c.redirect(url.toString(), 301);
 });
 
+// Login always happens on the primary host: the OAuth app has one registered callback, and the state
+// cookie must be set on the host GitHub returns to. Everything else answers on either domain.
+app.use("/auth/*", async (c, next) => {
+  const url = new URL(c.req.url);
+  if (!isSecondaryHost(url.hostname, primaryHost(c.env))) return next();
+  url.hostname = primaryHost(c.env);
+  return c.redirect(url.toString(), 302);
+});
+
 app.use("*", loadUser);
 app.route("/auth", auth);
 app.route("/api/v1", api);
@@ -52,6 +63,7 @@ app.route("/scan", scan);
 app.route("/orphanage", orphanage);
 app.route("/home", orphanage);
 app.route("/", agents);
+app.route("/", disclosure);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => {
@@ -91,13 +103,13 @@ app.get("/:file{[A-Za-z0-9-]{8,128}\\.txt}", (c, next) => {
 
 app.get("/llms.txt", (c) => {
   const origin = new URL(c.req.url).origin;
-  return c.text(`# SlopScore
+  return c.text(`# SlopScupper
 
 > ${SITE.tagline} ${SITE.description}
 
 ${SITE.manifesto}
 
-SlopScore is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
+SlopScupper is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
 
 ## URLs
 - ${origin}/            the feed. ?sort=${visibleSorts().filter((s) => s !== "upcoming").join("|")}&t=day|week|month|year|all&page=N
@@ -115,7 +127,8 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/ping/{owner}/{repo}  trigger an immediate check of a repo (rate-limited 1 per 10 min per repo)
 - ${origin}/scan        same thing as a form for logged-in humans; POST {repo} with a session or bearer token, answers in words why the repo was or was not queued
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
-- ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
+- ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
+- ${origin}/for-agents  how to hand SlopScupper to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
 
@@ -193,7 +206,7 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
 
 export default {
   fetch(request: Request, env: AppEnv["Bindings"], ctx: ExecutionContext) {
-    return app.fetch(rewriteFormat(request), env, ctx);
+    return app.fetch(rewriteFormat(onPrimaryHost(request, env)), env, ctx);
   },
   async scheduled(event: ScheduledEvent, env: AppEnv["Bindings"], ctx: ExecutionContext) {
     ctx.waitUntil(runCron(event.cron, env));

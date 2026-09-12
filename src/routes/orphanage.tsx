@@ -33,7 +33,7 @@ orphanage.get("/", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const title = "The Cap'm's Home for AI Slop";
   return c.html(
-    <Layout meta={{ title: `${title} — SlopScore`, description: "A home for orphaned repos. Every one of them is a diamond in the rough. Mostly rough." }} user={user} url={url}>
+    <Layout meta={{ title: `${title} — SlopScupper`, description: "A home for orphaned repos. Every one of them is a diamond in the rough. Mostly rough." }} user={user} url={url}>
       <section class="wrap narrow orphanage" style="padding:0">
         <div class="hero">
           <Mascot size={150} class="hero-pig" />

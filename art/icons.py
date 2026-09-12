@@ -1,4 +1,4 @@
-# Single-colour UI art for SlopScore: step icons, the "Certified Slop" stamp, the report flag, the wordmark.
+# Single-colour UI art for SlopScupper: step icons, the "Certified Slop" stamp, the report flag, the wordmark.
 # Everything uses currentColor so it follows the page's light/dark text colour. Emits plain SVG, no filters.
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -43,13 +43,13 @@ stamp = svg("stamp", '''
   <text x="150" y="82" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="15" letter-spacing="2" fill="currentColor" stroke="none">INSPECTED · GRADED · EATEN</text>
 </g>
 <ellipse cx="150" cy="60" rx="140" ry="52" fill="currentColor" stroke="none" opacity=".05"/>
-''', vb="0 0 300 120")
+''', vb="0 -17 300 154")  # the stamp is rotated -12deg; the taller box keeps its corners from clipping
 
 # Wordmark: heavy slab text with a slop drip off the first S. Fill currentColor; the drip uses the accent via CSS var with fallback.
 wordmark = svg("wordmark", '''
-<text x="0" y="46" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="46" font-weight="900" letter-spacing="-1" fill="currentColor" stroke="none">Slop<tspan fill="var(--accent, #e8669a)">Score</tspan></text>
+<text x="0" y="46" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="46" font-weight="900" letter-spacing="-1" fill="currentColor" stroke="none">Slop<tspan fill="var(--accent, #e8669a)">Scupper</tspan></text>
 <path d="M14 48c0 8-2 14-2 20 0 4 4 4 4 0 0-6-2-12-2-20z" fill="var(--accent, #e8669a)" stroke="none"/>
 <path d="M156 48c0 5-1 9-1 13 0 3 3 3 3 0 0-4-2-8-2-13z" fill="var(--accent, #e8669a)" stroke="none"/>
-''', vb="0 0 268 72", extra='role="img" aria-label="SlopScore"')
+''', vb="0 0 330 72", extra='role="img" aria-label="SlopScupper"')
 
 print("\n".join(os.listdir(HERE)))

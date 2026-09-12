@@ -5,6 +5,7 @@ import { feed, sortOn, visibleSorts, type RepoRow, type Sort } from "../lib/db";
 import { escapeHtml } from "../lib/markdown";
 import { isoDateTime } from "../lib/time";
 import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+import { trawlIndexed } from "../lib/virtual";
 
 export const feeds = new Hono<AppEnv>();
 
@@ -37,7 +38,7 @@ feeds.get("/feed.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
   const sort = (c.req.query("sort") === "updated" ? "updated" : "new") as Sort;
   const { rows } = await feed(c.env.DB, { sort, page: 1, source: "marker" }); // trawled listings never go out in feeds
-  return send(c, rss(origin, sort === "updated" ? "SlopScore — updated slop" : "SlopScore — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
+  return send(c, rss(origin, sort === "updated" ? "SlopScupper — updated slop" : "SlopScupper — new slop", "/feed", "Give me your slop! Peer review for code nobody wrote.", rows, sort === "updated"));
 });
 
 feeds.get("/b/:file", async (c, next) => {
@@ -45,7 +46,7 @@ feeds.get("/b/:file", async (c, next) => {
   const origin = new URL(c.req.url).origin;
   const slug = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, tag: slug, source: "marker" });
-  return send(c, rss(origin, `SlopScore — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
+  return send(c, rss(origin, `SlopScupper — b/${slug}`, `/b/${slug}`, `New slop in the ${slug} bucket.`, rows));
 });
 
 feeds.get("/f/:facet/:file", async (c, next) => {
@@ -54,7 +55,7 @@ feeds.get("/f/:facet/:file", async (c, next) => {
   const facet = c.req.param("facet"); const value = c.req.param("file").replace(/\.xml$/, "").toLowerCase();
   if (!([...DECLARED_FACETS, ...DETECTED_FACETS] as readonly string[]).includes(facet)) return c.notFound();
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, filters: [{ facet, value, negate: false }], source: "marker" });
-  return send(c, rss(origin, `SlopScore — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
+  return send(c, rss(origin, `SlopScupper — ${facet}: ${value}`, `/f/${facet}/${value}`, `New slop with ${facet} = ${value}.`, rows));
 });
 
 feeds.get("/u/:file", async (c, next) => {
@@ -62,13 +63,14 @@ feeds.get("/u/:file", async (c, next) => {
   const origin = new URL(c.req.url).origin;
   const login = c.req.param("file").replace(/\.xml$/, "");
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, owner: login, source: "marker" });
-  return send(c, rss(origin, `SlopScore — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
+  return send(c, rss(origin, `SlopScupper — ${login}`, `/u/${login}`, `Slop by ${login}.`, rows));
 });
 
 feeds.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
-  // Opted-in listings only: a trawled repo is noindex until its owner commits the file, so it never goes in the sitemap.
-  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
+  // Trawled listings follow TRAWL_INDEX: a page we keep out of search has no business in the sitemap either.
+  const onlyOptedIn = trawlIndexed(c.env) ? "" : " AND source = 'marker'";
+  const repos = await c.env.DB.prepare(`SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed'${onlyOptedIn} ORDER BY listed_at DESC LIMIT 5000`).all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
   // owner pages: someone searching their own GitHub handle should land on their listings
   const owners = await c.env.DB.prepare("SELECT DISTINCT owner FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY owner LIMIT 2000").all<{ owner: string }>().then((r) => r.results ?? []);
@@ -77,7 +79,7 @@ feeds.get("/sitemap.xml", async (c) => {
   const facets = await c.env.DB.prepare(
     "SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND r.source = 'marker' AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200",
   ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/for-agents", "/skill", "/stats", "/log", "/balcony", "/scan", "/contact"];
+  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/disclosure", "/for-agents", "/skill", "/stats", "/log", "/balcony", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -98,7 +100,7 @@ feeds.get("/openapi.json", (c) => {
   const okJson = (desc: string) => ({ description: desc, content: { "application/json": { schema: { type: "object" } } } });
   const doc = {
     openapi: "3.1.0",
-    info: { title: "SlopScore API", version: "1.0.0", description: "Give me your slop! Peer review for code nobody wrote. Every HTML page is also available as .json and .md. Writes need a bearer token from the GitHub device flow (POST /auth/device/start). See /llms.txt." },
+    info: { title: "SlopScupper API", version: "1.0.0", description: "Give me your slop! Peer review for code nobody wrote. Every HTML page is also available as .json and .md. Writes need a bearer token from the GitHub device flow (POST /auth/device/start). See /llms.txt." },
     servers: [{ url: origin }],
     components: {
       securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", description: "token from POST /auth/device/poll" } },

@@ -79,7 +79,7 @@ mod.get("/", async (c) => {
   );
 
   return c.html(
-    <Layout meta={{ title: "Mod — SlopScore", noindex: true }} user={user} url={url}>
+    <Layout meta={{ title: "Mod — SlopScupper", noindex: true }} user={user} url={url}>
       <section class="wrap narrow" style="padding:0">
         <h2>Mod console</h2>
         <p class="muted">Every action here lands in the <a href="/log">public log</a> with your login. Nothing here is a secret.</p>

@@ -47,7 +47,7 @@ async function judge(env: Env, c: Critic, repo: RepoRow): Promise<Verdict | { er
         authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
         "content-type": "application/json",
         "http-referer": env.SITE_URL ?? "https://slopscore.org",
-        "x-title": "SlopScore critics",
+        "x-title": "SlopScupper critics",
       },
       body: JSON.stringify({
         model: env.CRITICS_MODEL || CRITICS_MODEL_DEFAULT,

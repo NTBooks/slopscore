@@ -1,6 +1,6 @@
 @echo off
 REM ---------------------------------------------------------------------------
-REM SlopScore secrets. Copy to scripts\secrets.bat (gitignored), fill in the
+REM SlopScupper secrets. Copy to scripts\secrets.bat (gitignored), fill in the
 REM values, run it from the project root:   scripts\secrets.bat
 REM Each secret is pushed to BOTH environments (test.slopscore.org and
 REM slopscore.org). Leave a value empty to skip that secret.

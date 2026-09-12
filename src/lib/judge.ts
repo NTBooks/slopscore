@@ -17,7 +17,7 @@ export interface JudgeInput { full_name: string; description: string; topics: st
 export interface JudgeResult { keep: boolean; code: JudgeCode | null; error?: string }
 
 const SYSTEM = [
-  "You sort GitHub repos for SlopScore, a leaderboard of AI-generated software. A repo is listed only when it is software",
+  "You sort GitHub repos for SlopScupper, a leaderboard of AI-generated software. A repo is listed only when it is software",
   "someone made for a purpose AND its owner says, in the past tense, that an AI tool wrote it.",
   "",
   "Answer with exactly one code:",
@@ -47,7 +47,7 @@ export async function judgeCandidate(env: Env, c: JudgeInput): Promise<JudgeResu
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "content-type": "application/json", "x-title": "SlopScore trawl" },
+      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}`, "content-type": "application/json", "x-title": "SlopScupper trawl" },
       body: JSON.stringify({
         model, temperature: 0, max_tokens: 24,
         response_format: { type: "json_schema", json_schema: { name: "verdict", strict: true, schema: { type: "object", properties: { code: { type: "string", enum: [...JUDGE_CODES] } }, required: ["code"], additionalProperties: false } } },

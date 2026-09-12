@@ -15,7 +15,7 @@ export interface PageMeta {
 }
 
 export const SITE = {
-  name: "SlopScore",
+  name: "SlopScupper",
   tagline: "Give me your slop!",
   slogan: "I love slop, slop slop slop, eat it up yum.",
   description: "Peer review for code nobody wrote.",
@@ -115,7 +115,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <footer class="foot">
           <p class="footlinks">
             <strong>Nothing here is a secret. That's the point.</strong>
-            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
+            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/disclosure">disclosure</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
             · <a href="/for-agents">for agents</a>: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
             · <a href="/feed.xml">rss</a>
           </p>

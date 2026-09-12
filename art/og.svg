@@ -53,8 +53,8 @@
 </g>
 </g>
 <g transform="translate(620 150)">
-  <text x="0" y="90" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="88" font-weight="900" letter-spacing="-2" fill="#1a1a1a">Slop<tspan fill="#e8669a">Score</tspan></text>
-  <path d="M27 96c0 14-4 26-4 38 0 8 8 8 8 0 0-12-4-24-4-38z" fill="#e8669a"/>
+  <text x="0" y="90" font-family="'Arial Black', Impact, system-ui, sans-serif" font-size="72" font-weight="900" letter-spacing="-2" fill="#1a1a1a">Slop<tspan fill="#e8669a">Scupper</tspan></text>
+  <path d="M22 88c0 12-4 22-4 32 0 7 8 7 8 0 0-10-4-20-4-32z" fill="#e8669a"/>
   <text x="2" y="160" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="40" fill="#2a2a2a">Give me your slop!</text>
   <text x="2" y="215" font-family="system-ui, Segoe UI, Arial, sans-serif" font-size="26" fill="#6b6b6b">Peer review for code nobody wrote.</text>
   <text x="2" y="290" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="22" fill="#6b6b6b">commit slopscore.md → get sniffed → get graded</text>

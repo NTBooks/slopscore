@@ -17,12 +17,12 @@ const PROTOCOL = "2025-06-18";
 
 // A function, not a constant: flags are read per request (module scope runs before the first one).
 const tools = () => [
-  { name: "list_repos", description: `The SlopScore feed. sort: ${visibleSorts().join("|")}; t: day|week|month|year|all; page.`, inputSchema: { type: "object", properties: { sort: { type: "string" }, t: { type: "string" }, page: { type: "integer" }, bucket: { type: "string", description: "restrict to a slopbucket, e.g. cli" } } } },
+  { name: "list_repos", description: `The SlopScupper feed. sort: ${visibleSorts().join("|")}; t: day|week|month|year|all; page.`, inputSchema: { type: "object", properties: { sort: { type: "string" }, t: { type: "string" }, page: { type: "integer" }, bucket: { type: "string", description: "restrict to a slopbucket, e.g. cli" } } } },
   { name: "search_repos", description: "Full-text search with operators: category: lang: tool: bucket: platform: status: owner: … prefix - to exclude.", inputSchema: { type: "object", properties: { q: { type: "string" }, page: { type: "integer" } }, required: ["q"] } },
   { name: "get_repo", description: "One listing: disclosures, tags, scan report, comments.", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" } }, required: ["owner", "repo"] } },
   { name: "get_queue", description: "The public moderation queue and the site's capacity (free/paid mode, AI budget, scans left).", inputSchema: { type: "object", properties: {} } },
   { name: "list_buckets", description: "Curated slopbuckets with counts.", inputSchema: { type: "object", properties: {} } },
-  { name: "ping_repo", description: "Ask SlopScore to scan a GitHub repo that has a slopscore.md now (1 per 10 min per repo).", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" } }, required: ["owner", "repo"] } },
+  { name: "ping_repo", description: "Ask SlopScupper to scan a GitHub repo that has a slopscore.md now (1 per 10 min per repo).", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" } }, required: ["owner", "repo"] } },
   { name: "whoami", description: "The GitHub identity behind the bearer token, if any.", inputSchema: { type: "object", properties: {} } },
   { name: "vote", description: "Vote on a listed repo. value 1, -1, or 0 to clear. Needs a bearer token.", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, value: { type: "integer", enum: [1, -1, 0] } }, required: ["owner", "repo", "value"] } },
   { name: "comment", description: "Comment on a listed repo (markdown, ≤ 4000 chars, ≤ 2 links). Needs a bearer token. Flagged comments are held for a moderator.", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, body: { type: "string" }, parent_id: { type: "integer" } }, required: ["owner", "repo", "body"] } },
@@ -64,7 +64,7 @@ async function handle(c: Context<AppEnv>, m: Rpc) {
   const p = (m.params ?? {}) as Record<string, unknown>;
   switch (m.method) {
     case "initialize":
-      return ok(m.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slopscore", version: "1.0.0" }, instructions: "SlopScore: peer review for code nobody wrote. Reads are open. For vote/comment/report, get a bearer token via the GitHub device flow (POST /auth/device/start, poll /auth/device/poll) and send it as Authorization: Bearer. See /llms.txt." });
+      return ok(m.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slopscore", version: "1.0.0" }, instructions: "SlopScupper: peer review for code nobody wrote. Reads are open. For vote/comment/report, get a bearer token via the GitHub device flow (POST /auth/device/start, poll /auth/device/poll) and send it as Authorization: Bearer. See /llms.txt." });
     case "ping": return ok(m.id, {});
     case "tools/list": return ok(m.id, { tools: tools() });
     case "tools/call": return ok(m.id, await callTool(c, String(p.name ?? ""), (p.arguments ?? {}) as Record<string, unknown>));

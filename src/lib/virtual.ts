@@ -10,6 +10,19 @@ import { markDirty } from "./cache";
 /** Licenses that allow redistribution of the README text we show. The pick reason cites the one found. */
 export const PERMISSIVE = new Set(["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "0BSD", "Unlicense", "CC0-1.0"]);
 
+/**
+ * Whether a trawled listing is allowed into search results and the sitemap.
+ *
+ * Both answers are defensible and the choice is a product one, so it is a var rather than a decision in code.
+ * "on": the maker finds the page when they google their own handle, which is the challenge working as intended —
+ * wear the label or label yourself properly. It also means anyone else googling that person finds it, which is
+ * the part that reads as a shaming page rather than an invitation. "off": the listing is still public, readable,
+ * linkable and votable; search engines just are not handed a page about somebody who never asked for one.
+ */
+export function trawlIndexed(env: { TRAWL_INDEX?: string }): boolean {
+  return (env.TRAWL_INDEX ?? "").trim().toLowerCase() === "on";
+}
+
 export const MIN_STARS = 5;
 /** Famous repos aren't the audience, and they're the likeliest to mind. */
 export const MAX_STARS = 2000;
@@ -156,7 +169,7 @@ export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string): 
     "x-virtual: true",
     "---",
     "",
-    `**The Cap'm wrote this paperwork, not the owner.** This repo never submitted itself to SlopScore. ${curated ? `The Cap'm picked it by hand: ${curated.replace(/\.$/, "")}` : `The Cap'm hauled it in on a truffle trawl because it ${why}`}. It carries the ${g.license?.spdx_id ?? "unknown"} license. The disclosures above are his best guess from what GitHub shows.`,
+    `**The Cap'm wrote this paperwork, not the owner.** This repo never submitted itself to SlopScupper. ${curated ? `The Cap'm picked it by hand: ${curated.replace(/\.$/, "")}` : `The Cap'm hauled it in on a truffle trawl because it ${why}`}. It carries the ${g.license?.spdx_id ?? "unknown"} license. The disclosures above are his best guess from what GitHub shows.`,
     "",
     "Is this yours? Commit a real `slopscore.md` and press Refresh to replace this, or remove the listing in one click. There's no account to make: you log in with GitHub.",
     "",
@@ -165,7 +178,7 @@ export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string): 
 
 /** Server-side checks for a hand-vetted pick: the curator's reading replaces the keyword signals, the hard rules stay. Null = OK. */
 export function curatedCheck(g: GhRepo, o: { known: Set<string>; deny: DenyRow[] }): string | null {
-  if (o.known.has(g.full_name.toLowerCase())) return "already on SlopScore, or removed and remembered";
+  if (o.known.has(g.full_name.toLowerCase())) return "already on SlopScupper, or removed and remembered";
   if (g.private || g.fork || g.archived || g.disabled || g.is_template) return "private, fork, archived, disabled or template";
   if (g.owner.type !== "User") return "org-owned: nobody can log in as the repo owner";
   const spdx = g.license?.spdx_id ?? "";

@@ -1,4 +1,4 @@
-# SlopScore mascot: a smug pig in a lab coat, clipboard in hand, slop on his chin, at a trough labelled "main".
+# SlopScupper mascot: a smug pig in a lab coat, clipboard in hand, slop on his chin, at a trough labelled "main".
 # LIGHT: upper-left (10 o'clock). Airbrush register from the vector-art skill.
 # components: body (pink) · lab coat (white, lapels, pocket + pen) · head · snout w/ nostrils · 2 ears · 2 cheeks
 #   · droopy smug eyes + one raised brow · smirk · slop on mouth/chin with 3 drips · left arm + clipboard (paper, clip, check)

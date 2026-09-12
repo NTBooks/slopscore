@@ -179,7 +179,7 @@ export function parseSlopMd(text: string): ParseResult {
   else if (!isSpecUrl(d.spec)) errors.push(`spec must be ${SPEC_URL} (the file credits the contract it follows)`);
   if (d.content_rating !== "everyone") errors.push(`content_rating "${d.content_rating}" is not listed; only "everyone" is`);
   const rejectedHits = d.contains.filter((c) => (CONTAINS_REJECTED as readonly string[]).includes(c));
-  if (rejectedHits.length) errors.push(`contains ${rejectedHits.join(", ")}: not listed on SlopScore`);
+  if (rejectedHits.length) errors.push(`contains ${rejectedHits.join(", ")}: not listed on SlopScupper`);
   if (body.length > MAX_BODY) warnings.push(`body truncated to ${MAX_BODY} chars`);
 
   const meta: SlopMeta = { ...d, spec: d.spec ?? "", x } as SlopMeta;

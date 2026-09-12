@@ -109,6 +109,17 @@ details.reportform { display: inline; } details.reportform summary { display: in
   .rail ul li { padding: 3px 0; } .foot a { display: inline-block; padding: 4px 0; }
 }
 
+/* Desktop folds the byline onto the title's line to buy back the row height the action bar costs.
+   Phones keep it stacked above the title, where there is no room to share a line anyway.
+   Scoped to .feed so the repo page's own .rowmain header is untouched. */
+@media (min-width: 601px) {
+  .feed .row .rowmain { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; }
+  .feed .row .rowmain > * { flex-basis: 100%; }
+  .feed .row .title, .feed .row .byline { flex-basis: auto; }
+  .feed .row .title { order: -1; }
+  .feed .row .byline::before { content: "·"; margin-right: 6px; }
+}
+
 /* capacity box (queue + stats) */
 .capacity { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 4px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; margin: 8px 0; font-size: 12px; }
 .capacity.free { border-left: 4px solid var(--goo); } .capacity.paid { border-left: 4px solid var(--accent); }

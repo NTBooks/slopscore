@@ -1,0 +1,59 @@
+# Typecheck and unit tests on every push and pull request.
+#
+# Why this exists: deploys are a manual `wrangler deploy` from a working tree that several sessions edit at
+# once, and until now nothing ran `npm test` or `npm run typecheck` except a person remembering to. "Cheap
+# models keep the site updated" and "nothing checks what ships" is the combination that produces a bad
+# afternoon.
+#
+# No secrets, by design. The suite runs with `remoteBindings: false` (vitest.config.ts), so it needs the
+# workers runtime and not a Cloudflare account -- which means a fork's pull request gets the same signal the
+# owner does, and a leaked token cannot come from here because there is none to leak.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first answer irrelevant, so let it go.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      # Separate steps rather than one `&&`: when this fails, the failed step name should say which half.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The skill is generated from src/lib/skill.ts into skills/slopscore/SKILL.md, because registries can
+      # only see files in a repo. Nothing regenerates it on deploy, so a drifted copy is the normal failure:
+      # the site serves one skill at /skill.md and the registries publish another.
+      - name: Published skill matches its source
+        run: |
+          set -euo pipefail
+          npm run skill --silent
+          if ! git diff --quiet -- skills/; then
+            echo "::error::skills/ is out of date. Run 'npm run skill' and commit the result."
+            git diff --stat -- skills/
+            git diff -- skills/
+            exit 1
+          fi
+          echo "skills/ is in step with src/lib/skill.ts"

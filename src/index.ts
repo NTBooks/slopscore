@@ -27,7 +27,8 @@ import { awards } from "./jobs/awards";
 import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
 import { snapshotTrends } from "./jobs/trends";
-import { recordCron } from "./lib/crawlclock";
+import { recordCron, noteRun, type AnyJob } from "./lib/crawlclock";
+import { lookout } from "./jobs/lookout";
 import { indexNowKey } from "./lib/indexnow";
 
 const app = new Hono<AppEnv>();
@@ -177,6 +178,38 @@ app.onError((err, c) => {
   return c.text(`500. The trough overflowed: ${err.message}`, 500);
 });
 
+/**
+ * Run one job, record how it went, and never let it take its neighbours down.
+ *
+ * The daily tick used to be a single object literal, so a throw in awards silenced trawl, critics and
+ * trends with it and the only trace was a console.log. Each job now carries its own guard and its own
+ * heartbeat, which is what makes /queue able to answer "did that run, and did it work?".
+ *
+ * noteRun failing is never allowed to fail the job: the bookkeeping is worth less than the work.
+ */
+async function step<T>(env: AppEnv["Bindings"], job: AnyJob, fn: () => Promise<T>): Promise<T | { error: string }> {
+  const t0 = Date.now();
+  try {
+    const r = await fn();
+    await noteRun(env.DB, job, Math.floor(Date.now() / 1000), Date.now() - t0).catch(() => {});
+    return r;
+  } catch (e) {
+    const why = (e as Error).message;
+    await noteRun(env.DB, job, Math.floor(Date.now() / 1000), Date.now() - t0, why).catch(() => {});
+    return { error: why };
+  }
+}
+
+/** The 00:05 UTC round, shared with the test environment's combined tick so the two cannot drift apart. */
+async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unknown>> {
+  return {
+    awards: await step(env, "awards", () => awards(env)),
+    trawl: await step(env, "trawl", () => trawlDaily(env)),
+    critics: await step(env, "critics", () => runCritics(env)),
+    trends: await step(env, "trends", () => snapshotTrends(env)),
+  };
+}
+
 export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?: number; repo?: string; reason?: string; release?: number; dry?: boolean; auto?: number } = {}): Promise<unknown> {
   setFlags(env.MOD_FLAGS);
   const started = Date.now();
@@ -184,10 +217,12 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
   try {
     await recordCron(env.DB, cron).catch(() => {}); // lets /queue show when each job runs next
     switch (cron) {
-      case "*/15 * * * *": result = await sweep(env); break;
-      case "*/5 * * * *": result = await scanQueue(env, opts.n ?? undefined); break;
-      case "*/10 * * * *": result = await recrawl(env); break;
-      case "5 0 * * *": result = { awards: await awards(env), trawl: await trawlDaily(env), critics: await runCritics(env), trends: await snapshotTrends(env) }; break;
+      // The sweep tick carries the lookout: the most frequent reliable cron, so a stalled job is noticed
+      // within 15 minutes rather than at the next daily round.
+      case "*/15 * * * *": result = { sweep: await step(env, "sweep", () => sweep(env)), lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })) }; break;
+      case "*/5 * * * *": result = await step(env, "scan", () => scanQueue(env, opts.n ?? undefined)); break;
+      case "*/10 * * * *": result = await step(env, "recrawl", () => recrawl(env)); break;
+      case "5 0 * * *": result = await dailyRound(env); break;
       // manual only: &release=N moves N backlog picks into the queue; &repo=owner/name[&reason=...] hand-picks one; &n=N runs the keyword search
       case "trawl": result = opts.release ? await releaseBacklog(env, opts.release) : opts.auto ? await autoTrawl(env, opts.auto) : opts.repo ? await trawlOne(env, opts.repo, opts.reason) : await trawl(env, opts.n); break;
       // manual: &n=N repos per critic this run, &dry=1 to read and score without voting or recording
@@ -197,7 +232,13 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
         const d = new Date();
         const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;
-        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: daily ? await awards(env) : "skipped", trawl: daily ? await trawlDaily(env) : "skipped", critics: daily ? await runCritics(env) : "skipped", trends: daily ? await snapshotTrends(env) : "skipped" };
+        result = {
+          sweep: await step(env, "sweep", () => sweep(env)),
+          scan: await step(env, "scan", () => scanQueue(env)),
+          recrawl: await step(env, "recrawl", () => recrawl(env)),
+          ...(daily ? await dailyRound(env) : { daily: "skipped" }),
+          lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
+        };
         break;
       }
       default: result = { note: `unknown cron ${cron}` };

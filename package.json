@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "SlopScore \u2014 peer review for code nobody wrote.",
+  "description": "SlopScore — peer review for code nobody wrote.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -11,7 +11,8 @@
     "db:migrate": "wrangler d1 migrations apply slopscore --remote",
     "db:seed:local": "node scripts/seed.mjs > .seed.sql && wrangler d1 execute slopscore --local --file .seed.sql",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "skill": "node scripts/skill.mjs"
   },
   "dependencies": {
     "hono": "^4.9.0",

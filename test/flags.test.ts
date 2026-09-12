@@ -25,25 +25,33 @@ describe("parseFlags reads the list the way the header comment promises", () => 
   });
 });
 
-// The flags this feature hides behind. They ship off; turning one on is a deploy of the var, on purpose.
-describe("the rail's atmosphere ships dark", () => {
-  const NEW: Flag[] = ["frenzy", "chatter", "chart"];
+// The rail's atmosphere was shipped dark and then turned on deliberately. What is worth pinning now is
+// not that it is on -- that is one edit away and should be -- but that the three environments say the
+// same thing. Production and test drifting apart is how a box gets debugged on a site where it was never
+// enabled, and nothing else in the build would notice.
+describe("every environment ships the same flags", () => {
+  const RAIL: Flag[] = ["frenzy", "chatter", "chart"];
 
   it("names all three in the flag list, so /mod can show them", () => {
-    for (const f of NEW) expect(ALL_FLAGS).toContain(f);
+    for (const f of RAIL) expect(ALL_FLAGS).toContain(f);
   });
-  it("has every deployed environment shipping them off", () => {
-    expect(SHIPPED.length).toBe(3);   // local dev, test, production
+  it("has local dev, test and production agreeing on every flag", () => {
+    expect(SHIPPED.length).toBe(3);
+    const [first, ...rest] = SHIPPED.map((spec) => [...parseFlags(spec)].sort().join(","));
+    for (const other of rest) expect(other).toBe(first);
+  });
+  it("mentions no flag that does not exist", () => {
+    // A typo in a negation is silent: parseFlags ignores the name and the flag stays on.
+    const named = SHIPPED.flatMap((spec) => spec.split(/[,\s]+/))
+      .map((p) => p.replace(/^-/, "").trim().toLowerCase())
+      .filter((p) => p && p !== "all" && p !== "none");
+    for (const n of named) expect(ALL_FLAGS).toContain(n as Flag);
+  });
+  it("has the rail's two boxes and the cadence on together", () => {
+    // chatter without frenzy is a chat fed by one batch a night, which is the thing this replaced.
     for (const spec of SHIPPED) {
       const on = parseFlags(spec);
-      for (const f of NEW) expect(on.has(f)).toBe(false);
-    }
-  });
-  it("leaves every flag that was already on still on", () => {
-    const untouched = ALL_FLAGS.filter((f) => !NEW.includes(f) && !["rising", "controversial", "updated", "upcoming"].includes(f));
-    for (const spec of SHIPPED) {
-      const on = parseFlags(spec);
-      for (const f of untouched) expect(on.has(f)).toBe(true);
+      if (on.has("chatter")) expect(on.has("frenzy")).toBe(true);
     }
   });
 });

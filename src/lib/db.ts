@@ -7,7 +7,7 @@ import type { TagRow } from "./slopmd";
 import { WIP_STATUSES } from "./vocab";
 import { trustFor, ringCheck } from "./trust";
 import { viewsRecent, burstAllowance } from "./views";
-import { flagOn } from "./flags";
+import { flagOn, type Flag } from "./flags";
 import { CRITIC_WEIGHT } from "./trust";
 
 export interface RepoRow {
@@ -45,7 +45,24 @@ export interface CommentRow {
 
 export const SORTS = ["hot", "new", "top", "rising", "controversial", "updated", "upcoming"] as const;
 export type Sort = (typeof SORTS)[number];
+/** Sorts that live behind a flag of the same name (src/lib/flags.ts); hot/new/top are always on. */
+const OPTIONAL_SORTS = ["rising", "controversial", "updated", "upcoming"] as const;
 export const PAGE_SIZE = 25;
+
+/** Is this sort on offer right now? Off = it is not linked, not accepted, and /upcoming 404s. */
+export function sortOn(s: Sort): boolean {
+  return !(OPTIONAL_SORTS as readonly string[]).includes(s) || flagOn(s as Flag);
+}
+
+/** Every sort a reader may be shown or may ask for, in tab order. */
+export function visibleSorts(): Sort[] {
+  return SORTS.filter(sortOn);
+}
+
+/** One reading of ?sort= for every surface (pages, API, MCP): unknown or switched off falls back. */
+export function parseSort(s: string | undefined, fallback: Sort = "hot"): Sort {
+  return (SORTS as readonly string[]).includes(s ?? "") && sortOn(s as Sort) ? (s as Sort) : fallback;
+}
 
 export interface FeedOpts {
   sort: Sort;
@@ -60,6 +77,8 @@ export interface FeedOpts {
   source?: "marker" | "trawl";
   /** subreddit-style tag: matches category, tags, domain, or topic */
   tag?: string;
+  /** one slopsmith's upvotes, newest vote first; overrides `sort` */
+  upvotedBy?: number;
   /** queue view: FIFO ordering; true = paid jumpers only, false = free line only */
   queue?: boolean;
   priority?: boolean;
@@ -106,16 +125,23 @@ export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow
     params.push(...WIP_STATUSES);
   }
   if (o.filters?.length) { const f = filterSql(o.filters); where.push(...f.where); params.push(...f.params); }
+  // Pushed before the MATCH clause below so the bound params stay in the order the placeholders appear.
+  if (o.upvotedBy) { where.push("uv.user_id = ?", "uv.value = 1"); params.push(o.upvotedBy); }
   let from = "repos r";
   if (o.match) {
     from = "repos_fts f JOIN repos r ON r.id = f.rowid";
     where.push("repos_fts MATCH ?"); params.push(o.match);
   }
-  const order = o.queue ? "r.priority_at IS NULL, r.priority_at ASC, r.source ASC, r.first_seen ASC" : feedOrder(o.sort);
+  if (o.upvotedBy) from = o.match ? `${from} JOIN votes uv ON uv.repo_id = r.id` : "votes uv JOIN repos r ON r.id = uv.repo_id";
+  const order = o.queue
+    ? "r.priority_at IS NULL, r.priority_at ASC, r.source ASC, r.first_seen ASC"
+    : o.upvotedBy ? "uv.created_at DESC, r.id DESC" : feedOrder(o.sort);
   const sql = `SELECT r.* FROM ${from} WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ? OFFSET ?`;
   params.push(PAGE_SIZE + 1, (page - 1) * PAGE_SIZE);
-  // Served from cache until the data version bumps; the SQL plus its bound params is the key.
-  const rows = await cached(db, `feed:${sql}:${JSON.stringify(params)}`, async () => (await db.prepare(sql).bind(...params).all<RepoRow>()).results ?? []);
+  const run = async () => (await db.prepare(sql).bind(...params).all<RepoRow>()).results ?? [];
+  // Served from cache until the data version bumps; the SQL plus its bound params is the key. One person's
+  // upvotes are nobody else's rows, so that feed skips the shared edge cache entirely.
+  const rows = o.upvotedBy ? await run() : await cached(db, `feed:${sql}:${JSON.stringify(params)}`, run);
   return { rows: rows.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE, page };
 }
 

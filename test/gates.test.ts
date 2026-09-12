@@ -153,3 +153,22 @@ describe("moderation flags", async () => {
     expect(parseFlags("bogus,weight").has("weight")).toBe(true);
   });
 });
+
+describe("feed sorts behind flags", async () => {
+  const { setFlags } = await import("../src/lib/flags");
+  const { parseSort, sortOn, visibleSorts } = await import("../src/lib/db");
+  it("withdraws a switched-off sort from every surface that can ask for one", () => {
+    setFlags("all");
+    expect(visibleSorts()).toContain("rising");
+    expect(parseSort("rising")).toBe("rising");
+    setFlags("all,-rising,-controversial,-updated,-upcoming");
+    expect(visibleSorts()).toEqual(["hot", "new", "top"]);
+    expect(sortOn("upcoming")).toBe(false);
+    expect(sortOn("top")).toBe(true);
+    expect(parseSort("rising")).toBe("hot");              // ?sort=rising falls back
+    expect(parseSort("controversial", "new")).toBe("new"); // …to that page's own default
+    expect(parseSort(undefined, "new")).toBe("new");
+    expect(parseSort("top")).toBe("top");
+    setFlags(undefined); // module state is shared: hand the suite back everything switched on
+  });
+});

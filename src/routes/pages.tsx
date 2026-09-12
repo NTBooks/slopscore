@@ -6,7 +6,7 @@ import { adminLogins } from "../env";
 import { CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName } from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
-  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, SORTS, type RepoRow,
+  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, parseSort, sortOn, visibleSorts, type RepoRow,
 } from "../lib/db";
 import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { recordView } from "../lib/views";
@@ -54,10 +54,6 @@ async function railData(db: D1Database): Promise<RailData> {
   });
 }
 
-function sortParam(s: string | undefined): Sort {
-  return (SORTS as readonly string[]).includes(s ?? "") ? (s as Sort) : "hot";
-}
-
 const feedJson = (rows: RepoRow[], page: number, hasMore: boolean) => ({
   page, has_more: hasMore, next: hasMore ? page + 1 : null,
   repos: rows.map(repoJson),
@@ -91,14 +87,14 @@ function feedJsonLd(url: URL, name: string, rows: RepoRow[]) {
 // ---- generic feed page renderer ----
 async function feedPage(c: Context<AppEnv>, opts: {
   title: string; heading: string; sort: Sort; t?: string; page: number; filters?: ReturnType<typeof parseQuery>["filters"]; match?: string | null;
-  status?: RepoRow["status"] | RepoRow["status"][]; owner?: string; tag?: string; baseUrl: string; intro?: string; empty?: string; showStatus?: boolean; extra?: unknown; description?: string; q?: string; showHero?: boolean;
+  status?: RepoRow["status"] | RepoRow["status"][]; owner?: string; tag?: string; upvotedBy?: number; hideSorts?: boolean; baseUrl: string; intro?: string; empty?: string; showStatus?: boolean; extra?: unknown; description?: string; q?: string; showHero?: boolean;
   /** Search results and sort/window variants are the same rows in a different order: one canonical, no index. */
   noindex?: boolean; canonical?: string;
 }) {
   const user = c.get("user");
   const url = new URL(c.req.url);
   const [{ rows, hasMore, page }, rail] = await Promise.all([
-    feed(c.env.DB, { sort: opts.sort, t: opts.t, page: opts.page, filters: opts.filters, match: opts.match, status: opts.status, owner: opts.owner, tag: opts.tag }),
+    feed(c.env.DB, { sort: opts.sort, t: opts.t, page: opts.page, filters: opts.filters, match: opts.match, status: opts.status, owner: opts.owner, tag: opts.tag, upvotedBy: opts.upvotedBy }),
     railData(c.env.DB),
   ]);
   const votes = user ? await userVotesFor(c.env.DB, user.id, rows.map((r) => r.id)) : new Map<number, number>();
@@ -116,18 +112,26 @@ async function feedPage(c: Context<AppEnv>, opts: {
                 <div><h1>SlopScore — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
               </div>
               {d.winner ? (
-                <div class="strip"><Stamp class="strip-stamp" title={`Certified Slop of the Day ${d.winner.period}`} /><span class="stamp">Slop of the Day · {d.winner.period}</span> <a href={`/r/${d.winner.full_name}`}><strong>{d.winner.title ?? d.winner.name}</strong></a> <span class="muted">— {d.winner.tagline}</span> <span class="muted">· score {d.winner.score}</span></div>
+                <div class="strip">
+                  <Stamp class="strip-stamp" title={`Certified Slop of the Day ${d.winner.period}`} />
+                  <div class="stripmain">
+                    <div class="striplabel">Slop of the Day <span class="muted">· {d.winner.period}</span></div>
+                    <div class="striptitle"><a href={`/r/${d.winner.full_name}`}>{d.winner.title ?? d.winner.name}</a></div>
+                    {d.winner.tagline ? <div class="striptag muted">{d.winner.tagline}</div> : null}
+                  </div>
+                  <a class="stripscore" href={`/r/${d.winner.full_name}`} title="the score that won it the day"><strong>{d.winner.score}</strong><span>score</span></a>
+                </div>
               ) : null}
             </>
           ) : <h2 style="margin:8px 0">{opts.heading}</h2>}
           {opts.intro && !opts.showHero ? <p class="muted">{opts.intro}</p> : null}
-          {opts.showHero || opts.sort !== "hot" ? (
+          {!opts.hideSorts && (opts.showHero || opts.sort !== "hot") ? (
             <div class="muted" style="margin:4px 0">
-              sort: {SORTS.filter((s) => s !== "upcoming").map((s) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${s}`} class={s === opts.sort ? "chip ok" : "chip"}>{s}</a>)}
+              sort: {visibleSorts().filter((s) => s !== "upcoming").map((s) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${s}`} class={s === opts.sort ? "chip ok" : "chip"}>{s}</a>)}
               {opts.sort === "top" || opts.sort === "controversial" ? <> · window: {["day", "week", "month", "year", "all"].map((w) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${opts.sort}&t=${w}`} class={w === (opts.t ?? "all") ? "chip ok" : "chip"}>{w}</a>)}</> : null}
             </div>
           ) : null}
-          <FeedList rows={d.rows} page={d.page} hasMore={d.hasMore} votes={d.votes} user={user} baseUrl={opts.baseUrl + (opts.baseUrl.includes("?") ? "&" : "?") + `sort=${opts.sort}${opts.t ? `&t=${opts.t}` : ""}`} empty={opts.empty} showStatus={opts.showStatus} />
+          <FeedList rows={d.rows} page={d.page} hasMore={d.hasMore} votes={d.votes} user={user} baseUrl={opts.hideSorts ? opts.baseUrl : opts.baseUrl + (opts.baseUrl.includes("?") ? "&" : "?") + `sort=${opts.sort}${opts.t ? `&t=${opts.t}` : ""}`} empty={opts.empty} showStatus={opts.showStatus} />
         </section>
         <Rail data={rail} />
       </Layout>
@@ -137,21 +141,34 @@ async function feedPage(c: Context<AppEnv>, opts: {
 
 // ---- / ----
 pages.get("/", (c) => {
-  const sort = sortParam(c.req.query("sort"));
+  const sort = parseSort(c.req.query("sort"));
   if (sort === "upcoming") return c.redirect("/upcoming");
   return feedPage(c, { title: `SlopScore — ${SITE.tagline}`, heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
 });
 
-pages.get("/upcoming", (c) => feedPage(c, {
+pages.get("/upcoming", (c) => sortOn("upcoming") ? feedPage(c, {
   title: "Up and coming slop", heading: "Up and coming", sort: "upcoming", page: Number(c.req.query("page") ?? 1), baseUrl: "/upcoming",
   intro: "Listed repos whose authors admit they're not done: idea, prototype, works-on-my-machine, alpha. Once submitted they compete for Most Promising Slop of the Week.",
   empty: "Nobody is working on anything. Suspicious.",
-}));
+}) : c.notFound());
+
+// ---- everything the logged-in slopsmith upvoted, newest vote first ----
+pages.get("/upvoted", (c) => {
+  const user = c.get("user");
+  if (!user) return wantsJson(c) ? c.json({ error: "login required", login: "/auth/github?next=/upvoted" }, 401) : c.redirect("/auth/github?next=/upvoted");
+  return feedPage(c, {
+    title: "Slop you upvoted — SlopScore", heading: "Slop you upvoted", sort: "new", upvotedBy: user.id, hideSorts: true, noindex: true,
+    page: Number(c.req.query("page") ?? 1), baseUrl: "/upvoted", // Every status, so an upvote never vanishes without a word: the chip says what became of it.
+    status: ["listed", "discovered", "quarantined", "rejected", "hidden", "delisted"], showStatus: true,
+    intro: "Everything you have ever upvoted, newest vote first. Only votes cast while logged in; anonymous crowd votes belong to nobody. Upvote again on a repo page to take it back and it leaves this list.",
+    empty: "You haven't upvoted anything. The trough is right there.",
+  });
+});
 
 pages.get("/search", (c) => {
   const q = c.req.query("q") ?? "";
   const parsed = parseQuery(q);
-  const sort = sortParam(c.req.query("sort") ?? "top");
+  const sort = parseSort(c.req.query("sort"), "top");
   return feedPage(c, {
     title: `search: ${q} — SlopScore`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     filters: parsed.filters, match: parsed.match, baseUrl: `/search?q=${encodeURIComponent(q)}`, q, noindex: true,
@@ -166,7 +183,7 @@ pages.get("/f/:facet/:value", async (c) => {
   if (!known.includes(facet)) return c.notFound();
   const siblings = await facetCounts(c.env.DB, facet, 30);
   return feedPage(c, {
-    title: `${facet}: ${value} — SlopScore`, heading: `${facet} = ${value}`, sort: sortParam(c.req.query("sort") ?? "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `${facet}: ${value} — SlopScore`, heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     filters: [{ facet, value, negate: false }], baseUrl: `/f/${facet}/${value}`,
     intro: `Other ${facet} values: ${siblings.filter((s) => s.value !== value).slice(0, 15).map((s) => `${s.value} (${s.n})`).join(", ")}`, extra: { facet, value, siblings },
   });
@@ -209,7 +226,7 @@ pages.get("/b/:tag", async (c) => {
   const tag = await getTag(c.env.DB, slug);
   if (tag?.banned) return c.text(`b/${slug} is banned: ${tag.banned_reason ?? "out of control"}. See /log.`, 404);
   return feedPage(c, {
-    title: `b/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: sortParam(c.req.query("sort") ?? "hot"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `b/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     tag: slug, baseUrl: `/b/${slug}`, intro: tag?.blurb ?? `Everything in the ${slug} bucket, by declared slopbucket, category, tag, domain, or GitHub topic.`, extra: { bucket: tag ?? { slug, curated: 0 } },
     empty: `No slop in b/${slug} yet. Be the first slopsmith: slopbucket: [${slug}]`,
   });
@@ -223,7 +240,7 @@ pages.get("/u/:login", async (c) => {
   const optedIn = bot || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
     noindex: !optedIn,
-    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: sortParam(c.req.query("sort") ?? "new"), page: Number(c.req.query("page") ?? 1),
+    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
     intro: bot
       ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. Everything it has voted on, and why, is on /balcony?critic=${login}. The rules are on /about.`

@@ -1,4 +1,5 @@
-// Moderation feature flags. One var, MOD_FLAGS, a comma list of what's ON. Default: everything.
+// Feature flags: moderation gates and which feed sorts are on offer. One var, MOD_FLAGS, a comma list of
+// what's ON. Default: everything.
 // Flip one off without a redeploy of code: change the var in wrangler.jsonc (or the dashboard) and deploy.
 //   weight  votes carry a trust weight from GitHub signals (off = every vote weighs 1)
 //   ring    vote-ring heuristic zeroes bursts from same-week accounts / one network
@@ -7,7 +8,10 @@
 //   fuzz    displayed scores above 20 fuzzed ±2 %
 //   guard   comments pass through Llama Guard and can be held
 //   risk    risk score can quarantine (off = risk is recorded but never quarantines)
-export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk"] as const;
+// The last four name a feed sort each: rising, controversial, updated, upcoming. Off = that sort is gone —
+// no tab, no chip, no /upcoming page, and ?sort=/the API fall back to hot. The rows and the ranking maths
+// stay put; only the view is withdrawn.
+export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "rising", "controversial", "updated", "upcoming"] as const;
 export type Flag = (typeof ALL_FLAGS)[number];
 
 let current: Set<Flag> = new Set(ALL_FLAGS);

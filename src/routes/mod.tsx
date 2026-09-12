@@ -34,6 +34,10 @@ const FLAG_HELP: Record<string, string> = {
   fuzz: "displayed scores above 20 jittered ±2% so bots can't observe their own vote",
   guard: "comments pass through Llama Guard; flagged ones are held here",
   risk: "risk score at or above RISK_QUARANTINE sends a repo to quarantine",
+  rising: "the rising sort is on offer: a tab, a chip, and ?sort=rising",
+  controversial: "the controversial sort is on offer: a tab, a chip, and ?sort=controversial",
+  updated: "the updated sort is on offer: a tab, a chip, and ?sort=updated",
+  upcoming: "the /upcoming feed is on offer: a tab and ?sort=upcoming",
 };
 
 interface ReportRow { id: number; target_type: "repo" | "comment"; target_id: number; reason: string; note: string | null; created_at: number; reporter: string; label: string | null; status: string | null; body: string | null; author: string | null }
@@ -83,9 +87,9 @@ mod.get("/", async (c) => {
         <h3>Crawler</h3>
         <CrawlClockBox clock={clock} user={user} back="/mod" />
         <div class="capacity free" style="margin:8px 0">
-          <div style="grid-column:1/-1"><span class="label">moderation flags · MOD_FLAGS var, deploy to change</span>
+          <div style="grid-column:1/-1"><span class="label">feature flags · MOD_FLAGS var, deploy to change</span>
             {ALL_FLAGS.map((f) => <span class={`chip ${flagsSnapshot()[f] ? "ok" : "bad"}`} title={FLAG_HELP[f]}>{f}: {flagsSnapshot()[f] ? "on" : "off"}</span>)}
-            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score</span>
+            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score · rising/controversial/updated/upcoming = that feed sort is on offer</span>
           </div>
         </div>
 

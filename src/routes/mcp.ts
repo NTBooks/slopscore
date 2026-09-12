@@ -2,7 +2,7 @@
 // Speaks JSON-RPC 2.0 over POST /mcp: initialize, ping, tools/list, tools/call. Reads are open; writes need a bearer token.
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
-import { feed, getRepo, repoTags, comments, castVote, addComment, rateLimit, curatedTags, capacity, type Sort, SORTS } from "../lib/db";
+import { feed, getRepo, repoTags, comments, castVote, addComment, rateLimit, curatedTags, capacity, parseSort, visibleSorts } from "../lib/db";
 import { parseQuery } from "../lib/searchquery";
 import { repoJson } from "./pages";
 import { GitHub } from "../lib/github";
@@ -15,8 +15,9 @@ export const mcp = new Hono<AppEnv>();
 
 const PROTOCOL = "2025-06-18";
 
-const TOOLS = [
-  { name: "list_repos", description: "The SlopScore feed. sort: hot|new|top|rising|controversial|updated|upcoming; t: day|week|month|year|all; page.", inputSchema: { type: "object", properties: { sort: { type: "string" }, t: { type: "string" }, page: { type: "integer" }, bucket: { type: "string", description: "restrict to a slopbucket, e.g. cli" } } } },
+// A function, not a constant: flags are read per request (module scope runs before the first one).
+const tools = () => [
+  { name: "list_repos", description: `The SlopScore feed. sort: ${visibleSorts().join("|")}; t: day|week|month|year|all; page.`, inputSchema: { type: "object", properties: { sort: { type: "string" }, t: { type: "string" }, page: { type: "integer" }, bucket: { type: "string", description: "restrict to a slopbucket, e.g. cli" } } } },
   { name: "search_repos", description: "Full-text search with operators: category: lang: tool: bucket: platform: status: owner: … prefix - to exclude.", inputSchema: { type: "object", properties: { q: { type: "string" }, page: { type: "integer" } }, required: ["q"] } },
   { name: "get_repo", description: "One listing: disclosures, tags, scan report, comments.", inputSchema: { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" } }, required: ["owner", "repo"] } },
   { name: "get_queue", description: "The public moderation queue and the site's capacity (free/paid mode, AI budget, scans left).", inputSchema: { type: "object", properties: {} } },
@@ -37,7 +38,7 @@ const fail = (msg: string) => ({ content: [{ type: "text", text: msg }], isError
 mcp.get("/", (c) => c.json({
   name: "slopscore", protocol: PROTOCOL, transport: "streamable-http (stateless; POST JSON-RPC here)",
   auth: "optional Authorization: Bearer <token> from the GitHub device flow (POST /auth/device/start) for vote/comment/report",
-  tools: TOOLS.map((t) => t.name), docs: "/llms.txt",
+  tools: tools().map((t) => t.name), docs: "/llms.txt",
 }));
 
 mcp.post("/", async (c) => {
@@ -65,7 +66,7 @@ async function handle(c: Context<AppEnv>, m: Rpc) {
     case "initialize":
       return ok(m.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slopscore", version: "1.0.0" }, instructions: "SlopScore: peer review for code nobody wrote. Reads are open. For vote/comment/report, get a bearer token via the GitHub device flow (POST /auth/device/start, poll /auth/device/poll) and send it as Authorization: Bearer. See /llms.txt." });
     case "ping": return ok(m.id, {});
-    case "tools/list": return ok(m.id, { tools: TOOLS });
+    case "tools/list": return ok(m.id, { tools: tools() });
     case "tools/call": return ok(m.id, await callTool(c, String(p.name ?? ""), (p.arguments ?? {}) as Record<string, unknown>));
     default: return err(m.id, -32601, `method not found: ${m.method}`);
   }
@@ -78,8 +79,7 @@ async function callTool(c: Context<AppEnv>, name: string, a: Record<string, unkn
   const needUser = () => (user ? null : fail("This tool needs a bearer token. Start the GitHub device flow: POST /auth/device/start, then poll /auth/device/poll."));
   switch (name) {
     case "list_repos": {
-      const sort = (SORTS as readonly string[]).includes(s("sort")) ? (s("sort") as Sort) : "hot";
-      const r = await feed(db, { sort, t: s("t") || undefined, page: Number(a.page ?? 1), tag: s("bucket") || undefined });
+      const r = await feed(db, { sort: parseSort(s("sort")), t: s("t") || undefined, page: Number(a.page ?? 1), tag: s("bucket") || undefined });
       return text({ page: r.page, has_more: r.hasMore, repos: r.rows.map(repoJson) });
     }
     case "search_repos": {

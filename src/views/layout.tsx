@@ -1,7 +1,7 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import type { SessionUser } from "../env";
-import { SORTS, type Sort } from "../lib/db";
+import { visibleSorts, type Sort } from "../lib/db";
 import { Wordmark } from "./art";
 
 export interface PageMeta {
@@ -82,9 +82,10 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             <img src="/favicon.svg" alt="" class="mark" width="28" height="28" /> <Wordmark />
           </a>
           <nav class="tabs">
-            {SORTS.map((s) => (
+            {visibleSorts().map((s) => (
               <a href={s === "upcoming" ? "/upcoming" : `/?sort=${s}`} class={sort === s ? "on" : ""}>{s}</a>
             ))}
+            {user ? <a href="/upvoted" class={url.pathname.startsWith("/upvoted") ? "on" : ""} title="everything you upvoted, newest first">upvoted</a> : null}
             <a href="/queue" class={url.pathname.startsWith("/queue") ? "on" : ""}>queue</a>
             <a href="/best" class={url.pathname.startsWith("/best") ? "on" : ""} title="truffles: what Schnitzel dug up">winners</a>
           </nav>
@@ -106,9 +107,10 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
           </div>
         </header>
         <main class="wrap">{children}</main>
+        {/* Sticky: the feed scrolls for ever (see INFINITE_JS), so the bottom of the document is a place nobody arrives at. */}
         <footer class="foot">
-          <p><strong>Nothing here is a secret. That's the point.</strong></p>
-          <p>
+          <p class="footlinks">
+            <strong>Nothing here is a secret. That's the point.</strong>
             <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
             · <a href="/for-agents">for agents</a>: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
             · <a href="/feed.xml">rss</a>

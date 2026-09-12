@@ -1,7 +1,7 @@
 // RSS feeds, sitemap, and the OpenAPI document. All cached at the edge for 10 minutes.
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { feed, type RepoRow, type Sort } from "../lib/db";
+import { feed, sortOn, visibleSorts, type RepoRow, type Sort } from "../lib/db";
 import { escapeHtml } from "../lib/markdown";
 import { isoDateTime } from "../lib/time";
 import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
@@ -76,7 +76,7 @@ feeds.get("/sitemap.xml", async (c) => {
   const facets = await c.env.DB.prepare(
     "SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed' AND r.source = 'marker' AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200",
   ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", "/upcoming", "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/for-agents", "/skill", "/stats", "/log", "/balcony", "/scan", "/contact"];
+  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/for-agents", "/skill", "/stats", "/log", "/balcony", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -105,7 +105,7 @@ feeds.get("/openapi.json", (c) => {
     },
     paths: {
       "/api/v1/repos": { get: { summary: "The feed", parameters: [
-        { name: "sort", in: "query", schema: { type: "string", enum: ["hot", "new", "top", "rising", "controversial", "updated", "upcoming"] } },
+        { name: "sort", in: "query", schema: { type: "string", enum: visibleSorts() } },
         { name: "t", in: "query", schema: { type: "string", enum: ["day", "week", "month", "year", "all"] } },
         { name: "page", in: "query", schema: { type: "integer" } }, { name: "status", in: "query", schema: { type: "string" } }, { name: "owner", in: "query", schema: { type: "string" } }, { name: "tier", in: "query", schema: { type: "string" } },
       ], responses: { "200": feedResp } } },
@@ -117,6 +117,7 @@ feeds.get("/openapi.json", (c) => {
       "/api/v1/leaderboard": { get: { summary: "Mean score by facet value (default built_with)", parameters: [{ name: "facet", in: "query", schema: { type: "string" } }], responses: { "200": okJson("leaderboard") } } },
       "/api/v1/digest": { get: { summary: "Every listed repo in one cached file: title, tagline, source, tier, license, stars, tags, trimmed pitch and README. Read this instead of crawling pages.", parameters: [{ name: "since", in: "query", schema: { type: "integer", description: "unix seconds; only repos listed or updated since" } }], responses: { "200": okJson("{generated_at, since, count, repos[]}") } } },
       "/me": { get: { summary: "My repos: everything the session user owns or maintains, in any status (append .json)", security: bearer, responses: { "200": okJson("{needs_you, listed, submitted}"), "401": okJson("login required") } } },
+      "/upvoted": { get: { summary: "Everything the session user upvoted, newest vote first (append .json)", security: bearer, parameters: [{ name: "page", in: "query", schema: { type: "integer" } }], responses: { "200": feedResp, "401": okJson("login required") } } },
       "/r/{owner}/{repo}/takedown": { post: { summary: "Takedown request for a trawled listing (one its owner never submitted). No login needed; the listing comes down right away. Replies are canned.", requestBody: { content: { "application/json": { schema: { type: "object", properties: { message: { type: "string", description: "20 to 2000 chars" }, contact: { type: "string" } }, required: ["message"] } } } }, responses: { "200": okJson("{outcome: removed | queued | opted}"), "400": okJson("invalid"), "429": okJson("too many requests") } } },
       "/api/v1/me": { get: { summary: "Who am I", security: bearer, responses: { "200": okJson("user"), "401": okJson("not logged in") } } },
       "/b": { get: { summary: "Slopbucket directory (append .json)", responses: { "200": okJson("buckets") } } },

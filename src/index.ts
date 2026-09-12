@@ -16,6 +16,7 @@ import { scan } from "./routes/scan";
 import { orphanage } from "./routes/orphanage";
 import { agents } from "./routes/agents";
 import { setFlags } from "./lib/flags";
+import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
@@ -99,8 +100,9 @@ ${SITE.manifesto}
 SlopScore is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
 
 ## URLs
-- ${origin}/            the feed. ?sort=hot|new|top|rising|controversial|updated&t=day|week|month|year|all&page=N
-- ${origin}/upcoming    listed repos whose declared status is idea|prototype|works-on-my-machine|alpha
+- ${origin}/            the feed. ?sort=${visibleSorts().filter((s) => s !== "upcoming").join("|")}&t=day|week|month|year|all&page=N
+${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared status is idea|prototype|works-on-my-machine|alpha
+` : ""}- ${origin}/upvoted     everything the logged-in slopsmith upvoted, newest vote first (login)
 - ${origin}/queue       public moderation queue: found-but-not-listed repos with the reason (awaiting scan, AI budget, human review, rejected under a policy)
 - ${origin}/best        award winners (?kind=day|week|upcoming-week&period=YYYY-MM-DD)
 - ${origin}/tools       which AI tool produces the best slop (mean score by built_with)

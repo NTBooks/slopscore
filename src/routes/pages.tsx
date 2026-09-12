@@ -258,7 +258,9 @@ pages.get("/b/:tag", async (c) => {
   const tag = await getTag(c.env.DB, slug);
   if (tag?.banned) return c.text(`b/${slug} is banned: ${tag.banned_reason ?? "out of control"}. See /log.`, 404);
   return feedPage(c, {
-    title: `b/${slug} — ${tag?.title ?? slug} — SlopScore`, heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `AI-generated ${tag?.title?.toLowerCase() ?? `${slug} projects`} — SlopScore`,
+    description: `Vibe-coded ${tag?.title?.toLowerCase() ?? `${slug} projects`}, ranked by humans and agents. Every listing declares how much a model wrote and how much a human touched it, in its own slopscore.md.`,
+    heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     tag: slug, baseUrl: `/b/${slug}`, intro: tag?.blurb ?? `Everything in the ${slug} bucket, by declared slopbucket, category, tag, domain, or GitHub topic.`, extra: { bucket: tag ?? { slug, curated: 0 } },
     empty: `No slop in b/${slug} yet. Be the first slopsmith: slopbucket: [${slug}]`,
   });
@@ -354,7 +356,7 @@ pages.get("/queue", async (c) => {
       "## Needs a human or was rejected", "", ...d.other.map((r) => `- [${r.full_name}](/r/${r.full_name}) — **${r.status}**${r.reject_reason ? `: ${r.reject_reason}` : r.queue_reason ? ` (${r.queue_reason})` : ""}`),
     ].join("\n"),
     html: (d) => (
-      <Layout meta={{ title: "The trough — moderation queue", description: intro }} user={user} url={url} tags={rail.tags}>
+      <Layout meta={{ title: "The trough — what is waiting to be graded — SlopScore", description: intro }} user={user} url={url} tags={rail.tags}>
         <section>
           <h2 style="margin:8px 0">In the trough</h2>
           <p class="muted">{intro}</p>

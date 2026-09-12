@@ -655,6 +655,9 @@ pages.get("/r/:owner/:name", async (c) => {
       html: (d) => <Layout meta={{ title: "Removed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Removed</h2><p><code>{d.full_name}</code> {note}</p><p class="muted">The owner can come back any time by committing a <code>slopscore.md</code> (<a href="/spec">spec</a>).</p></section></Layout>,
     }, 404);
   }
+  // A trawled listing is a page about somebody who never asked to be here. Keep it out of search until its
+  // owner opts in: the header covers .json and .md too, and the HTML head carries the meta tag below.
+  if (r.source === "trawl") c.header("X-Robots-Tag", "noindex, follow");
   c.executionCtx.waitUntil(freshen(c.env, r));
   c.executionCtx.waitUntil(recordView(c.env.DB, r.id, Number(c.env.VIEW_SAMPLE || 1)).catch(() => {}));
   const [tags, cs, awards, versions, mine] = await Promise.all([
@@ -668,7 +671,7 @@ pages.get("/r/:owner/:name", async (c) => {
       comments: d.comments.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === d.repo.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) }),
     md: (d) => repoMd(d.repo, d.tags, d.comments, d.awards),
     html: (d) => (
-      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed", jsonLd: repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
+      <Layout meta={{ title: `${d.repo.title ?? d.repo.name} by ${d.repo.owner} — SlopScore`, description: d.repo.tagline ?? undefined, image: ogImage(d.repo), noindex: d.repo.status !== "listed" || d.repo.source === "trawl", jsonLd: d.repo.source === "trawl" ? undefined : repoJsonLd(url, d.repo, d.tags, d.comments.length) }} user={user} url={url}>
         <RepoPage d={d} />
         <Rail data={{ stats: { listed: 0, queued: 0, users: 0, votes: 0, comments: 0 }, tools: [], tags: [] }} />
       </Layout>

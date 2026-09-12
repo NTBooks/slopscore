@@ -67,7 +67,8 @@ feeds.get("/u/:file", async (c, next) => {
 
 feeds.get("/sitemap.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
-  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
+  // Opted-in listings only: a trawled repo is noindex until its owner commits the file, so it never goes in the sitemap.
+  const repos = await c.env.DB.prepare("SELECT full_name, md_updated_at, listed_at FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY listed_at DESC LIMIT 5000").all<{ full_name: string; md_updated_at: number | null; listed_at: number | null }>().then((r) => r.results ?? []);
   const buckets = await c.env.DB.prepare("SELECT slug FROM tags WHERE banned = 0").all<{ slug: string }>().then((r) => r.results ?? []);
   // owner pages: someone searching their own GitHub handle should land on their listings
   const owners = await c.env.DB.prepare("SELECT DISTINCT owner FROM repos WHERE status = 'listed' AND source = 'marker' ORDER BY owner LIMIT 2000").all<{ owner: string }>().then((r) => r.results ?? []);

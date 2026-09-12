@@ -7,7 +7,7 @@ import type { SlopMeta } from "../lib/slopmd";
 import { CONTAINS_LISTED } from "../lib/vocab";
 import { fuzz } from "../lib/trust";
 import { flagOn } from "../lib/flags";
-import { Flag } from "./art";
+import { Flag, Icon, Caret } from "./art";
 import { isOwnerOf } from "../lib/owner";
 
 export const repoUrl = (r: RepoRow) => `/r/${r.full_name}`;
@@ -31,9 +31,9 @@ export const VoteBox: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
   return (
     <form class={`vote votebox${votable ? "" : " off"}${user ? "" : " anon"}`} method="post" action={`${repoUrl(repo)}/vote`} title={title}>
       {user ? <input type="hidden" name="csrf" value={user.csrf} /> : null}
-      <button name="value" value={mine === 1 ? "0" : "1"} class={`up${mine === 1 ? " on" : ""}`} disabled={!votable} aria-label="upvote">▲</button>
+      <button name="value" value={mine === 1 ? "0" : "1"} class={`up${mine === 1 ? " on" : ""}`} disabled={!votable} aria-label="upvote"><Caret dir="up" /></button>
       <span class="score" title={flagOn("fuzz") ? "weighted, lightly fuzzed" : "weighted"}>{flagOn("fuzz") ? fuzz(repo.score, repo.id) : repo.score}</span>
-      <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote">▼</button>
+      <button name="value" value={mine === -1 ? "0" : "-1"} class={`down${mine === -1 ? " on" : ""}`} disabled={!votable} aria-label="downvote"><Caret dir="down" /></button>
       {flagOn("crowd") && (crowd !== 0 || !user) ? <span class="crowd" title="anonymous crowd votes: shown, never ranking">{crowd > 0 ? `+${crowd}` : crowd} crowd</span> : null}
       {repo.critic_up ? <a class="crowd" href="/about#critics" title="upvotes from SlopScore's disclosed agent critics (accounts on this site, not GitHub accounts), at half weight; awards ignore them">incl. {repo.critic_up} critic{repo.critic_up === 1 ? "" : "s"}</a> : null}
     </form>
@@ -69,31 +69,35 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
       <span class="rank">{rank}</span>
       <VoteBox repo={repo} mine={mine} user={user} />
       {thumb ? <a href={repoUrl(repo)} class="thumbwrap"><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank thumbwrap">🐷</a>}
-      <div>
+      <div class="rowmain">
+        <div class="byline">
+          {showStatus ? <span class={`chip ${repo.status === "rejected" ? "bad" : "warn"}`}>{repo.status}{repo.queue_reason ? ` · ${repo.queue_reason}` : ""}</span> : null}{" "}
+          {gh.owner_avatar ? <img class="byline-avatar" src={gh.owner_avatar} alt="" loading="lazy" referrerpolicy="no-referrer" /> : null}
+          <a href={`/u/${repo.owner}`}>{repo.owner}</a> · {repo.status === "listed" ? <>listed {ago(repo.listed_at)}</> : <>found {ago(repo.first_seen)}</>}
+        </div>
         <div class="title">
           <a href={repoUrl(repo)}>{repo.title ?? repo.name}</a>
         </div>
-        <div class="repolink"><a href={ghUrl(repo)} rel="noopener">github.com/{repo.full_name}</a> <span class="arrow">↗</span></div>
+        <div class="repolink"><a href={ghUrl(repo)} rel="noopener"><Icon name="external" /> github.com/{repo.full_name}</a></div>
         <div class="tagline">{repo.tagline}</div>
         <div class="meta">
           {repo.language ? <span><i class="langdot"></i>{repo.language} · </span> : null}
           ★ {repo.stars} · <Chips repo={repo} />
         </div>
-        <div class="meta">
-          {showStatus ? <span class={`chip ${repo.status === "rejected" ? "bad" : "warn"}`}>{repo.status}{repo.queue_reason ? ` · ${repo.queue_reason}` : ""}</span> : null}{" "}
-          {repo.status === "listed" ? <>listed {ago(repo.listed_at)}</> : <>found {ago(repo.first_seen)}</>} by <a href={`/u/${repo.owner}`}>{repo.owner}</a>
-          {gh.owner_avatar ? null : null} · <a href={`${repoUrl(repo)}#comments`}>{repo.comment_count} comments</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
-          {repo.status === "rejected" && repo.reject_reason ? <div class="muted">✗ {repo.reject_reason}</div> : null}
-          {user && isOwnerOf(repo, user.login, user.id) ? (
-            <div class="ownerline">
-              <span class="chip tier">yours</span>
-              {repo.status === "listed" && repo.tier === "found" && repo.source !== "trawl" ? (
-                <form method="post" action={`${repoUrl(repo)}/owner/submit`} class="inline"><input type="hidden" name="csrf" value={user.csrf} /><button type="submit" class="btn small">Submit for consideration</button></form>
-              ) : repo.source === "trawl" ? <span class="muted">trawled: commit your own slopscore.md to claim it</span> : repo.tier === "submitted" ? <span class="muted">submitted {ago(repo.submitted_at)}</span> : <span class="muted">submit opens once listed</span>}
-              {" "}<a href={repoUrl(repo)} class="muted">manage ›</a>
-            </div>
-          ) : null}
-        </div>
+        {repo.status === "rejected" && repo.reject_reason ? <div class="meta muted">✗ {repo.reject_reason}</div> : null}
+      </div>
+      <div class="actions">
+        <a class="act" href={`${repoUrl(repo)}#comments`}><Icon name="comment" /> {repo.comment_count} <span class="act-label">comment{repo.comment_count === 1 ? "" : "s"}</span></a>
+        <a class="act report" href={`${repoUrl(repo)}#report`}><Flag /> <span class="act-label">report</span></a>
+        {user && isOwnerOf(repo, user.login, user.id) ? (
+          <>
+            <a class="act own" href={repoUrl(repo)}><Icon name="manage" /> manage</a>
+            <span class="chip tier">yours</span>
+            {repo.status === "listed" && repo.tier === "found" && repo.source !== "trawl" ? (
+              <form method="post" action={`${repoUrl(repo)}/owner/submit`} class="inline"><input type="hidden" name="csrf" value={user.csrf} /><button type="submit" class="btn small"><Icon name="rocket" /> Submit for consideration</button></form>
+            ) : repo.source === "trawl" ? <span class="muted small">trawled: commit your own slopscore.md to claim it</span> : repo.tier === "submitted" ? <span class="muted small">submitted {ago(repo.submitted_at)}</span> : <span class="muted small">submit opens once listed</span>}
+          </>
+        ) : null}
       </div>
     </li>
   );

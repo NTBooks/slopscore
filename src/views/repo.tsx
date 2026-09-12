@@ -8,6 +8,7 @@ import type { ScanReport } from "../lib/scan";
 import { POLICY_LABELS } from "../lib/scan";
 import { ago, isoDate } from "../lib/time";
 import { VoteBox, ghUrl, Chips } from "./feed";
+import { Icon, Caret, Flag, type IconName } from "./art";
 import { CONTAINS_LISTED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import type { VulnSummary } from "../lib/osv";
 import { adoptionTemplate } from "../lib/virtual";
@@ -47,12 +48,12 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
         <span class="rank"></span>
         <VoteBox repo={r} mine={d.mine} user={user} />
         {gh.owner_avatar ? <img class="thumb thumbwrap" src={gh.owner_avatar} alt="" referrerpolicy="no-referrer" /> : <span class="thumb blank thumbwrap">🐷</span>}
-        <div>
+        <div class="rowmain">
           <h1>{r.title ?? r.name}</h1>
           <div class="tagline">{r.tagline}</div>
           <div class="openbar">
-            <a class="btn open" href={ghUrl(r)} rel="noopener">Open repo on GitHub ↗</a>
-            {r.demo_url ? <a class="btn open secondary" href={r.demo_url} rel="nofollow noopener">Open the demo ↗</a> : null}
+            <a class="btn open" href={ghUrl(r)} rel="noopener"><Icon name="external" /> Open repo on GitHub</a>
+            {r.demo_url ? <a class="btn open secondary" href={r.demo_url} rel="nofollow noopener"><Icon name="eye" /> Open the demo</a> : null}
             <span class="muted">github.com/{r.full_name}</span>
           </div>
           <div class="sub">
@@ -114,7 +115,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
         <details class="body readmebox">
           <summary>README <span class="muted">— the repo's own words, folded up so the grading fits on one screen</span></summary>
           <div class="readme">{raw(r.readme_html)}</div>
-          <p class="muted"><a href={ghUrl(r)} rel="noopener">Read the rest on GitHub ↗</a></p>
+          <p class="muted"><a href={ghUrl(r)} rel="noopener"><Icon name="external" /> Read the rest on GitHub</a></p>
         </details>
       ) : null}
 
@@ -144,7 +145,7 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       </section>
 
       <details class="reportform" id="report">
-        <summary class="report">report this listing</summary>
+        <summary class="report"><Flag /> report this listing</summary>
         {user ? (
           <form method="post" action={`/r/${r.full_name}/report`}>
             <input type="hidden" name="csrf" value={user.csrf} />
@@ -214,10 +215,10 @@ const ClaimBox: FC<{ r: RepoRow; user: SessionUser | null }> = ({ r, user }) => 
 
 const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
   const canSubmit = r.source !== "trawl" && r.status === "listed" && (r.tier === "found" || (r.submitted_at ?? 0) < Math.floor(Date.now() / 1000) - 180 * 86400);
-  const act = (name: string, label: string, opts: { disabled?: boolean; secondary?: boolean; confirm?: string; title?: string } = {}) => (
+  const act = (name: string, label: string, opts: { disabled?: boolean; secondary?: boolean; confirm?: string; title?: string; icon?: IconName } = {}) => (
     <form class="owner" method="post" action={`/r/${r.full_name}/owner/${name}`} onsubmit={opts.confirm ? `return confirm(${JSON.stringify(opts.confirm)})` : undefined}>
       <input type="hidden" name="csrf" value={user.csrf} />
-      <button type="submit" class={opts.secondary ? "secondary" : ""} disabled={opts.disabled} title={opts.title}>{label}</button>
+      <button type="submit" class={opts.secondary ? "secondary" : ""} disabled={opts.disabled} title={opts.title}>{opts.icon ? <Icon name={opts.icon} /> : null} {label}</button>
     </form>
   );
   return (
@@ -231,8 +232,8 @@ const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
       ) : null}
       {r.status === "listed" ? <BadgeBox r={r} /> : null}
       <p class="muted">Tier: <strong>{r.tier}</strong> · status: <strong>{r.status}</strong>. {r.tier === "found" ? "Votes already count. Submitting makes it a launch and puts it in the running for Slop of the Day." : `Launched ${isoDate(r.submitted_at)}.`}</p>
-      {act("refresh", "Refresh from GitHub", { secondary: true, title: "re-crawl now, re-run every gate" })}
-      {act("submit", "Submit for consideration", { disabled: !canSubmit, title: canSubmit ? "" : r.source === "trawl" ? "commit your own slopscore.md and press Refresh first" : r.status !== "listed" ? "available once listed" : "already submitted in the last 180 days" })}
+      {act("refresh", "Refresh from GitHub", { secondary: true, icon: "refresh", title: "re-crawl now, re-run every gate" })}
+      {act("submit", "Submit for consideration", { icon: "rocket", disabled: !canSubmit, title: canSubmit ? "" : r.source === "trawl" ? "commit your own slopscore.md and press Refresh first" : r.status !== "listed" ? "available once listed" : "already submitted in the last 180 days" })}
       {r.status === "delisted" && r.source === "trawl"
         ? <p class="muted">Removed. To come back, commit a slopscore.md and press Refresh.</p>
         : r.status === "delisted" && r.removed_reason === "owner-request"
@@ -273,11 +274,21 @@ const COPY_JS = "var i=this.previousElementSibling,t=this.textContent;i.select()
 const Comment: FC<{ c: CommentRow; r: RepoRow; user: SessionUser | null; pinned?: boolean; replies: CommentRow[] }> = ({ c, r, user, pinned, replies }) => (
   <div class={`comment${pinned ? " pinned" : ""}`} id={`c${c.id}`}>
     <div class="meta">
-      <a href={`/u/${c.login}`}>{c.login}</a>{c.user_id === r.owner_id ? <span class="maker"> maker</span> : null} · {ago(c.created_at)} · ▲{c.up} ▼{c.down}
+      <a href={`/u/${c.login}`}>{c.login}</a>{c.user_id === r.owner_id ? <span class="maker"> maker</span> : null} · {ago(c.created_at)}
       {pinned ? <span class="muted"> · pinned maker comment</span> : null}
-      {user ? <> · <form class="inline" method="post" action={`/c/${c.id}/vote`}><input type="hidden" name="csrf" value={user.csrf} /><button class="link" name="value" value="1">▲</button> <button class="link" name="value" value="-1">▼</button></form> · <a href={`#reply-${c.id}`} class="muted">reply</a> · <form class="inline" method="post" action={`/c/${c.id}/report`}><input type="hidden" name="csrf" value={user.csrf} /><input type="hidden" name="reason" value="objectionable" /><button class="link report">report</button></form></> : null}
     </div>
     <div class="cbody">{c.deleted_at ? <em class="muted">[deleted]</em> : raw(c.body_html)}</div>
+    <div class="actions cactions">
+      {user ? (
+        <form class="inline cvote" method="post" action={`/c/${c.id}/vote`}>
+          <input type="hidden" name="csrf" value={user.csrf} />
+          <button class="act" name="value" value="1" aria-label="upvote comment"><Caret dir="up" /> {c.up}</button>
+          <button class="act" name="value" value="-1" aria-label="downvote comment"><Caret dir="down" /> {c.down}</button>
+        </form>
+      ) : <span class="act off"><Caret dir="up" /> {c.up} <Caret dir="down" /> {c.down}</span>}
+      {user ? <a class="act" href={`#reply-${c.id}`}><Icon name="comment" /> reply</a> : null}
+      {user ? <form class="inline" method="post" action={`/c/${c.id}/report`}><input type="hidden" name="csrf" value={user.csrf} /><input type="hidden" name="reason" value="objectionable" /><button class="act report"><Flag /> <span class="act-label">report</span></button></form> : null}
+    </div>
     {user && r.status === "listed" ? (
       <details id={`reply-${c.id}`}><summary class="muted">reply</summary>
         <form class="commentform" method="post" action={`/r/${r.full_name}/comments`}>

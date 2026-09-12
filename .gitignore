@@ -8,3 +8,8 @@ scripts/secrets.bat
 
 # local logical backups (scripts/backup.mjs)
 backups/
+
+# mcp-publisher binary and its signing key (never commit the key)
+.tools/
+key.pem
+mcp-registry-auth

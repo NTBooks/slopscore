@@ -135,7 +135,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
               {opts.sort === "top" || opts.sort === "controversial" ? <> · window: {["day", "week", "month", "year", "all"].map((w) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${opts.sort}&t=${w}`} class={w === (opts.t ?? "all") ? "chip ok" : "chip"}>{w}</a>)}</> : null}
             </div>
           ) : null}
-          <FeedList rows={d.rows} page={d.page} hasMore={d.hasMore} votes={d.votes} user={user} baseUrl={opts.hideSorts ? opts.baseUrl : opts.baseUrl + (opts.baseUrl.includes("?") ? "&" : "?") + `sort=${opts.sort}${opts.t ? `&t=${opts.t}` : ""}`} empty={opts.empty} showStatus={opts.showStatus} />
+          <FeedList rows={d.rows} page={d.page} hasMore={d.hasMore} votes={d.votes} user={user} baseUrl={opts.hideSorts ? opts.baseUrl : opts.baseUrl + (opts.baseUrl.includes("?") ? "&" : "?") + `sort=${opts.sort}${opts.t ? `&t=${opts.t}` : ""}`} empty={opts.empty} showStatus={opts.showStatus} markTrawl={!opts.upvotedBy} />
         </section>
         <Rail data={rail} />
       </Layout>

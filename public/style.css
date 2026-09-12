@@ -106,12 +106,24 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 details.reportform { display: inline; } details.reportform summary { display: inline; cursor: pointer; list-style: none; } details.reportform form { display: inline-flex; gap: 4px; margin-left: 6px; }
 .pager { padding: 10px 0; display: flex; gap: 12px; }
 .ownerline { margin-top: 4px; display: flex; gap: 8px; align-items: center; font-size: 11px; } .btn.small { padding: 2px 8px; font-size: 11px; }
+/* The line where the Cap'm's trawl starts: a hairline, a small label, and the story only if it is asked for.
+   Quiet on purpose — it separates the feed, it does not interrupt it. */
+.feed .netline { list-style: none; padding: 14px 0 4px; }
+.feed .netline > details { font-size: 11px; color: var(--muted); }
+.feed .netline summary { display: flex; align-items: center; gap: 8px; cursor: help; list-style: none; text-transform: uppercase; letter-spacing: .08em; }
+.feed .netline summary::-webkit-details-marker { display: none; }
+/* Dashed and in currentColor so it reads as a boundary rather than another row border, and brightens with the label. */
+.feed .netline summary::after { content: ""; flex: 1; border-top: 1px dashed currentColor; opacity: .45; }
+.feed .netline summary:hover, .feed .netline[open] summary { color: var(--fg); }
+.feed .netline summary:hover::after, .feed .netline[open] summary::after { opacity: .3; }
+.feed .netline .netnote { margin: 6px 0 2px; font-size: 12px; line-height: 1.5; max-width: 68ch; }
+
 .empty { padding: 26px; text-align: center; color: var(--muted); font-style: italic; font-family: var(--serif); font-size: 14px; }
 
 /* Touch targets. Scoped to coarse pointers so a mouse keeps the dense list: 44px rows everywhere would cost
    about a third of the feed's rows-per-screen, and that density is the point of a leaderboard. */
 @media (pointer: coarse) {
-  .act, .votebox button, .tabs a, .pager a, .who a, details.reportform summary, .readmebox > summary { min-height: 44px; }
+  .act, .votebox button, .tabs a, .pager a, .who a, details.reportform summary, .readmebox > summary, .feed .netline summary { min-height: 44px; }
   .act, .tabs a, .pager a, details.reportform summary, .readmebox > summary { display: inline-flex; align-items: center; gap: 6px; }
   .votebox button { min-width: 44px; display: grid; place-items: center; }
   .rail ul li { padding: 3px 0; } .foot a { display: inline-block; padding: 4px 0; }

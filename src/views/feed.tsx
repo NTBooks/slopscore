@@ -61,6 +61,19 @@ export const Chips: FC<{ repo: RepoRow; full?: boolean }> = ({ repo, full }) => 
   );
 };
 
+/** The one line in the feed where opted-in listings end and the Cap'm's trawl begins. Hover for the whole
+ *  story, or click: it is a <details>, so the explanation costs no script and no room until it is wanted. */
+const TRAWL_NOTE = "The Cap'm's net dragged everything below this line out of public GitHub: nobody submitted it, and he wrote the paperwork himself from what the owner already said. Trawled listings sort under every repo that opted in, stay out of the RSS feed, and can't win awards. An owner can claim one with a slopscore.md of their own, or have it removed in a click.";
+
+export const NetLine: FC = () => (
+  <li class="netline">
+    <details>
+      <summary title={TRAWL_NOTE}>the trawling net</summary>
+      <p class="netnote">{TRAWL_NOTE} <a href="/about">How the trawl works</a>.</p>
+    </details>
+  </li>
+);
+
 export const FeedRow: FC<{ repo: RepoRow; mine: number; user: SessionUser | null; showStatus?: boolean }> = ({ repo, mine, user, showStatus }) => {
   const thumb = thumbUrl(repo);
   const gh = parseJson<{ owner_avatar?: string }>(repo.gh, {});
@@ -102,13 +115,17 @@ export const FeedRow: FC<{ repo: RepoRow; mine: number; user: SessionUser | null
   );
 };
 
-export const FeedList: FC<{ rows: RepoRow[]; page: number; hasMore: boolean; votes: Map<number, number>; user: SessionUser | null; baseUrl: string; empty?: string; showStatus?: boolean }> = ({ rows, page, hasMore, votes, user, baseUrl, empty, showStatus }) => {
+export const FeedList: FC<{ rows: RepoRow[]; page: number; hasMore: boolean; votes: Map<number, number>; user: SessionUser | null; baseUrl: string; empty?: string; showStatus?: boolean; markTrawl?: boolean }> = ({ rows, page, hasMore, votes, user, baseUrl, empty, showStatus, markTrawl }) => {
   const sep = baseUrl.includes("?") ? "&" : "?";
+  // Every feed sort puts opted-in repos above trawled ones (feedOrder in lib/db), so the first trawled row on the
+  // page is the boundary and one line marks it. Off by default: the lists that are all trawl already say so in a
+  // heading of their own, and a vote-ordered feed interleaves the two kinds, where a line would be a lie.
+  const netAt = markTrawl ? rows.findIndex((r) => r.source === "trawl") : -1;
   return (
     <>
       {rows.length === 0 ? <div class="empty">{empty ?? "No slop yet. Suspicious."}</div> : null}
       <ol class="feed">
-        {rows.map((r) => <FeedRow repo={r} mine={votes.get(r.id) ?? 0} user={user} showStatus={showStatus} />)}
+        {rows.map((r, i) => <>{i === netAt ? <NetLine /> : null}<FeedRow repo={r} mine={votes.get(r.id) ?? 0} user={user} showStatus={showStatus} /></>)}
       </ol>
       {(page > 1 || hasMore) ? (
         <div class="pager">

@@ -5,6 +5,9 @@
   --accent: #e8669a; --accent-2: #c94a7c; --goo: #8a5a30; --goo-2: #5c3a1c;
   --up: #e8669a; --down: #7a6cd6; --link: #8a4a2a; --visited: #a06a9a;
   --chip: #f3dde2; --chip-fg: #5c3a3a; --warn: #fbe9c8; --bad: #f9d0d4; --ok: #dff0d2;
+  /* Filled buttons and other accent-on-accent text. White reads on the light theme's deep rose; the dark
+     theme's accent is a pale pink, where white lands at 2.1:1 and the deep brown at 7.5:1. */
+  --btn-fg: #fff; --btn-sh: 0 1px 0 rgba(0,0,0,.15);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: verdana, "Segoe UI", arial, helvetica, sans-serif;
   --serif: Georgia, "Times New Roman", serif;
@@ -15,6 +18,7 @@
     --accent: #ff8fb5; --accent-2: #ffb0c9; --goo: #c99a63; --goo-2: #a3703f;
     --up: #ff8fb5; --down: #9d93ff; --link: #e6b08a; --visited: #d1a3c6;
     --chip: #2f2122; --chip-fg: #e2cfd2; --warn: #3f2e14; --bad: #452022; --ok: #1e3320;
+    --btn-fg: #3a1520; --btn-sh: 0 1px 0 rgba(255,255,255,.22);
   }
 }
 * { box-sizing: border-box; }
@@ -43,13 +47,13 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .tabs { display: flex; flex-wrap: wrap; gap: 2px; } .tabs a { text-transform: lowercase; padding: 3px 7px; color: var(--muted); border-bottom: 2px solid transparent; } .tabs a.on { color: var(--accent); font-weight: bold; border-bottom-color: var(--accent); }
 .onphone { display: none; }
 .search { display: flex; gap: 4px; flex: 1; min-width: 220px; } .search input { flex: 1; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); font: inherit; }
-.search button, .btn, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--accent); color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.15); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
+.search button, .btn, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--accent); color: var(--btn-fg); text-shadow: var(--btn-sh); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
 .btn.secondary, form.owner button.secondary { background: var(--panel); color: var(--fg); border-color: var(--line); font-weight: normal; }
 .btn[disabled], form.owner button[disabled] { opacity: .5; cursor: not-allowed; }
 .who { display: flex; gap: 10px; align-items: center; margin-left: auto; } .avatar { width: 18px; height: 18px; border-radius: 3px; vertical-align: middle; }
 .who .mod { color: var(--accent); font-weight: bold; }
 .login { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--goo-2); color: #fff !important; border-radius: 5px; font-weight: bold; border: 1px solid var(--fg); white-space: nowrap; }
-.login:hover { text-decoration: none; background: var(--accent); border-color: var(--accent-2); color: #fff !important; }
+.login:hover { text-decoration: none; background: var(--accent); border-color: var(--accent-2); color: var(--btn-fg) !important; }
 .login { border-color: var(--goo-2); }
 .login svg { width: 16px; height: 16px; fill: currentColor; }
 
@@ -458,7 +462,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .sloptest fieldset.q[hidden] { display: none; }
 .sloptest fieldset.q legend { font-family: var(--serif); font-size: 17px; padding: 0 6px; }
 .sloptest fieldset.q legend .n { display: inline-block; min-width: 19px; height: 19px; line-height: 19px; text-align: center; border-radius: 50%;
-  background: var(--accent); color: #fff; font-family: var(--sans); font-size: 11px; font-weight: bold; margin-right: 5px; vertical-align: 1px; }
+  background: var(--accent); color: var(--btn-fg); font-family: var(--sans); font-size: 11px; font-weight: bold; margin-right: 5px; vertical-align: 1px; }
 .sloptest .opt { display: flex; gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 3px; cursor: pointer; font-size: 14px; }
 .sloptest .opt:hover { background: var(--panel-2); }
 .sloptest .opt input { margin: 0; accent-color: var(--accent); flex: none; }

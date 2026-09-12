@@ -94,7 +94,7 @@ feeds.get("/sitemap.xml", async (c) => {
   const facets = await c.env.DB.prepare(
     `SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed'${onlyOptedInR} AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200`,
   ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/spec", "/disclosure", "/for-agents", "/skill", "/trends", "/stats", "/log", "/balcony", "/scan", "/contact"];
+  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/but-is-it-slop", "/spec", "/disclosure", "/for-agents", "/skill", "/trends", "/stats", "/log", "/balcony", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

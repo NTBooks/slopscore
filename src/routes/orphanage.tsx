@@ -18,7 +18,7 @@ const INTAKE = [
 ];
 
 const FAQ: [string, string][] = [
-  ["Is my repo an orphan?", "If you haven't opened it since the demo worked, yes. If you opened it and closed it again quickly, also yes."],
+  ["Is my repo an orphan?", "If you haven't opened it since the demo worked, yes. If you opened it and closed it again quickly, also yes. There is a questionnaire if you want it in writing."],
   ["What if it's actually good?", "Then it's a diamond in the rough, and the rough is the only place anyone looks for diamonds. That's the whole premise of the house."],
   ["Do you turn anyone away?", "Only for missing paperwork. We ask every intake where it came from and how much of it a human touched. Nobody is turned away for the answer, only for not answering."],
   ["Can I adopt one?", "Log in with GitHub, upvote it, leave a comment, fork it. Most of them are MIT. Take one home. It won't notice."],
@@ -64,6 +64,7 @@ orphanage.get("/", (c) => {
         </ol>
         <pre>{MINIMAL_EXAMPLE.trim()}</pre>
         <p class="muted">That's the whole file. Name, description, language, stars, and README come from GitHub. <a href="/spec">Full spec</a> · impatient? <a href="/scan">/scan</a> checks a repo right now and says in words why it was or wasn't taken in.</p>
+        <p class="muted">Not sure yours qualifies? <a href="/but-is-it-slop">Seven questions</a> and the house will tell you, then hand you the file with your answers already in it.</p>
 
         <h2>House rules</h2>
         <ul class="rules">

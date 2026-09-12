@@ -17,6 +17,7 @@ import { scan } from "./routes/scan";
 import { orphanage } from "./routes/orphanage";
 import { agents } from "./routes/agents";
 import { disclosure } from "./routes/disclosure";
+import { quiz } from "./routes/quiz";
 import { setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
@@ -66,6 +67,8 @@ app.route("/contact", contact);
 app.route("/scan", scan);
 app.route("/orphanage", orphanage);
 app.route("/home", orphanage);
+app.route("/but-is-it-slop", quiz);
+app.route("/is-it-slop", quiz);
 app.route("/", agents);
 app.route("/", disclosure);
 app.route("/", pages);
@@ -135,6 +138,7 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
 - ${origin}/trends      what the corpus looks like from a distance: languages, tools, categories, and what the trawl threw back, counted nightly and split into the trawled sample and the self-selected opted-in one. .json is the whole snapshot as data
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
+- ${origin}/but-is-it-slop  a seven-question questionnaire for a human who is not sure whether their own repo counts. Ends with a slopscore.md drafted from the answers
 - ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}

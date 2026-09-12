@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+<defs><linearGradient id="ogbg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbf7ef"/><stop offset="1" stop-color="#f1e6d2"/></linearGradient></defs>
+<rect width="1200" height="630" fill="url(#ogbg)"/>
+<g transform="translate(60 20) scale(0.98)">
+<!-- LIGHT: upper-left, ~10 o'clock. Emissive parts ignore it. -->
+<defs>
+  <filter id="b2"  x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="2"/></filter>
+  <filter id="b4"  x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="4"/></filter>
+  <filter id="b8"  x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="8"/></filter>
+  <filter id="b16" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="16"/></filter>
+  <filter id="b30" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="30"/></filter>
+  <filter id="b56" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="56"/></filter>
+  <filter id="grain" x="0%" y="0%" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>
+    <feColorMatrix type="saturate" values="0"/></filter>
+
+<radialGradient id="pk" gradientUnits="userSpaceOnUse" cx="300" cy="300" r="200" fx="236" fy="220"><stop offset="0" stop-color="#ffd1de"/><stop offset="0.3" stop-color="#ff9fbd"/><stop offset="0.62" stop-color="#f2739c"/><stop offset="0.86" stop-color="#d4507e"/><stop offset="1" stop-color="#e8669a"/></radialGradient>
+<radialGradient id="sn" gradientUnits="userSpaceOnUse" cx="300" cy="346" r="90" fx="272" fy="322"><stop offset="0" stop-color="#ffb8cf"/><stop offset="0.5" stop-color="#f27aa6"/><stop offset="1" stop-color="#c94a7c"/></radialGradient>
+<radialGradient id="er" gradientUnits="userSpaceOnUse" cx="300" cy="120" r="180" fx="240" fy="90"><stop offset="0" stop-color="#ff9fbd"/><stop offset="0.6" stop-color="#e8669a"/><stop offset="1" stop-color="#c94a7c"/></radialGradient>
+<radialGradient id="mud" gradientUnits="userSpaceOnUse" cx="304" cy="420" r="50" fx="290" fy="410"><stop offset="0" stop-color="#b98a5a"/><stop offset="0.35" stop-color="#8a5a30"/><stop offset="0.7" stop-color="#5c3a1c"/><stop offset="1" stop-color="#7a4d26"/></radialGradient>
+<path id="p-head" d="M 300 108 C 412 108 486 190 486 300 C 486 412 404 492 300 492 C 196 492 114 412 114 300 C 114 190 188 108 300 108 Z"/><clipPath id="c-head"><use href="#p-head"/></clipPath>
+<path id="p-snout" d="M 300 292 C 356 292 386 320 386 350 C 386 382 350 402 300 402 C 250 402 214 382 214 350 C 214 320 244 292 300 292 Z"/><clipPath id="c-snout"><use href="#p-snout"/></clipPath>
+<path id="p-mud" d="M 262 404 C 256 424 276 440 296 436 C 306 448 322 442 328 432 C 344 438 356 424 348 404 C 322 412 288 412 262 404 Z"/><clipPath id="c-mud"><use href="#p-mud"/></clipPath>
+<linearGradient id="m-litH-r" gradientUnits="userSpaceOnUse" x1="114" y1="108" x2="486" y2="492" ><stop offset="0.34" stop-color="#fff"/><stop offset="0.84" stop-color="#000"/></linearGradient><mask id="m-litH"><rect width="600" height="600" fill="url(#m-litH-r)"/></mask><linearGradient id="m-rimH-r" gradientUnits="userSpaceOnUse" x1="114" y1="108" x2="486" y2="492" ><stop offset="0.34" stop-color="#000"/><stop offset="0.84" stop-color="#fff"/></linearGradient><mask id="m-rimH"><rect width="600" height="600" fill="url(#m-rimH-r)"/></mask>
+<linearGradient id="m-litS-r" gradientUnits="userSpaceOnUse" x1="214" y1="292" x2="386" y2="402" ><stop offset="0.34" stop-color="#fff"/><stop offset="0.84" stop-color="#000"/></linearGradient><mask id="m-litS"><rect width="600" height="600" fill="url(#m-litS-r)"/></mask><linearGradient id="m-rimS-r" gradientUnits="userSpaceOnUse" x1="214" y1="292" x2="386" y2="402" ><stop offset="0.34" stop-color="#000"/><stop offset="0.84" stop-color="#fff"/></linearGradient><mask id="m-rimS"><rect width="600" height="600" fill="url(#m-rimS-r)"/></mask>
+<linearGradient id="m-litM-r" gradientUnits="userSpaceOnUse" x1="256" y1="402" x2="358" y2="448" ><stop offset="0.34" stop-color="#fff"/><stop offset="0.84" stop-color="#000"/></linearGradient><mask id="m-litM"><rect width="600" height="600" fill="url(#m-litM-r)"/></mask><linearGradient id="m-rimM-r" gradientUnits="userSpaceOnUse" x1="256" y1="402" x2="358" y2="448" ><stop offset="0.34" stop-color="#000"/><stop offset="0.84" stop-color="#fff"/></linearGradient><mask id="m-rimM"><rect width="600" height="600" fill="url(#m-rimM-r)"/></mask>
+</defs>
+
+<g style="isolation:isolate">
+
+  <path d="M 160 176 C 150 132 168 96 192 84 C 214 92 236 118 246 150 C 210 152 182 162 160 176 Z" fill="url(#er)"/><path d="M 440 176 C 450 132 432 96 408 84 C 386 92 364 118 354 150 C 390 152 418 162 440 176 Z" fill="url(#er)"/>
+  <path d="M 178 168 C 176 142 186 118 200 106 C 212 116 224 134 230 150 Z" fill="#ff8fb5" opacity=".7"/>
+  <path d="M 422 168 C 424 142 414 118 400 106 C 388 116 376 134 370 150 Z" fill="#ff8fb5" opacity=".7"/>
+  <use href="#p-head" fill="url(#pk)"/>
+  <g clip-path="url(#c-head)"><ellipse cx="384" cy="386" rx="167" ry="211" fill="#8a2a55" opacity="0.4" filter="url(#b56)" style="mix-blend-mode:multiply"/><g mask="url(#m-litH)"><use href="#p-head" fill="none" stroke="#fff" stroke-width="42" filter="url(#b16)" opacity=".5"/></g><ellipse cx="236" cy="210" rx="74" ry="46" fill="#fff" opacity="0.5" filter="url(#b8)" transform="rotate(-30 236 210)"/><ellipse cx="214" cy="196" rx="20" ry="10" fill="#fff" opacity=".95" filter="url(#b2)" transform="rotate(-30 214 196)"/><g mask="url(#m-rimH)"><use href="#p-head" fill="none" stroke="#ffd8e6" stroke-width="21" filter="url(#b4)" opacity="0.75"/></g></g>
+  <g clip-path="url(#c-head)">
+    <ellipse cx="196" cy="352" rx="40" ry="24" fill="#ff5f8f" opacity=".35" filter="url(#b16)"/>
+    <ellipse cx="404" cy="352" rx="40" ry="24" fill="#ff5f8f" opacity=".35" filter="url(#b16)"/>
+  </g>
+  <g clip-path="url(#c-head)"><use href="#p-snout" fill="#8a2a55" opacity="0.45" filter="url(#b16)" style="mix-blend-mode:multiply" transform="translate(3,8)"/></g>
+  <use href="#p-snout" fill="url(#sn)"/>
+  <g clip-path="url(#c-snout)"><ellipse cx="339" cy="370" rx="77" ry="59" fill="#8a2a55" opacity="0.45" filter="url(#b56)" style="mix-blend-mode:multiply"/><g mask="url(#m-litS)"><use href="#p-snout" fill="none" stroke="#fff" stroke-width="19" filter="url(#b16)" opacity=".5"/></g><ellipse cx="262" cy="318" rx="34" ry="16" fill="#fff" opacity="0.5" filter="url(#b8)" transform="rotate(-20 262 318)"/><ellipse cx="250" cy="312" rx="10" ry="5" fill="#fff" opacity=".95" filter="url(#b2)" transform="rotate(-30 250 312)"/><g mask="url(#m-rimS)"><use href="#p-snout" fill="none" stroke="#ffd8e6" stroke-width="9" filter="url(#b4)" opacity="0.75"/></g></g>
+  <ellipse cx="270" cy="350" rx="14" ry="18" fill="#8a2a55"/><ellipse cx="330" cy="350" rx="14" ry="18" fill="#8a2a55"/>
+  <ellipse cx="266" cy="344" rx="4" ry="5" fill="#ff9fbd" opacity=".6"/><ellipse cx="326" cy="344" rx="4" ry="5" fill="#ff9fbd" opacity=".6"/>
+  <ellipse cx="228" cy="258" rx="16" ry="19" fill="#2a1420"/><ellipse cx="372" cy="258" rx="16" ry="19" fill="#2a1420"/>
+  <circle cx="223" cy="251" r="5" fill="#fff" opacity=".9"/><circle cx="367" cy="251" r="5" fill="#fff" opacity=".9"/>
+  <path d="M 313.5 438.6 L 313.9 439.8 L 314.3 441.0 L 314.6 442.3 L 314.9 443.5 L 315.2 444.8 L 315.5 446.1 L 315.8 447.5 L 316.1 448.8 L 316.3 450.2 L 316.5 451.6 L 316.8 453.0 L 316.9 454.4 L 317.1 455.9 L 317.3 457.4 L 317.4 458.9 L 317.6 460.4 L 317.7 462.0 L 317.8 463.5 L 317.9 465.1 L 317.9 466.7 L 318.0 468.4 L 318.0 470.0 L 318.0 470.0 L 318.4 468.4 L 318.7 466.8 L 319.1 465.2 L 319.4 463.6 L 319.7 462.1 L 320.0 460.5 L 320.3 459.0 L 320.6 457.5 L 320.8 456.0 L 321.0 454.5 L 321.2 453.0 L 321.4 451.5 L 321.6 450.1 L 321.8 448.6 L 321.9 447.2 L 322.1 445.7 L 322.2 444.3 L 322.3 442.9 L 322.3 441.5 L 322.4 440.1 L 322.4 438.7 L 322.5 437.4 Z" fill="url(#mud)"/>
+  <use href="#p-mud" fill="url(#mud)"/>
+  <g clip-path="url(#c-mud)"><ellipse cx="325" cy="432" rx="41" ry="24" fill="#2a1608" opacity="0.5" filter="url(#b56)" style="mix-blend-mode:multiply"/><g mask="url(#m-litM)"><use href="#p-mud" fill="none" stroke="#fff" stroke-width="10" filter="url(#b16)" opacity=".5"/></g><ellipse cx="284" cy="412" rx="18" ry="8" fill="#fff" opacity="0.55" filter="url(#b8)" transform="rotate(-20 284 412)"/><ellipse cx="278" cy="410" rx="6" ry="3" fill="#fff" opacity=".95" filter="url(#b2)" transform="rotate(-30 278 410)"/><g mask="url(#m-rimM)"><use href="#p-mud" fill="none" stroke="#e8c79a" stroke-width="5" filter="url(#b4)" opacity="0.75"/></g></g>
+  <ellipse cx="318" cy="466" rx="4" ry="2.5" fill="#e8c79a" opacity=".7"/>
+
+
+</g>
+</g>
+<g transform="translate(620 132)">
+  <text x="0" y="56" font-family="Georgia, 'Times New Roman', serif" font-size="66" font-weight="bold" fill="#1a1a1a">But is it</text>
+  <text x="0" y="132" font-family="Georgia, 'Times New Roman', serif" font-size="66" font-weight="bold" fill="#1a1a1a">slop <tspan fill="#c94a7c">though?</tspan></text>
+  <text x="2" y="196" font-family="system-ui, Segoe UI, Arial, sans-serif" font-size="26" fill="#6b6b6b">Seven questions. Forty seconds. No login.</text>
+  <text x="2" y="236" font-family="system-ui, Segoe UI, Arial, sans-serif" font-size="26" fill="#6b6b6b">Every honest answer lands in the trough.</text>
+  <text x="2" y="316" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="22" fill="#6b6b6b">did you read it? &#8594; do you know the language?</text>
+  <text x="2" y="372" font-family="system-ui, Segoe UI, Arial, sans-serif" font-size="22" fill="#8a5a30">slopscore.org/but-is-it-slop</text>
+</g>
+</svg>

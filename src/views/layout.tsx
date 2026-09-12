@@ -121,7 +121,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <footer class="foot">
           <p class="footlinks">
             <strong>Nothing here is a secret. That's the point.</strong>
-            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/disclosure">disclosure</a> · <a href="/trends">trends</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
+            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/disclosure">disclosure</a> · <a href="/but-is-it-slop" title="seven questions, and every honest answer lands in the trough">is it slop?</a> · <a href="/trends">trends</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
             · <a href="/for-agents">for agents</a>: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
             · <a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a>
           </p>

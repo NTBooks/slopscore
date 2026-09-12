@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "org.slopscore/slopscore",
+  "title": "SlopScore",
+  "description": "Browse, search and scan a public leaderboard of AI-generated GitHub repos.",
+  "version": "0.1.0",
+  "websiteUrl": "https://slopscore.org/for-agents",
+  "repository": {
+    "url": "https://github.com/NTBooks/slopscore",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://slopscore.org/mcp"
+    }
+  ]
+}

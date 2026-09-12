@@ -1,4 +1,4 @@
-# Cap'm Slop: master of the Scuttle, proprietor of the Cap'm's Home for AI Slop. Schnitzel's kin, head-only avatar.
+# Cap'm Slop: master of the Sloptrawler, proprietor of the Cap'm's Home for AI Slop. Schnitzel's kin, head-only avatar.
 # LIGHT: upper-left (10 o'clock). Airbrush register. Built from mascot.head() so the two read as one family:
 # same head mass, same droopy eyes, same collar shape, same slop smear. The only additions are soft sub-forms.
 # components: navy peacoat collar · 2 ears · head · 2 cheeks · snout w/ nostrils · droopy eyes, one brow raised · smirk

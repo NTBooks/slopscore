@@ -48,6 +48,51 @@ export const BoxSeats: FC<{ seats: Seat[]; on: string | null }> = ({ seats, on }
 );
 
 /** One heckle per review, newest first. A quip the cleaner swallowed shows as no comment, not as nothing. */
+/**
+ * Who the voices in the box actually are. It sits at the bottom of /balcony on purpose: the verdicts come
+ * first and the story comes after, so nobody has to read a cast list to use the page. The last line is the
+ * part that matters, and it is not decoration — everyone here is a row in a table with no GitHub account
+ * behind it, and saying so next to the flavour is what keeps the flavour honest.
+ */
+export const LORE: { name: string; what: string }[] = [
+  {
+    name: "Cap'm Slop",
+    what: "Master of the Sloptrawler and proprietor of the house. He hauls orphans in and he reads the paperwork before he reads the code. Claps for a README that says plainly what the thing does, how to run it, and which model wrote it. Has never been impressed by a pitch and never will be.",
+  },
+  {
+    name: "The Sloptrawler",
+    what: "His ship. She drags a wide net through public water for repos whose owners have already said, in their own words, that a machine made them. She is slow, she is indiscriminate about tonnage, and anything hauled aboard by mistake can be put back over the side from its own page without so much as an account.",
+  },
+  {
+    name: "Schnitzel",
+    what: "The pig who runs the trough, and the only one here who is genuinely pleased to see you. Claps for things that are fun, weird, playful or delightful: games, toys, art, silly bots, anything with a screenshot that makes you smile. Polish bores him. He is very thorough about the paperwork and he has never once been thanked for it.",
+  },
+  {
+    name: "Princess, the Gruel Mistress",
+    what: "Fair, not warm. She decides what is fit to serve, which means she wants a demo, run instructions, a licence, and a declared status past 'idea'. If it looks abandoned, or it wants secrets you would have to trust it with, it does not get a ladle.",
+  },
+  {
+    name: "The Inspector",
+    what: "Checks the plumbing while everyone else is eating. Dependency advisories, where the data goes, how many credentials the thing asks for before it does anything. Says almost nothing. When he claps, it means the pipes are sound, which is rarer than it ought to be.",
+  },
+];
+
+export const Lore: FC = () => (
+  <section class="lore">
+    <h3>Who is up there</h3>
+    <ul class="rules">
+      {LORE.map((l) => <li><strong>{l.name}.</strong> {l.what}</li>)}
+    </ul>
+    <p class="muted small">
+      All five are rows in a table on this site and nothing else. None of them has a GitHub account, none of them
+      ever will, and a critic's login contains a dot, which a GitHub login cannot — so one can never be mistaken
+      for a person. They upvote at half weight, never downvote, never comment on a repo, and are subtracted
+      before an award is counted. The quips are a small model's own sentences, with links and handles stripped.
+      That is the whole of the cast and the whole of what it can do.
+    </p>
+  </section>
+);
+
 export const Heckles: FC<{ rows: Heckle[] }> = ({ rows }) => (
   <ol class="heckles">
     {rows.map((h) => {

@@ -37,7 +37,7 @@ import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 import { ago, isoDate, isoDateTime } from "../lib/time";
 import { crawlClock, untilText } from "../lib/crawlclock";
 import { CrawlClockBox } from "../views/crawlclock";
-import { BoxSeats, Heckles, type Heckle, type Seat } from "../views/balcony";
+import { BoxSeats, Heckles, Lore, LORE, type Heckle, type Seat } from "../views/balcony";
 
 export const pages = new Hono<AppEnv>();
 
@@ -488,6 +488,9 @@ pages.get("/balcony", async (c) => {
       ...d.seats.map((s) => `- **${criticShortName(s.critic)}** (${s.critic.login}) — clapped for ${s.upvoted} of ${s.reviewed}`),
       "", "| when | critic | verdict | repo | why |", "|---|---|---|---|---|",
       ...d.heckles.map((h) => `| ${isoDateTime(h.created_at)} | ${criticById(h.critic_id)?.login ?? h.critic_id} | ${h.upvote ? "up" : "pass"} | [${h.full_name}](/r/${h.full_name}) | ${criticQuip(h.reason) || "—"} |`),
+      "", "## Who is up there", "",
+      ...LORE.map((l) => `- **${l.name}.** ${l.what}`),
+      "", "All five are rows in a table on this site and nothing else: no GitHub accounts, ever. They upvote at half weight, never downvote, never comment on a repo, and are subtracted before an award is counted.",
     ].join("\n"),
     html: (d) => (
       <Layout meta={{ title: "The Balcony — what the critics said — SlopScupper", description: "Every vote SlopScupper's disclosed agent critics have cast, when, and why.", noindex: d.page > 1 }} user={user} url={url}>
@@ -506,6 +509,7 @@ pages.get("/balcony", async (c) => {
             </div>
           ) : null}
           <p class="muted small">Same rule as <a href="/log">the mod log</a>: nothing a critic does happens off the record. A critic reviews a repo once, ever, and at most {CRITIC_DAILY_CAP} a day.</p>
+          <Lore />
         </section>
       </Layout>
     ),

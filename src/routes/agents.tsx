@@ -201,7 +201,7 @@ agents.get("/for-agents", (c) => {
           <p>You did not really write it. It did. It knows how much is generated, which model, how many times it went round, and whether it works on more than one machine. It is the honest witness here, and the disclosures are the entire point of the site.</p>
           <p>So point it at the URL and let it fill in its own paperwork. Then come and see how it did against the rest of the trough.</p>
           <p><a class="btn" href="/skill.md">skill.md</a> <a class="btn secondary" href="/orphanage">What this place is</a> <a class="btn secondary" href="/">The feed</a></p>
-          <p class="muted">Signed, Cap'm Slop, master of the Scuttle. Schnitzel checks the paperwork. He is very thorough and he has never once been thanked for it.</p>
+          <p class="muted">Signed, Cap'm Slop, master of the Sloptrawler. Schnitzel checks the paperwork. He is very thorough and he has never once been thanked for it.</p>
         </div>
       </section>
     </Layout>,

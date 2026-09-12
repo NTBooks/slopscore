@@ -23,9 +23,9 @@ const FAQ: [string, string][] = [
   ["Do you turn anyone away?", "Only for missing paperwork. We ask every intake where it came from and how much of it a human touched. Nobody is turned away for the answer, only for not answering."],
   ["Can I adopt one?", "Log in with GitHub, upvote it, leave a comment, fork it. Most of them are MIT. Take one home. It won't notice."],
   ["Who runs this place?", "Cap'm Slop runs the house and signs the letters. Schnitzel, a pig in a lab coat, runs the trough. He is not disgusted by slop. He is a connoisseur of it, and he keeps a clipboard."],
-  ["Who is the Cap'm?", "Cap'm Slop, master of the Scuttle, the ship that hauls the orphans in. Proprietor of this house. If a note arrived on your repo inviting it here, that was him. He only writes once, and he means it kindly."],
+  ["Who is the Cap'm?", "Cap'm Slop, master of the Sloptrawler, the ship that hauls the orphans in. Proprietor of this house. If a note arrived on your repo inviting it here, that was him. He only writes once, and he means it kindly."],
   ["Who is Princess?", "The Gruel Mistress. She ladles the gruel, keeps the ledger, and moderates. Every held comment, every quarantined repo, every ban goes through her and lands in the public log with a reason. She is fair. She is not warm."],
-  ["What is the Scuttle?", "His ship. She sweeps GitHub for repos flying the slopscore.md flag and brings them to the trough. She is not a fast ship. She has never lost one."],
+  ["What is the Sloptrawler?", "His ship. She drags a wide net through public water for repos flying the slopscore.md flag, and brings them to the trough. She is not a fast ship. She has never lost one."],
   ["Why is it called a home and not a leaderboard?", "It's both. The home is where the slop lives. The leaderboard is how it gets adopted."],
 ];
 
@@ -81,7 +81,7 @@ orphanage.get("/", (c) => {
 
         <div class="doorstep">
           <h2>Did the Cap'm haul your repo in?</h2>
-          <p>The Scuttle also brings in repos nobody left on the doorstep: the ones whose owners say, in their own words, that an AI tool wrote them, and whose licence lets us quote the README back. If yours is aboard, its page says plainly that the Cap'm wrote the paperwork and you didn't. Have a look:</p>
+          <p>The Sloptrawler also brings in repos nobody left on the doorstep: the ones whose owners say, in their own words, that an AI tool wrote them, and whose licence lets us quote the README back. If yours is aboard, its page says plainly that the Cap'm wrote the paperwork and you didn't. Have a look:</p>
           <form class="search" action="/search" method="get" role="search"><input type="search" name="q" placeholder="your repo name" aria-label="Search for your repo" /><button type="submit">look</button></form>
           <p class="muted">Found it? Log in with GitHub as the owner. Commit your own <code>slopscore.md</code> and press Refresh to replace his paperwork, or press Remove and it is gone for good, never to be hauled in again. Can't log in as the owner? Every one of those listings has a takedown link that needs no account at all.</p>
         </div>
@@ -90,7 +90,7 @@ orphanage.get("/", (c) => {
           <h2>Leave one on the doorstep</h2>
           <p>Add the file. Schnitzel will find it, usually within the hour. Then <a href="/">watch the feed</a> or <a href="/scan">ask for a scan</a> if you can't wait.</p>
           <p><a class="btn" href="/spec">Read the spec</a> <a class="btn secondary" href="/scan">Scan a repo now</a> {user ? null : <a class="btn secondary" href={`/auth/github?next=${encodeURIComponent(url.pathname)}`}>Log in to adopt</a>}</p>
-          <p class="muted">No orphans were harmed in the making of this page. Several were refactored. Signed, Cap'm Slop, master of the Scuttle.</p>
+          <p class="muted">No orphans were harmed in the making of this page. Several were refactored. Signed, Cap'm Slop, master of the Sloptrawler.</p>
         </div>
       </section>
     </Layout>,

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
-import { loadUser } from "./middleware";
+import { loadUser, secure, tripwire } from "./middleware";
 import { rewriteFormat } from "./lib/negotiate";
 import { homeUrl, SECONDARY_REDIRECT } from "./lib/host";
 import { pages } from "./routes/pages";
@@ -29,6 +29,7 @@ import { runCritics } from "./jobs/critics";
 import { snapshotTrends } from "./jobs/trends";
 import { recordCron, noteRun, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
+import { sweepTripwire } from "./lib/tripwire";
 import { indexNowKey } from "./lib/indexnow";
 
 const app = new Hono<AppEnv>();
@@ -50,7 +51,9 @@ app.use("*", async (c, next) => {
   return home ? c.redirect(home, SECONDARY_REDIRECT) : next();
 });
 
+app.use("*", secure);
 app.use("*", loadUser);
+app.use("*", tripwire);
 app.route("/auth", auth);
 app.route("/api/v1", api);
 app.route("/r", owner);
@@ -207,6 +210,7 @@ async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unkno
     trawl: await step(env, "trawl", () => trawlDaily(env)),
     critics: await step(env, "critics", () => runCritics(env)),
     trends: await step(env, "trends", () => snapshotTrends(env)),
+    tripwire: await step(env, "tripwire", () => sweepTripwire(env.DB).then(() => "swept")),
   };
 }
 

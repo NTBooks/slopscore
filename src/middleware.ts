@@ -4,7 +4,10 @@ import { adminLogins } from "./env";
 import { readSession, csrfToken } from "./lib/session";
 import { getUser } from "./lib/db";
 import { now } from "./lib/time";
-import { setFlags } from "./lib/flags";
+import { setFlags, flagOn } from "./lib/flags";
+import { csp } from "./lib/csp";
+import { classify, isShut, record, BLOCK_SECONDS } from "./lib/tripwire";
+import { ipHash } from "./lib/trust";
 
 /** Loads the session user (cookie or bearer) into c.var.user. Never blocks. */
 export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -65,4 +68,55 @@ export async function body(c: Parameters<MiddlewareHandler<AppEnv>>[0]): Promise
 export const wantsJson = (c: Parameters<MiddlewareHandler<AppEnv>>[0]) => {
   const a = c.req.header("accept") ?? "";
   return a.includes("application/json") || (c.req.header("authorization") ?? "").toLowerCase().startsWith("bearer ");
+};
+
+/**
+ * The headers every response carries, and the CSP on the HTML ones.
+ *
+ * The CSP is the layer under GitHub's sanitiser and ours: repo pages render third-party README HTML
+ * verbatim, and this assumes both passes failed (see lib/csp.ts). It goes on HTML only -- a JSON or XML
+ * response has no script to govern, and /badge/*.svg is embedded in other people's READMEs on purpose.
+ */
+export const secure: MiddlewareHandler<AppEnv> = async (c, next) => {
+  await next();
+  c.header("x-content-type-options", "nosniff");
+  c.header("referrer-policy", "strict-origin-when-cross-origin");
+  if ((c.res.headers.get("content-type") ?? "").includes("text/html")) {
+    c.header("content-security-policy", await csp());
+    c.header("x-frame-options", "DENY");
+  }
+};
+
+/**
+ * The tripwire (lib/tripwire.ts): count requests shaped like an attack, and refuse a source that earned a
+ * 24-hour block. Recording happens after the response is sent, so a probe never costs a real visitor
+ * latency, and the whole thing is wrapped: a broken tripwire must never be able to 500 a page.
+ *
+ * A verified search crawler or a logged-in admin is counted but never blocked. Googlebot following a
+ * mangled link must not be able to take this site out of the index, and locking the moderator out of the
+ * mod console is how a false positive becomes an outage.
+ */
+export const tripwire: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!flagOn("tripwire")) return next();
+  const url = new URL(c.req.url);
+  const trip = classify(url);
+  let hash: string | null = null;
+  try {
+    hash = await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET);
+    if (await isShut(c.env.DB, hash)) {
+      c.header("retry-after", String(BLOCK_SECONDS));
+      return c.text(
+        `Refused. This address sent something shaped like an attack, so it is shut out for 24 hours.
+
+If that was not you, or it was and you were only curious, say so at ${c.env.SITE_URL ?? "https://slopscore.org"}/contact and it will be lifted.
+`,
+        403,
+      );
+    }
+  } catch { /* the door is stuck open: serve the request */ }
+  if (!trip) return next();
+  const cf = c.req.raw.cf as { verifiedBotCategory?: string; botManagement?: { verifiedBot?: boolean } } | undefined;
+  const exempt = Boolean(cf?.verifiedBotCategory || cf?.botManagement?.verifiedBot || c.get("user")?.isAdmin);
+  c.executionCtx.waitUntil(record(c.env, trip, hash, exempt).catch(() => {}));
+  return next();
 };

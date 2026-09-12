@@ -5,6 +5,7 @@
 // should publish when its own machinery has stopped. "All reporting in" is the normal answer and is said
 // out loud, because a box that only appears when something is wrong is a box nobody learns to read.
 import { raw } from "hono/html";
+import { inlineScript, COUNTDOWN_JS } from "./clientjs";
 import type { SessionUser } from "../env";
 import { JOBS, HEALTH_LABEL, everyText, untilText, type CrawlClock, type JobClock, type Health } from "../lib/crawlclock";
 import { ago, isoDateTime } from "../lib/time";
@@ -88,25 +89,7 @@ export const CrawlClockBox = ({ clock, user, back }: { clock: CrawlClock; user: 
         : "The schedule shows up after the first cron tick on this deploy. "}
       The sweep only sees what GitHub's code search has indexed, which can trail a push. <a href="/scan">Request a scan</a> to skip the wait.
     </p>
-    {raw(COUNTDOWN_JS)}
+    {inlineScript(COUNTDOWN_JS)}
   </div>
 );
 
-// Ticks each countdown every second against the server clock; a */N cron rolls over to its next fire once it has passed.
-const COUNTDOWN_JS = `<script>
-(function(){
-  var box=document.getElementById('crawler'); if(!box) return;
-  var off=Number(box.dataset.now)-Date.now()/1000;
-  function tick(){
-    var now=Date.now()/1000+off;
-    box.querySelectorAll('time.countdown').forEach(function(t){
-      var at=Number(t.dataset.at), every=Number(t.dataset.every)||0, s=Math.round(at-now);
-      while(every&&s<=-90){at+=every;s+=every;t.dataset.at=at;}
-      if(s<=0){t.textContent=s>-90?'running now':'due now';return;}
-      var m=Math.floor(s/60), x=s%60;
-      t.textContent='in '+(m>=10?m+'m':(m?m+'m ':'')+x+'s');
-    });
-  }
-  tick(); setInterval(tick,1000);
-})();
-</script>`;

@@ -16,6 +16,7 @@ import { recrawl } from "../jobs/recrawl";
 import { getState, setState } from "../jobs/stats";
 import { retireTrawled } from "../lib/virtual";
 import { addToBacklog, releaseBacklog, type CuratedInput } from "../jobs/trawl";
+import { counts as tripCounts, BLOCK_SECONDS } from "../lib/tripwire";
 
 export const mod = new Hono<AppEnv>();
 
@@ -34,6 +35,8 @@ const FLAG_HELP: Record<string, string> = {
   fuzz: "displayed scores above 20 jittered ±2% so bots can't observe their own vote",
   guard: "comments pass through Llama Guard; flagged ones are held here",
   risk: "risk score at or above RISK_QUARANTINE sends a repo to quarantine",
+  tripwire: "requests shaped like an attack are counted, and one email a day goes out",
+  tripblock: "a targeted probe also shuts that source out for 24 hours (never a verified crawler or an admin)",
   rising: "the rising sort is on offer: a tab, a chip, and ?sort=rising",
   controversial: "the controversial sort is on offer: a tab, a chip, and ?sort=controversial",
   updated: "the updated sort is on offer: a tab, a chip, and ?sort=updated",
@@ -49,6 +52,15 @@ mod.get("/", async (c) => {
   const clock = await crawlClock(db);
   const messages = await db.prepare("SELECT id, login, subject, body, repo_full_name, created_at, read_at, reply FROM messages WHERE resolved_at IS NULL ORDER BY created_at DESC LIMIT 100").all<{ id: number; login: string; subject: string; body: string; repo_full_name: string | null; created_at: number; read_at: number | null; reply: string | null }>().then((r) => r.results ?? []);
   const backlog = await db.prepare("SELECT sum(CASE WHEN released_at IS NULL THEN 1 ELSE 0 END) AS waiting, sum(CASE WHEN outcome = 'queued' THEN 1 ELSE 0 END) AS released, sum(CASE WHEN outcome LIKE 'skipped:%' THEN 1 ELSE 0 END) AS refused FROM trawl_backlog").first<{ waiting: number | null; released: number | null; refused: number | null }>();
+  const today = new Date().toISOString().slice(0, 10);
+  const [trip, blocks] = await Promise.all([
+    tripCounts(db, today),
+    db.prepare("SELECT ip_hash, until, kind, hits, at FROM tripwire_blocks WHERE until > ? ORDER BY at DESC LIMIT 50").bind(now())
+      .all<{ ip_hash: string; until: number; kind: string; hits: number; at: number }>().then((r) => r.results ?? []),
+  ]);
+  const trend = await db.prepare(
+    "SELECT day, sum(CASE WHEN severity = 'targeted' THEN n ELSE 0 END) AS targeted, sum(CASE WHEN severity != 'targeted' THEN n ELSE 0 END) AS noise FROM tripwire GROUP BY day ORDER BY day DESC LIMIT 14",
+  ).all<{ day: string; targeted: number; noise: number }>().then((r) => r.results ?? []);
   const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; created_at: number; status: string | null }>().then((r) => r.results ?? []);
   const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
@@ -75,7 +87,7 @@ mod.get("/", async (c) => {
   for (const r of reports) { const k = `${r.target_type}:${r.target_id}`; groups.set(k, [...(groups.get(k) ?? []), r]); }
   const csrf = <input type="hidden" name="csrf" value={user.csrf} />;
   const act = (action: string, label: string, url: string, cls = "btn secondary", confirm?: string) => (
-    <form method="post" action={url} class="inline" onsubmit={confirm ? `return confirm(${JSON.stringify(confirm)})` : undefined}>{csrf}<button class={cls} name="action" value={action}>{label}</button></form>
+    <form method="post" action={url} class="inline" data-confirm={confirm}>{csrf}<button class={cls} name="action" value={action}>{label}</button></form>
   );
 
   return c.html(
@@ -89,9 +101,74 @@ mod.get("/", async (c) => {
         <div class="capacity free" style="margin:8px 0">
           <div style="grid-column:1/-1"><span class="label">feature flags · MOD_FLAGS var, deploy to change</span>
             {ALL_FLAGS.map((f) => <span class={`chip ${flagsSnapshot()[f] ? "ok" : "bad"}`} title={FLAG_HELP[f]}>{f}: {flagsSnapshot()[f] ? "on" : "off"}</span>)}
-            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score · rising/controversial/updated/upcoming = that feed sort is on offer</span>
+            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score · tripwire = probe counting and the daily email · tripblock = a probe costs that source 24 hours · rising/controversial/updated/upcoming = that feed sort is on offer</span>
           </div>
         </div>
+
+        <h3>Tripwire <span class="muted">· {trip.targeted} targeted, {trip.noise} noise today</span></h3>
+        <p class="muted small">
+          Requests shaped like an attack (src/lib/tripwire.ts). <strong>Targeted</strong> means nobody's accident:
+          SQL tautologies, our own &lt;repo&gt; prompt delimiter in a query string, path traversal. <strong>Noise</strong>
+          is the background radiation of the public internet — .env probes, wp-admin, a crawler following a mangled
+          link — and never blocks anyone or sends mail. If the source count climbs, turn on Bot Fight Mode
+          (Cloudflare → slopscore.org → Security → Bots). One email a day at most, whatever arrives.
+        </p>
+        <div class={`capacity ${trip.targeted ? "paid" : "free"}`} style="margin:8px 0">
+          <div><span class="label">targeted today</span>{trip.targeted}</div>
+          <div><span class="label">noise today</span>{trip.noise}</div>
+          <div><span class="label">distinct sources</span>{trip.ips}</div>
+          <div><span class="label">busiest source</span>{trip.worst} hits</div>
+          <div><span class="label">shut out now</span>{blocks.length}{blocks.length === 50 ? "+" : ""}</div>
+        </div>
+        {trip.byKind.length ? (
+          <table class="grid small">
+            <thead><tr><th>kind</th><th>severity</th><th>today</th><th>last</th><th>most recent sample</th></tr></thead>
+            <tbody>
+              {trip.byKind.map((k) => (
+                <tr>
+                  <td><code>{k.kind}</code></td>
+                  <td><span class={`chip ${k.severity === "targeted" ? "bad" : ""}`}>{k.severity}</span></td>
+                  <td>{k.n}</td>
+                  <td class="muted">{ago(k.last_at)}</td>
+                  <td class="muted"><code>{k.sample ?? ""}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div class="empty">Nothing tripped today. Quiet out there.</div>}
+        {blocks.length ? (
+          <details style="margin:8px 0">
+            <summary>Shut out right now · {blocks.length}</summary>
+            <p class="muted small">
+              {BLOCK_SECONDS / 3600} hours from the probe. The hash is the salted digest the vote ring-detector
+              uses (no address is stored, and rotating SESSION_SECRET voids every row). Expired rows are swept
+              at 00:05. Somebody caught by mistake can ask on /contact.
+            </p>
+            <table class="grid small">
+              <thead><tr><th>source</th><th>why</th><th>hits</th><th>since</th><th>until</th></tr></thead>
+              <tbody>
+                {blocks.map((b) => (
+                  <tr>
+                    <td><code>{b.ip_hash}</code></td>
+                    <td><code>{b.kind}</code></td>
+                    <td>{b.hits}</td>
+                    <td class="muted">{ago(b.at)}</td>
+                    <td class="muted">{ago(b.until)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        ) : null}
+        {trend.length > 1 ? (
+          <details style="margin:8px 0">
+            <summary>Last {trend.length} days</summary>
+            <table class="grid small">
+              <thead><tr><th>day</th><th>targeted</th><th>noise</th></tr></thead>
+              <tbody>{trend.map((d) => <tr><td>{d.day}</td><td>{d.targeted}</td><td class="muted">{d.noise}</td></tr>)}</tbody>
+            </table>
+          </details>
+        ) : null}
 
         <h3>Reports <span class="muted">· {groups.size} targets, {reports.length} reports</span></h3>
         {groups.size === 0 ? <div class="empty">Nothing reported. Suspicious.</div> : null}

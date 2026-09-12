@@ -13,7 +13,7 @@
 /** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons. */
 export const JOBS = ["sweep", "scan", "recrawl"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
-export const DAILY_JOBS = ["awards", "trawl", "critics", "trends"] as const;
+export const DAILY_JOBS = ["awards", "trawl", "critics", "trends", "tripwire"] as const;
 
 export type Job = (typeof JOBS)[number];
 export type DailyJob = (typeof DAILY_JOBS)[number];
@@ -29,6 +29,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   trawl: { label: "next trawl release", does: "moves backlog picks into the queue" },
   critics: { label: "next critics round", does: "the cast reads a few listings and votes" },
   trends: { label: "next trends count", does: "counts the corpus for /trends" },
+  tripwire: { label: "next tripwire sweep", does: "expires blocks and prunes the probe counters" },
 };
 
 /** Which jobs each cron drives. Mirrors the switch in runCron (src/index.ts). */

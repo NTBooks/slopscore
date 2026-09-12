@@ -64,6 +64,17 @@ export function parseSort(s: string | undefined, fallback: Sort = "hot"): Sort {
   return (SORTS as readonly string[]).includes(s ?? "") && sortOn(s as Sort) ? (s as Sort) : fallback;
 }
 
+/** Deep offsets cost a scan of everything before them, and nobody hand-pages this far. Crawlers do. */
+export const MAX_PAGE = 500;
+
+/**
+ * One reading of ?page= for every surface. Junk, negatives, fractions and NaN all land on page 1: a crawler
+ * following a mangled link used to bind NaN into LIMIT/OFFSET and take the whole page down with a 500.
+ */
+export function parsePage(v: unknown): number {
+  return Math.min(MAX_PAGE, Math.max(1, Math.floor(Number(v)) || 1));
+}
+
 export interface FeedOpts {
   sort: Sort;
   t?: string;
@@ -102,7 +113,7 @@ function sortKey(sort: Sort): string {
 }
 
 export async function feed(db: D1Database, o: FeedOpts): Promise<{ rows: RepoRow[]; hasMore: boolean; page: number }> {
-  const page = Math.max(1, o.page ?? 1);
+  const page = parsePage(o.page);
   const where: string[] = [];
   const params: unknown[] = [];
   const statuses = Array.isArray(o.status) ? o.status : [o.status ?? "listed"];

@@ -6,7 +6,7 @@ import { adminLogins } from "../env";
 import { CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName } from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
-  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, parseSort, sortOn, visibleSorts, type RepoRow,
+  getUserByLogin, castVote, addComment, castCommentVote, rateLimit, logAction, parseJson, curatedTags, getTag, capacity, type Sort, parseSort, parsePage, sortOn, visibleSorts, type RepoRow,
 } from "../lib/db";
 import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { recordView } from "../lib/views";
@@ -150,12 +150,12 @@ pages.get("/", (c) => {
   return feedPage(c, {
     title: "SlopScore — the leaderboard for AI-generated software",
     description: "Peer review for code nobody wrote. Add a slopscore.md to a public GitHub repo and your vibe-coded project gets listed, voted on, and graded by humans and agents.",
-    heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, intro: SITE.manifesto,
+    heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: parsePage(c.req.query("page")), baseUrl: "/", showHero: true, intro: SITE.manifesto,
   });
 });
 
 pages.get("/upcoming", (c) => sortOn("upcoming") ? feedPage(c, {
-  title: "Up and coming slop", heading: "Up and coming", sort: "upcoming", page: Number(c.req.query("page") ?? 1), baseUrl: "/upcoming",
+  title: "Up and coming slop", heading: "Up and coming", sort: "upcoming", page: parsePage(c.req.query("page")), baseUrl: "/upcoming",
   intro: "Listed repos whose authors admit they're not done: idea, prototype, works-on-my-machine, alpha. Once submitted they compete for Most Promising Slop of the Week.",
   empty: "Nobody is working on anything. Suspicious.",
 }) : c.notFound());
@@ -166,7 +166,7 @@ pages.get("/upvoted", (c) => {
   if (!user) return wantsJson(c) ? c.json({ error: "login required", login: "/auth/github?next=/upvoted" }, 401) : c.redirect("/auth/github?next=/upvoted");
   return feedPage(c, {
     title: "Slop you upvoted — SlopScore", heading: "Slop you upvoted", sort: "new", upvotedBy: user.id, hideSorts: true, noindex: true,
-    page: Number(c.req.query("page") ?? 1), baseUrl: "/upvoted", // Every status, so an upvote never vanishes without a word: the chip says what became of it.
+    page: parsePage(c.req.query("page")), baseUrl: "/upvoted", // Every status, so an upvote never vanishes without a word: the chip says what became of it.
     status: ["listed", "discovered", "quarantined", "rejected", "hidden", "delisted"], showStatus: true,
     intro: "Everything you have ever upvoted, newest vote first. Only votes cast while logged in; anonymous crowd votes belong to nobody. Upvote again on a repo page to take it back and it leaves this list.",
     empty: "You haven't upvoted anything. The trough is right there.",
@@ -178,7 +178,7 @@ pages.get("/search", (c) => {
   const parsed = parseQuery(q);
   const sort = parseSort(c.req.query("sort"), "top");
   return feedPage(c, {
-    title: `search: ${q} — SlopScore`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `search: ${q} — SlopScore`, heading: `Search: ${q}`, sort, t: c.req.query("t"), page: parsePage(c.req.query("page")),
     filters: parsed.filters, match: parsed.match, baseUrl: `/search?q=${encodeURIComponent(q)}`, q, noindex: true,
     intro: parsed.terms.length ? `Parsed as: ${parsed.terms.join(" ")}` : "Operators: category: lang: tool: model: platform: interface: audience: data: human: ai: status: tag: topic: license: owner: — prefix with - to exclude.",
     empty: "Nothing matches. Either it doesn't exist or nobody admitted to it.", extra: { parsed },
@@ -215,7 +215,7 @@ pages.get("/f/:facet/:value", async (c) => {
   if (!known.includes(facet)) return c.notFound();
   const siblings = await facetCounts(c.env.DB, facet, 30);
   return feedPage(c, {
-    title: `${facetTitle(facet, value)} — SlopScore`, description: facetDescription(facet, value), heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `${facetTitle(facet, value)} — SlopScore`, description: facetDescription(facet, value), heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: parsePage(c.req.query("page")),
     filters: [{ facet, value, negate: false }], baseUrl: `/f/${facet}/${value}`,
     intro: `Other ${facet} values: ${siblings.filter((s) => s.value !== value).slice(0, 15).map((s) => `${s.value} (${s.n})`).join(", ")}`, extra: { facet, value, siblings },
   });
@@ -260,7 +260,7 @@ pages.get("/b/:tag", async (c) => {
   return feedPage(c, {
     title: `AI-generated ${tag?.title?.toLowerCase() ?? `${slug} projects`} — SlopScore`,
     description: `Vibe-coded ${tag?.title?.toLowerCase() ?? `${slug} projects`}, ranked by humans and agents. Every listing declares how much a model wrote and how much a human touched it, in its own slopscore.md.`,
-    heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    heading: `b/${slug}${tag ? ` · ${tag.title}` : ""}`, sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: parsePage(c.req.query("page")),
     tag: slug, baseUrl: `/b/${slug}`, intro: tag?.blurb ?? `Everything in the ${slug} bucket, by declared slopbucket, category, tag, domain, or GitHub topic.`, extra: { bucket: tag ?? { slug, curated: 0 } },
     empty: `No slop in b/${slug} yet. Be the first slopsmith: slopbucket: [${slug}]`,
   });
@@ -276,7 +276,7 @@ pages.get("/u/:login", async (c) => {
   const optedIn = bot || trawlOwnerIndexed(c.env) || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
     noindex: !optedIn,
-    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),
+    title: `${login} — SlopScore`, heading: bot ? `${login} — a SlopScore critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: parsePage(c.req.query("page")),
     owner: login, status: ["listed", "discovered", "quarantined", "rejected"], baseUrl: `/u/${login}`, showStatus: true,
     intro: bot
       ? `${u?.bio ?? ""} A disclosed critic: an account on this site only, with no GitHub account behind it. It upvotes at half weight, never downvotes, never comments, and never counts towards an award. Everything it has voted on, and why, is on /balcony?critic=${login}. The rules are on /about.`
@@ -330,7 +330,7 @@ pages.get("/me", async (c) => {
 pages.get("/queue", async (c) => {
   const st = c.req.query("status");
   const user = c.get("user"); const url = new URL(c.req.url);
-  const page = Number(c.req.query("page") ?? 1);
+  const page = parsePage(c.req.query("page"));
   const [cap, clock] = await Promise.all([capacity(c.env.DB, c.env), crawlClock(c.env.DB)]);
   const flash = c.req.query("flash");
   // Four lines: paid jumpers (FIFO), the free line (FIFO), the Cap'm's own lane, then everything else by filter.
@@ -480,7 +480,7 @@ pages.get("/balcony", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const wanted = (c.req.query("critic") ?? "").toLowerCase();
   const only = CRITICS.find((x) => x.login === wanted) ?? null;
-  const page = Math.min(50, Math.max(1, Math.floor(Number(c.req.query("page") ?? 1)) || 1));
+  const page = Math.min(50, parsePage(c.req.query("page")));
   const per = 100;
   // A hidden repo stays hidden: a heckle about it is not a back door to its name in a feed.
   const clause = only ? "r.status != 'hidden' AND cr.critic_id = ?" : "r.status != 'hidden'";

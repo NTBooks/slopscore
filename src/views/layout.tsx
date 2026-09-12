@@ -3,6 +3,7 @@ import { raw } from "hono/html";
 import type { SessionUser } from "../env";
 import { visibleSorts, type Sort } from "../lib/db";
 import { Wordmark, Icon } from "./art";
+import { inlineScript, INFINITE_JS, VOTE_JS, CLIP_JS, CONFIRM_JS } from "./clientjs";
 
 export interface PageMeta {
   title: string;
@@ -126,8 +127,10 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
           </p>
           <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does. Made by slopsmiths, for slopsmiths.</p>
         </footer>
-        {raw(VOTE_JS)}
-        {raw(INFINITE_JS)}
+        {inlineScript(VOTE_JS)}
+        {inlineScript(INFINITE_JS)}
+        {inlineScript(CLIP_JS)}
+        {inlineScript(CONFIRM_JS)}
         <script src="/schnitzel.js" defer></script>
         {/* The cast lockets on /balcony. It finds nothing to do on every other page and stops. */}
         <script src="/lockets.js" defer></script>
@@ -142,50 +145,4 @@ const GITHUB_MARK = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3
 // Infinite scroll, progressive: the pager's next link still works without it. When the link nears the viewport, fetch the
 // next page's HTML and append its rows to the same list (matched by position, so /queue's two lists stay apart).
 // Rows already on the page are skipped (hot ranks shift between fetches). Stops after 40 pages; the link remains.
-const INFINITE_JS = `<script>
-(function(){
-  if(!('IntersectionObserver' in window)||!window.DOMParser) return;
-  var busy=false, loaded=0, MAX=40;
-  var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting) more(e.target); }); },{rootMargin:'800px 0px'});
-  function hook(){ document.querySelectorAll('.pager a[rel=next]').forEach(function(a){ if(a.dataset.watch) return; a.dataset.watch='1'; io.observe(a); }); }
-  async function more(a){
-    if(busy||loaded>=MAX) return;
-    var pager=a.closest('.pager'), list=pager&&pager.previousElementSibling;
-    if(!list||!list.matches('ol.feed')) return;
-    busy=true;
-    var idx=[].indexOf.call(document.querySelectorAll('ol.feed'),list), label=a.textContent;
-    a.textContent='digging up more slop…';
-    try{
-      var r=await fetch(a.href,{headers:{accept:'text/html'},credentials:'same-origin'});
-      if(!r.ok) throw new Error(String(r.status));
-      var doc=new DOMParser().parseFromString(await r.text(),'text/html');
-      var nl=doc.querySelectorAll('ol.feed')[idx];
-      if(nl) [].slice.call(nl.children).forEach(function(li){ if(!li.id||!document.getElementById(li.id)) list.appendChild(document.importNode(li,true)); });
-      var np=nl&&nl.nextElementSibling, nn=np&&np.classList.contains('pager')?np.querySelector('a[rel=next]'):null;
-      io.unobserve(a); delete a.dataset.watch; a.textContent=label;
-      if(nn){ a.href=nn.getAttribute('href'); loaded++; hook(); }
-      else { var end=document.createElement('div'); end.className='pager muted'; end.textContent='That\u2019s the bottom of the trough.'; pager.replaceWith(end); }
-    }catch(_){ a.textContent=label; }
-    busy=false;
-  }
-  hook();
-})();
-</script>`;
 
-// Progressive enhancement only: forms work without it.
-const VOTE_JS = `<script>
-document.addEventListener('submit',async function(e){
-  var f=e.target; if(!f.classList||!f.classList.contains('vote')) return;
-  e.preventDefault();
-  var btn=e.submitter||f.querySelector('button');
-  var fd=new FormData(f); if(btn&&btn.name) fd.set(btn.name,btn.value);
-  var r=await fetch(f.action,{method:'POST',body:fd,headers:{'accept':'application/json'}});
-  if(r.status===401){location.href='/auth/github?next='+encodeURIComponent(location.pathname);return;}
-  if(r.status===429){var jj=await r.json().catch(function(){return {}}); alert(jj.error||'slow down'); return;}
-  if(!r.ok){var j=await r.json().catch(function(){return {}}); alert(j.error||('vote failed ('+r.status+')')); return;}
-  var d=await r.json(); var box=f.closest('.votebox'); if(!box) return;
-  if(d.crowd){ var cr=box.querySelector('.crowd'); if(cr){ var n=(d.crowd_up||0)-(d.crowd_down||0); cr.textContent=(n>0?'+'+n:n)+' crowd'; } }
-  else box.querySelector('.score').textContent=d.score;
-  box.querySelectorAll('button').forEach(function(b){b.classList.toggle('on', Number(b.value)===d.mine)});
-});
-</script>`;

@@ -34,6 +34,10 @@ const KEEP = new Set<JudgeCode>(["app", "game", "tool", "library", "hardware"]);
 export const judgeKeeps = (code: JudgeCode | null): boolean => Boolean(code && KEEP.has(code));
 
 export interface JudgeInput { full_name: string; description: string; topics: string[]; language: string | null; stars: number; claim: string; readme: string }
+
+/** Strip the delimiter and cap the length: nothing from a stranger's repo may end the data block early. */
+const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\/?repo>/gi, "").slice(0, n);
+
 export interface JudgeResult { keep: boolean; code: JudgeCode | null; domain: JudgeDomain | null; error?: string }
 
 const SYSTEM = [
@@ -66,8 +70,8 @@ export async function judgeCandidate(env: Env, c: JudgeInput): Promise<JudgeResu
   if (!env.OPENROUTER_API_KEY) return { keep: false, code: null, domain: null, error: "no OPENROUTER_API_KEY" };
   const model = env.OPENROUTER_JUDGE_MODEL || "anthropic/claude-haiku-4.5";
   const data = {
-    repo: c.full_name, description: String(c.description ?? "").slice(0, 300), topics: (c.topics ?? []).slice(0, 12),
-    language: c.language, stars: c.stars, claim: String(c.claim ?? "").slice(0, 400), readme: String(c.readme ?? "").slice(0, 2500),
+    repo: clean(c.full_name, 140), description: clean(c.description, 300), topics: (c.topics ?? []).slice(0, 12).map((t) => clean(t, 50)),
+    language: clean(c.language, 40) || null, stars: c.stars, claim: clean(c.claim, 400), readme: clean(c.readme, 2500),
   };
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {

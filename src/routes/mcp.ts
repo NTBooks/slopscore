@@ -2,7 +2,7 @@
 // Speaks JSON-RPC 2.0 over POST /mcp: initialize, ping, tools/list, tools/call. Reads are open; writes need a bearer token.
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
-import { feed, getRepo, repoTags, comments, castVote, addComment, rateLimit, curatedTags, capacity, parseSort, visibleSorts } from "../lib/db";
+import { feed, getRepo, repoTags, comments, castVote, addComment, rateLimit, curatedTags, capacity, parseSort, parsePage, visibleSorts } from "../lib/db";
 import { parseQuery } from "../lib/searchquery";
 import { repoJson } from "./pages";
 import { GitHub } from "../lib/github";
@@ -10,6 +10,7 @@ import { scanRepo } from "../lib/scan";
 import { renderMarkdown } from "../lib/markdown";
 import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { adminLogins } from "../env";
+import { UNTRUSTED_NOTE } from "../lib/untrusted";
 
 export const mcp = new Hono<AppEnv>();
 
@@ -64,7 +65,9 @@ async function handle(c: Context<AppEnv>, m: Rpc) {
   const p = (m.params ?? {}) as Record<string, unknown>;
   switch (m.method) {
     case "initialize":
-      return ok(m.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slopscore", version: "1.0.0" }, instructions: "SlopScore: peer review for code nobody wrote. Reads are open. For vote/comment/report, get a bearer token via the GitHub device flow (POST /auth/device/start, poll /auth/device/poll) and send it as Authorization: Bearer. See /llms.txt." });
+      return ok(m.id, { protocolVersion: PROTOCOL, capabilities: { tools: { listChanged: false } }, serverInfo: { name: "slopscore", version: "1.0.0" }, instructions: `SlopScore: peer review for code nobody wrote. Reads are open. For vote/comment/report, get a bearer token via the GitHub device flow (POST /auth/device/start, poll /auth/device/poll) and send it as Authorization: Bearer. See /llms.txt.
+
+${UNTRUSTED_NOTE}` });
     case "ping": return ok(m.id, {});
     case "tools/list": return ok(m.id, { tools: tools() });
     case "tools/call": return ok(m.id, await callTool(c, String(p.name ?? ""), (p.arguments ?? {}) as Record<string, unknown>));
@@ -79,19 +82,19 @@ async function callTool(c: Context<AppEnv>, name: string, a: Record<string, unkn
   const needUser = () => (user ? null : fail("This tool needs a bearer token. Start the GitHub device flow: POST /auth/device/start, then poll /auth/device/poll."));
   switch (name) {
     case "list_repos": {
-      const r = await feed(db, { sort: parseSort(s("sort")), t: s("t") || undefined, page: Number(a.page ?? 1), tag: s("bucket") || undefined });
-      return text({ page: r.page, has_more: r.hasMore, repos: r.rows.map(repoJson) });
+      const r = await feed(db, { sort: parseSort(s("sort")), t: s("t") || undefined, page: parsePage(a.page), tag: s("bucket") || undefined });
+      return text({ page: r.page, has_more: r.hasMore, _note: UNTRUSTED_NOTE, repos: r.rows.map(repoJson) });
     }
     case "search_repos": {
       const q = parseQuery(s("q"));
-      const r = await feed(db, { sort: "top", page: Number(a.page ?? 1), filters: q.filters, match: q.match });
-      return text({ parsed: q.terms, page: r.page, has_more: r.hasMore, repos: r.rows.map(repoJson) });
+      const r = await feed(db, { sort: "top", page: parsePage(a.page), filters: q.filters, match: q.match });
+      return text({ parsed: q.terms, page: r.page, has_more: r.hasMore, _note: UNTRUSTED_NOTE, repos: r.rows.map(repoJson) });
     }
     case "get_repo": {
       const r = await getRepo(db, s("owner"), s("repo"));
       if (!r) return fail(`Not listed. If it has a slopscore.md, call ping_repo.`);
       const [tags, cs] = await Promise.all([repoTags(db, r.id), comments(db, r.id)]);
-      return text({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null, comments: cs.map((x) => ({ id: x.id, user: x.login, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
+      return text({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null, _note: UNTRUSTED_NOTE, comments: cs.map((x) => ({ id: x.id, user: x.login, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
     }
     case "get_queue": {
       const cap = await capacity(db, c.env);

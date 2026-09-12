@@ -219,7 +219,7 @@ const ClaimBox: FC<{ r: RepoRow; user: SessionUser | null }> = ({ r, user }) => 
 const OwnerBox: FC<{ r: RepoRow; user: SessionUser }> = ({ r, user }) => {
   const canSubmit = r.source !== "trawl" && r.status === "listed" && (r.tier === "found" || (r.submitted_at ?? 0) < Math.floor(Date.now() / 1000) - 180 * 86400);
   const act = (name: string, label: string, opts: { disabled?: boolean; secondary?: boolean; confirm?: string; title?: string; icon?: IconName } = {}) => (
-    <form class="owner" method="post" action={`/r/${r.full_name}/owner/${name}`} onsubmit={opts.confirm ? `return confirm(${JSON.stringify(opts.confirm)})` : undefined}>
+    <form class="owner" method="post" action={`/r/${r.full_name}/owner/${name}`} data-confirm={opts.confirm}>
       <input type="hidden" name="csrf" value={user.csrf} />
       <button type="submit" class={opts.secondary ? "secondary" : ""} disabled={opts.disabled} title={opts.title}>{opts.icon ? <Icon name={opts.icon} /> : null} {label}</button>
     </form>
@@ -263,16 +263,15 @@ const BadgeBox: FC<{ r: RepoRow }> = ({ r }) => {
       <span class="label">Badge for your README</span>
       <img src={`/badge/${r.full_name}.svg`} alt={`SlopScore badge for ${r.full_name}`} height="20" class="badge-preview" />
       <div class="badge-copy">
-        <input type="text" readonly value={md} onclick="this.select()" aria-label="Badge markdown" />
-        <button type="button" class="secondary" onclick={COPY_JS}>copy</button>
+        <input type="text" readonly value={md} data-selectall aria-label="Badge markdown" />
+        <button type="button" class="secondary" data-copy>copy</button>
       </div>
       <p class="muted small">Paste it near the top of your README. It updates itself with the live score and links back to this page, so everyone reading your repo can grade it.</p>
     </div>
   );
 };
 
-// Copies the sibling input and says so for a beat. No clipboard permission prompt: it is a user gesture.
-const COPY_JS = "var i=this.previousElementSibling,t=this.textContent;i.select();navigator.clipboard.writeText(i.value).then(function(){},function(){document.execCommand('copy')});this.textContent='copied';var b=this;setTimeout(function(){b.textContent=t},1500)";
+// The copy button and the field beside it are wired by CLIP_JS in views/clientjs.ts: CSP admits no inline handlers.
 
 const Comment: FC<{ c: CommentRow; r: RepoRow; user: SessionUser | null; pinned?: boolean; replies: CommentRow[] }> = ({ c, r, user, pinned, replies }) => (
   <div class={`comment${pinned ? " pinned" : ""}`} id={`c${c.id}`}>

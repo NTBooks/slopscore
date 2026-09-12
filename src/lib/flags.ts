@@ -8,10 +8,13 @@
 //   fuzz    displayed scores above 20 fuzzed ±2 %
 //   guard   comments pass through Llama Guard and can be held
 //   risk    risk score can quarantine (off = risk is recorded but never quarantines)
+//   tripwire   requests shaped like an attack are counted, and one email a day goes out (lib/tripwire.ts)
+//   tripblock  a targeted probe also shuts that source out for 24 hours. Needs tripwire. Verified search
+//              crawlers and logged-in admins are never blocked; off = counted and emailed, nobody locked out
 // The last four name a feed sort each: rising, controversial, updated, upcoming. Off = that sort is gone —
 // no tab, no chip, no /upcoming page, and ?sort=/the API fall back to hot. The rows and the ranking maths
 // stay put; only the view is withdrawn.
-export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "rising", "controversial", "updated", "upcoming"] as const;
+export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "tripwire", "tripblock", "rising", "controversial", "updated", "upcoming"] as const;
 export type Flag = (typeof ALL_FLAGS)[number];
 
 let current: Set<Flag> = new Set(ALL_FLAGS);

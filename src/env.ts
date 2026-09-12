@@ -47,6 +47,10 @@ export interface Env {
   CONTACT_NOTIFY?: string;   // secret: a verified Email Routing destination (your real inbox); never rendered
   CONTACT_FROM?: string;
   MAIL?: { send(message: unknown): Promise<void> };
+  /** Tripwire (lib/tripwire.ts). NOTIFY is a secret and falls back to CONTACT_NOTIFY; never rendered. */
+  TRIPWIRE_NOTIFY?: string;
+  /** Targeted probes in one UTC day before the email goes out. Default 1. One email a day regardless. */
+  TRIPWIRE_ALERT_AT?: string;
   /** The model the disclosed critics read with, through OpenRouter. Critics are site accounts, never GitHub accounts (src/lib/critics.ts). */
   CRITICS_MODEL?: string;
   /** Truffle trawl: repos listed per day, and the opted-in listing count at which the trawl stops for good. */

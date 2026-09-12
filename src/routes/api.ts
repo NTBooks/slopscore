@@ -1,12 +1,13 @@
 // JSON API v1. Pages already answer as .json; this is the stable, documented surface with cursor pagination.
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { feed, getRepo, repoTags, comments, facetCounts, siteStats, parseJson, parseSort, type RepoRow } from "../lib/db";
+import { feed, getRepo, repoTags, comments, facetCounts, siteStats, parseJson, parseSort, parsePage, type RepoRow } from "../lib/db";
 import { cached } from "../lib/cache";
 import { stripHtml } from "../lib/markdown";
 import type { SlopMeta } from "../lib/slopmd";
 import type { VulnSummary } from "../lib/osv";
 import { parseQuery } from "../lib/searchquery";
+import { UNTRUSTED_NOTE } from "../lib/untrusted";
 import { vocabJson, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { repoJson } from "./pages";
 
@@ -35,7 +36,7 @@ api.get("/facets", async (c) => {
 
 api.get("/repos", async (c) => {
   const status = (c.req.query("status") ?? "listed") as RepoRow["status"];
-  const r = await feed(c.env.DB, { sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), status, owner: c.req.query("owner"), tier: c.req.query("tier") as "found" | "submitted" | undefined });
+  const r = await feed(c.env.DB, { sort: parseSort(c.req.query("sort")), t: c.req.query("t"), page: parsePage(c.req.query("page")), status, owner: c.req.query("owner"), tier: c.req.query("tier") as "found" | "submitted" | undefined });
   const out = paged(c, r.rows, r.page, r.hasMore);
   if (out.next) c.header("Link", `<${out.next}>; rel="next"`);
   return c.json(out);
@@ -45,20 +46,20 @@ api.get("/repos/:owner/:name", async (c) => {
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
   if (!r) return c.json({ error: "not listed", ping: `/ping/${c.req.param("owner")}/${c.req.param("name")}` }, 404);
   const tags = await repoTags(c.env.DB, r.id);
-  return c.json({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null });
+  return c.json({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null, _note: UNTRUSTED_NOTE });
 });
 
 api.get("/repos/:owner/:name/comments", async (c) => {
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
   if (!r) return c.json({ error: "not listed" }, 404);
   const cs = await comments(c.env.DB, r.id);
-  return c.json({ repo: r.full_name, comments: cs.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === r.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
+  return c.json({ repo: r.full_name, _note: UNTRUSTED_NOTE, comments: cs.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === r.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
 });
 
 api.get("/search", async (c) => {
   const q = c.req.query("q") ?? "";
   const p = parseQuery(q);
-  const r = await feed(c.env.DB, { sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), filters: p.filters, match: p.match });
+  const r = await feed(c.env.DB, { sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: parsePage(c.req.query("page")), filters: p.filters, match: p.match });
   return c.json({ q, parsed: p, ...paged(c, r.rows, r.page, r.hasMore) });
 });
 
@@ -96,7 +97,7 @@ api.get("/digest", async (c) => {
       };
     });
   });
-  return c.json({ generated_at: Math.floor(Date.now() / 1000), since, count: repos.length, repos });
+  return c.json({ generated_at: Math.floor(Date.now() / 1000), since, count: repos.length, _note: UNTRUSTED_NOTE, repos });
 });
 
 api.get("/stats", async (c) => c.json(await siteStats(c.env.DB)));

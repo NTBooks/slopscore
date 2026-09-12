@@ -65,7 +65,7 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 
 /* feed rows */
 .feed { list-style: none; margin: 0; padding: 0; }
-.row { display: grid; grid-template-columns: 26px 44px 70px minmax(0, 1fr); grid-template-areas: "rank vote thumb main" "rank vote thumb acts"; gap: 2px 8px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.row { display: grid; grid-template-columns: 26px 44px 70px minmax(0, 1fr); grid-template-areas: "rank vote thumb main" "rank vote thumb acts"; gap: 2px 8px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: start; }
 .row .rank { grid-area: rank; } .row .votebox { grid-area: vote; } .row .thumbwrap { grid-area: thumb; } .row .rowmain { grid-area: main; } .row .actions { grid-area: acts; }
 .row .rank { color: var(--muted); text-align: right; padding-top: 6px; font-size: 14px; font-family: var(--serif); }
 .votebox { display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -87,7 +87,7 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .langdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 3px; vertical-align: middle; }
 .icon { width: 14px; height: 14px; flex: none; vertical-align: -2px; }
 .row .actions, .cactions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; margin-top: 3px; }
-.act { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 5px; color: var(--muted); font-family: inherit; font-size: 12px; font-weight: 600; background: none; border: 0; cursor: pointer; line-height: 1.4; }
+.act { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 5px; color: var(--muted); font-family: inherit; font-size: 12px; font-weight: 600; background: none; border: 0; cursor: pointer; line-height: 1.4; }
 .act:hover { background: var(--panel-2); color: var(--fg); text-decoration: none; }
 .act .caret { width: 13px; height: 13px; } .act .flag-icon, details.reportform summary .flag-icon { width: 13px; height: 13px; } .act.off { cursor: default; } .act.off:hover { background: none; color: var(--muted); }
 .cvote { display: inline-flex; gap: 2px; } .cvote .act:hover { color: var(--up); }

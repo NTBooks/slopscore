@@ -35,7 +35,7 @@ import { scanRepo } from "../lib/scan";
 import { checkOne } from "../jobs/recrawl";
 import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
-import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS, SPEC_VERSION } from "../lib/vocab";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 import { ago, isoDate, isoDateTime } from "../lib/time";
 import { crawlClock, untilText } from "../lib/crawlclock";
@@ -147,7 +147,11 @@ async function feedPage(c: Context<AppEnv>, opts: {
 pages.get("/", (c) => {
   const sort = parseSort(c.req.query("sort"));
   if (sort === "upcoming") return c.redirect("/upcoming");
-  return feedPage(c, { title: `SlopScore — ${SITE.tagline}`, heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, description: `${SITE.slogan} ${SITE.description}`, intro: SITE.manifesto });
+  return feedPage(c, {
+    title: "SlopScore — the leaderboard for AI-generated software",
+    description: "Peer review for code nobody wrote. Add a slopscore.md to a public GitHub repo and your vibe-coded project gets listed, voted on, and graded by humans and agents.",
+    heading: "SlopScore — the feed", sort, t: c.req.query("t"), page: Number(c.req.query("page") ?? 1), baseUrl: "/", showHero: true, intro: SITE.manifesto,
+  });
 });
 
 pages.get("/upcoming", (c) => sortOn("upcoming") ? feedPage(c, {
@@ -181,13 +185,37 @@ pages.get("/search", (c) => {
   });
 });
 
+/**
+ * A facet feed's title, in the words somebody would actually search.
+ *
+ * "built_with: claude-code" is how the database says it and nobody types that. These pages are the long tail —
+ * "claude code slop", "python slop", "vibe coded games" — and the title is the only place that phrasing can go,
+ * because the heading has to keep saying which facet is filtered or the page stops being legible.
+ */
+function facetTitle(facet: string, value: string): string {
+  switch (facet) {
+    case "built_with": return `Slop built with ${value}`;
+    case "model": return `Slop written by ${value}`;
+    case "language": return `${value} slop`;
+    case "category": return `${value} slop`;
+    case "platform": return `Slop that runs on ${value}`;
+    case "interface": return `Slop with a ${value} interface`;
+    default: return `Slop tagged ${value}`;
+  }
+}
+
+function facetDescription(facet: string, value: string): string {
+  const what = facet === "built_with" || facet === "model" ? `that ${value} wrote` : `tagged ${value}`;
+  return `AI-generated repos ${what}, ranked by humans and agents. Every listing declares how much a model wrote and how much a human touched, in its own slopscore.md.`;
+}
+
 pages.get("/f/:facet/:value", async (c) => {
   const facet = c.req.param("facet"); const value = c.req.param("value").toLowerCase();
   const known = [...DECLARED_FACETS, ...DETECTED_FACETS] as readonly string[];
   if (!known.includes(facet)) return c.notFound();
   const siblings = await facetCounts(c.env.DB, facet, 30);
   return feedPage(c, {
-    title: `${facet}: ${value} — SlopScore`, heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
+    title: `${facetTitle(facet, value)} — SlopScore`, description: facetDescription(facet, value), heading: `${facet} = ${value}`, sort: parseSort(c.req.query("sort"), "top"), t: c.req.query("t"), page: Number(c.req.query("page") ?? 1),
     filters: [{ facet, value, negate: false }], baseUrl: `/f/${facet}/${value}`,
     intro: `Other ${facet} values: ${siblings.filter((s) => s.value !== value).slice(0, 15).map((s) => `${s.value} (${s.n})`).join(", ")}`, extra: { facet, value, siblings },
   });
@@ -614,7 +642,7 @@ pages.get("/spec", (c) => {
   return respond(c, { md, vocab: v }, {
     json: (d) => d.vocab,
     md: (d) => d.md,
-    html: (d) => <Layout meta={{ title: "slopscore.md spec — SlopScore" }} user={user} url={url}><section class="wrap narrow" style="padding:0">{(() => { const html = renderMarkdown(d.md); return <div dangerouslySetInnerHTML={{ __html: html }} />; })()}</section></Layout>,
+    html: (d) => <Layout meta={{ title: "slopscore.md — the spec", description: `The slopscore.md contract, version ${SPEC_VERSION}: the disclosure fields every listed repo declares, the optional facets, and what gets a repo rejected. One file at the root of a public GitHub repo.` }} user={user} url={url}><section class="wrap narrow" style="padding:0">{(() => { const html = renderMarkdown(d.md); return <div dangerouslySetInnerHTML={{ __html: html }} />; })()}</section></Layout>,
   });
 });
 

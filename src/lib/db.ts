@@ -356,12 +356,13 @@ export function parseJson<T>(s: string | null | undefined, fallback: T): T {
   try { return JSON.parse(s) as T; } catch { return fallback; }
 }
 
-/** Scan capacity for the public queue + stats pages. Free mode: Workers AI's 10k neurons/day is the ceiling. */
+/** Scan capacity for the public queue + stats pages. Free mode: Workers AI's 10k neurons/day is the ceiling.
+ *  `queue.free` is the human line only; trawled finds queue apart and are scanned on our own OpenRouter budget. */
 export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEURON_BUDGET: string; OPENROUTER_API_KEY?: string }) {
   const today = new Date().toISOString().slice(0, 10);
   const [used, depth] = await Promise.all([
     db.prepare("SELECT value FROM crawl_state WHERE key = ?").bind(`ai_neurons:${today}`).first<{ value: string }>(),
-    db.prepare("SELECT sum(CASE WHEN priority_at IS NOT NULL THEN 1 ELSE 0 END) AS paid, sum(CASE WHEN priority_at IS NULL THEN 1 ELSE 0 END) AS free, sum(CASE WHEN queue_reason = 'ai-budget' THEN 1 ELSE 0 END) AS deferred FROM repos WHERE status = 'discovered'").first<{ paid: number | null; free: number | null; deferred: number | null }>(),
+    db.prepare("SELECT sum(CASE WHEN priority_at IS NOT NULL THEN 1 ELSE 0 END) AS paid, sum(CASE WHEN priority_at IS NULL AND source <> 'trawl' THEN 1 ELSE 0 END) AS free, sum(CASE WHEN priority_at IS NULL AND source = 'trawl' THEN 1 ELSE 0 END) AS trawl, sum(CASE WHEN queue_reason = 'ai-budget' THEN 1 ELSE 0 END) AS deferred FROM repos WHERE status = 'discovered'").first<{ paid: number | null; free: number | null; trawl: number | null; deferred: number | null }>(),
   ]);
   const mode = env.PLAN_MODE === "paid" ? "paid" : "free";
   const budget = Number(env.AI_NEURON_BUDGET || 9000);
@@ -372,7 +373,9 @@ export async function capacity(db: D1Database, env: { PLAN_MODE?: string; AI_NEU
     scans_per_day: Math.floor(budget / perScan), scans_left_today: Math.floor(Math.max(0, budget - neuronsUsed) / perScan),
     paid_scans_unlimited: mode === "paid" || Boolean(env.OPENROUTER_API_KEY),
     paid_scan_provider: env.OPENROUTER_API_KEY ? "openrouter" : mode === "paid" ? "workers-ai (metered)" : "workers-ai (same free ceiling)",
-    queue: { paid: depth?.paid ?? 0, free: depth?.free ?? 0, deferred: depth?.deferred ?? 0 },
+    queue: { paid: depth?.paid ?? 0, free: depth?.free ?? 0, trawl: depth?.trawl ?? 0, deferred: depth?.deferred ?? 0 },
+    // The Cap'm's own finds are scanned in their own lane, paid for on OpenRouter, so they take neither a free slot nor a neuron.
+    trawl_lane: env.OPENROUTER_API_KEY ? "openrouter (own lane)" : "paused: no OPENROUTER_API_KEY",
     limits: mode === "free"
       ? { workers_requests_per_day: 100_000, d1_reads_per_day: 5_000_000, d1_writes_per_day: 100_000, ai_neurons_per_day: 10_000, crons: 5 }
       : { workers_requests_per_day: null, d1_reads_per_day: 25_000_000_000, d1_writes_per_day: 50_000_000, ai_neurons_per_day: null, crons: 250 },

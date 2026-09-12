@@ -1,7 +1,8 @@
 // Truffle trawling expedition. Picks are vetted by hand (an admin, or the admin's agent reading READMEs) and posted to
 // POST /mod/trawl/import, which puts them in trawl_backlog. The daily 00:05 UTC tick releases TRAWL_PER_DAY of them into
-// the scan queue, where they wait behind every opted-in repo; releases stop for good once TRAWL_STOP_AT opted-in repos are
-// listed. The keyword search trawl below is manual only (/__cron?cron=trawl&n=20): keywords can't tell a vibe-coded app
+// a lane of their own: trawled finds are scanned on our OpenRouter bill (src/jobs/scan.ts), never taking a free slot or a
+// Workers AI neuron from a repo that came to us, and a trawled repo that turns out to have the file moves to the free
+// line (src/jobs/sweep.ts). Releases stop for good once TRAWL_STOP_AT opted-in repos are listed. The keyword search trawl below is manual only (/__cron?cron=trawl&n=20): keywords can't tell a vibe-coded app
 // from a tool for vibe coders, so it only trusts past-tense claims.
 import { GitHub } from "../lib/github";
 import type { Env } from "../env";
@@ -118,7 +119,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   if (!env.OPENROUTER_API_KEY) return { ...out, note: "no OPENROUTER_API_KEY: the auto-trawl needs its judge" };
   const db = env.DB;
   const t = now();
-  const budget = Math.min(Math.max(0, Math.floor(n)), 25);
+  const budget = Math.min(Math.max(0, Math.floor(n)), 50);
   if (!budget) return out;
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
   const deny = await loadDenyRows(db);
@@ -178,7 +179,7 @@ export async function trawlDaily(env: Env): Promise<{ queued: string[]; skipped:
   if ((opted?.n ?? 0) >= stopAt) return { queued: [], skipped: [], left: 0, note: `expedition over: ${opted?.n} opted-in listings (TRAWL_STOP_AT ${stopAt})` };
   const day = new Date(now() * 1000).toISOString().slice(0, 10);
   const done = Number((await getState(db, `trawl:${day}`)) ?? 0);
-  const budget = Number(env.TRAWL_PER_DAY || 10) - done;
+  const budget = Number(env.TRAWL_PER_DAY || 50) - done;
   if (budget <= 0) return { queued: [], skipped: [], left: 0, note: `today's releases are done (or paused): trawl:${day} = ${done}` };
   const res = await releaseBacklog(env, budget);
   const left = budget - res.queued.length;
@@ -200,7 +201,7 @@ export async function trawl(env: Env, n?: number): Promise<TrawlResult> {
     if ((opted?.n ?? 0) >= stopAt) return { ...out, note: `expedition over: ${opted?.n} opted-in listings (TRAWL_STOP_AT ${stopAt})` };
   }
   const doneToday = Number((await getState(db, `trawl:${day}`)) ?? 0);
-  const perDay = Number(env.TRAWL_PER_DAY || 10);
+  const perDay = Number(env.TRAWL_PER_DAY || 50);
   const budget = manual ? Math.min(Math.max(1, Math.floor(n!)), 200) : perDay - doneToday;
   if (budget <= 0) return { ...out, note: `today's ${perDay} already trawled` };
 

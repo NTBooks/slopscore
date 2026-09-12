@@ -423,11 +423,13 @@ mod.post("/user/:id", requireUser, async (c) => {
 const RUN: Record<Job, (env: AppEnv["Bindings"]) => Promise<string>> = {
   sweep: async (env) => {
     const r = await sweep(env);
-    return r.note ? `Sweep skipped: ${r.note}.` : `Sweep searched ${r.pages} page(s) of GitHub code search and found ${r.found} new repo(s).`;
+    return r.note ? `Sweep skipped: ${r.note}.` : `Sweep searched ${r.pages} page(s) of GitHub code search and found ${r.found} new repo(s)${r.promoted ? `, and moved ${r.promoted} trawled repo(s) to the free line: the owner committed the file` : ""}.`;
   },
   scan: async (env) => {
     const r = await scanQueue(env);
-    return `Scan tick inspected ${r.scanned}${r.deferred ? `, ${r.deferred} waiting on budget` : ""}${r.results.length ? `: ${r.results.map((x) => `${x.repo} ${x.status}`).join(", ")}` : ""}.`;
+    const lanes = [`${r.scanned} in the free line${r.deferred ? `, ${r.deferred} waiting on budget` : ""}`, r.trawl.note ?? `${r.trawl.scanned} trawled (our OpenRouter bill)`];
+    const seen = [...r.results, ...r.trawl.results];
+    return `Scan tick: ${lanes.join(" · ")}${seen.length ? `: ${seen.map((x) => `${x.repo} ${x.status}`).join(", ")}` : ""}.`;
   },
   recrawl: async (env) => {
     const r = await recrawl(env);

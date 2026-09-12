@@ -280,24 +280,26 @@ pages.get("/queue", async (c) => {
   const page = Number(c.req.query("page") ?? 1);
   const [cap, clock] = await Promise.all([capacity(c.env.DB, c.env), crawlClock(c.env.DB)]);
   const flash = c.req.query("flash");
-  // Three lines: paid jumpers (FIFO), the free line (FIFO), then everything else by filter.
-  const [paid, free, other, rail] = await Promise.all([
+  // Four lines: paid jumpers (FIFO), the free line (FIFO), the Cap'm's own lane, then everything else by filter.
+  const [paid, free, trawled, other, rail] = await Promise.all([
     st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: true, page: 1 }),
-    st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: false, page }),
+    st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: false, source: "marker", page }),
+    st ? Promise.resolve({ rows: [] as RepoRow[], hasMore: false, page: 1 }) : feed(c.env.DB, { sort: "new", status: "discovered", queue: true, priority: false, source: "trawl", page: 1 }),
     feed(c.env.DB, { sort: "new", page: st ? page : 1, status: st === "rejected" ? ["rejected"] : st === "hidden" ? ["hidden"] : st === "quarantined" ? ["quarantined"] : st === "delisted" ? ["delisted"] : st === "discovered" ? ["discovered"] : ["quarantined", "rejected"], queue: st === "discovered" }),
     railData(c.env.DB),
   ]);
-  const ids = [...paid.rows, ...free.rows, ...other.rows].map((r) => r.id);
+  const ids = [...paid.rows, ...free.rows, ...trawled.rows, ...other.rows].map((r) => r.id);
   const votes = user ? await userVotesFor(c.env.DB, user.id, ids) : new Map<number, number>();
-  const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix. Missing a repo that has the file? Log in and request a scan at /scan; it tells you why.";
-  return respond(c, { cap, clock, paid: paid.rows, free: free.rows, other: other.rows, freeMore: free.hasMore, otherMore: other.hasMore, page }, {
-    json: (d) => ({ capacity: d.cap, crawler: d.clock, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
+  const intro = "Everything the crawler found that isn't listed yet, and why. Paid jumpers are one first-in-first-out line, drained before the free line, which is also first-in-first-out. The Cap'm's own trawled finds wait in a lane of their own, scanned on our OpenRouter bill so they never take a free slot or a neuron from a repo that came to us; commit the file and a trawled repo moves to the free line. Nothing here is votable; everything is readable and reportable. Rejected repos re-enter detection when the owner presses Refresh or anyone pings them after a fix. Missing a repo that has the file? Log in and request a scan at /scan; it tells you why.";
+  return respond(c, { cap, clock, paid: paid.rows, free: free.rows, trawled: trawled.rows, other: other.rows, freeMore: free.hasMore, trawlMore: trawled.hasMore, otherMore: other.hasMore, page }, {
+    json: (d) => ({ capacity: d.cap, crawler: d.clock, jumpers: d.paid.map(repoJson), free_line: d.free.map(repoJson), trawl_lane: d.trawled.map(repoJson), other: d.other.map(repoJson), page: d.page, filter: st ?? null }),
     md: (d) => [
       "# In the trough", "", intro, "",
       `**Mode: ${d.cap.mode}.** AI budget today ${d.cap.neurons_used}/${d.cap.budget} neurons ≈ ${d.cap.scans_left_today} of ${d.cap.scans_per_day} free scans left. Paid scans: ${d.cap.paid_scans_unlimited ? `unlimited via ${d.cap.paid_scan_provider}` : "priority only; same daily ceiling until the site moves to a paid plan"}.`, "",
       `**Crawler.** ${d.clock.jobs.map((j) => `${j.label}: ${j.next_run ? untilText(j.next_run - d.clock.now) : "not scheduled yet"}`).join(" · ")}.`, "",
       "## Jumpers (paid, FIFO)", "", ...(d.paid.length ? d.paid.map((r, i) => `${i + 1}. [${r.full_name}](/r/${r.full_name}) — paid ${isoDate(r.priority_at)}`) : ["_nobody has paid to jump. The line is honest today._"]), "",
       "## Free line (FIFO)", "", ...(d.free.length ? d.free.map((r, i) => `${(d.page - 1) * 25 + i + 1}. [${r.full_name}](/r/${r.full_name}) — ${r.queue_reason ?? "awaiting-scan"} · found ${ago(r.first_seen)}`) : ["_empty. The inspector is bored._"]), "",
+      `## The Cap'm's lane (trawled, ${d.cap.trawl_lane})`, "", ...(d.trawled.length ? d.trawled.map((r, i) => `${i + 1}. [${r.full_name}](/r/${r.full_name}) — ${r.queue_reason ?? "awaiting-scan"} · found ${ago(r.first_seen)}`) : ["_nothing trawled is waiting._"]), "",
       "## Needs a human or was rejected", "", ...d.other.map((r) => `- [${r.full_name}](/r/${r.full_name}) — **${r.status}**${r.reject_reason ? `: ${r.reject_reason}` : r.queue_reason ? ` (${r.queue_reason})` : ""}`),
     ].join("\n"),
     html: (d) => (
@@ -309,7 +311,7 @@ pages.get("/queue", async (c) => {
               are ours to worry about, so they stay behind the mod login; the full numbers live on /stats. */}
           <div class={`capacity ${d.cap.mode}`}>
             <div><span class="label">free scans left today</span><strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day}</div>
-            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
+            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.trawl}</strong> trawled (our bill) · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
             {user?.isAdmin ? (
               <>
                 <div><span class="label">mod · mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
@@ -330,6 +332,9 @@ pages.get("/queue", async (c) => {
               <FeedList rows={d.paid} page={1} hasMore={false} votes={votes} user={user} baseUrl="/queue" empty="Nobody has paid to jump. The line is honest today." showStatus />
               <h3>Free line <span class="muted">· first come first served, after the jumpers</span></h3>
               <FeedList rows={d.free} page={d.page} hasMore={d.freeMore} votes={votes} user={user} baseUrl="/queue" empty="The free line is empty. The inspector is bored." showStatus />
+              <h3>The Cap'm's lane <span class="muted">· trawled finds, scanned on our own bill, behind every repo that came to us</span></h3>
+              <FeedList rows={d.trawled} page={1} hasMore={false} votes={votes} user={user} baseUrl="/queue" empty="Nothing trawled is waiting." showStatus />
+              {d.trawlMore ? <p class="muted small"><a href="/queue?status=discovered">The rest of the lane</a> · {d.cap.queue.trawl} waiting in all.</p> : null}
               <h3>Needs a human, or rejected <span class="muted">· <a href="/queue?status=quarantined">quarantined</a> · <a href="/queue?status=rejected">rejected</a> · <a href="/queue?status=hidden">hidden</a> · <a href="/queue?status=delisted">delisted</a></span></h3>
             </>
           ) : <h3>{st}</h3>}
@@ -429,7 +434,7 @@ pages.get("/stats", async (c) => {
   const led = await ledger(c.env.DB, c.env);
   return respond(c, { stats, daily, byStatus, budget, cap, led }, {
     json: (d) => ({ capacity: d.cap, ledger: d.led, moderation_flags: flagsSnapshot(), by_status: d.byStatus, stats: d.stats, daily: d.daily }),
-    md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
+    md: (d) => ["# Stats", "", `Mode: **${d.cap.mode}** · AI today ${d.cap.neurons_used}/${d.cap.budget} · free scans left ${d.cap.scans_left_today}/${d.cap.scans_per_day} · in line: ${d.cap.queue.paid} paid, ${d.cap.queue.free} free, ${d.cap.queue.trawl} trawled (${d.cap.trawl_lane}), ${d.cap.queue.deferred} waiting on budget`, "", ...d.byStatus.map((s) => `- ${s.status}: ${s.n}`), "", `AI neuron budget/day: ${d.budget}`, "", "| date | neurons | scans | deferred | found | listed | rejected | quarantined |", "|---|---|---|---|---|---|---|---|", ...d.daily.map((r) => `| ${r.date} | ${r.neurons_used}/${r.neurons_budget} | ${r.scans} | ${r.deferred} | ${r.found} | ${r.listed} | ${r.rejected} | ${r.quarantined} |`)].join("\n"),
     html: (d) => (
       <Layout meta={{ title: "Stats — SlopScore" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
@@ -438,7 +443,7 @@ pages.get("/stats", async (c) => {
           <div class={`capacity ${d.cap.mode}`}>
             <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
             <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons · <strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day} free scans left</div>
-            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
+            <div><span class="label">in line</span><span><strong>{d.cap.queue.paid}</strong> paid · <strong>{d.cap.queue.free}</strong> free · <strong>{d.cap.queue.trawl}</strong> trawled (our bill) · <strong>{d.cap.queue.deferred}</strong> waiting on budget</span></div>
           </div>
           <table class="stats">{d.byStatus.map((s) => <tr><td>{s.status}</td><td>{s.n}</td></tr>)}<tr><td>slopsmiths</td><td>{d.stats.users}</td></tr><tr><td>votes</td><td>{d.stats.votes}</td></tr><tr><td>comments</td><td>{d.stats.comments}</td></tr></table>
           <h3>Free-tier headroom <span class="muted">· what we can count from inside the Worker</span></h3>

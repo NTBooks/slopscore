@@ -81,13 +81,21 @@ describe("csp", () => {
     expect(h.match(/'sha256-[A-Za-z0-9+/=]+'/g) ?? []).toHaveLength(INLINE_SCRIPTS.length);
   });
 
-  it("leaves script with no way in but self and those hashes", async () => {
+  it("leaves script no way in but self, those hashes, and the analytics beacon", async () => {
     const script = (await csp()).split("; ").find((d) => d.startsWith("script-src "))!;
     expect(script).toContain("'self'");
     expect(script).not.toContain("unsafe-inline");
     expect(script).not.toContain("unsafe-eval");
     expect(script).not.toContain("unsafe-hashes");
     expect(script).not.toContain("*");
+  });
+
+  // The zone injects beacon.min.js after this worker has run, so there is nothing to hash. Leaving it out
+  // blocked it and quietly took the site's analytics with it; only a live page shows that.
+  it("admits the Cloudflare analytics beacon and its reporting endpoint", async () => {
+    const h = await csp();
+    expect(h.split("; ").find((d) => d.startsWith("script-src "))).toContain("https://static.cloudflareinsights.com");
+    expect(h.split("; ").find((d) => d.startsWith("connect-src "))).toContain("https://cloudflareinsights.com");
   });
 
   it("allows images from exactly the hosts the sanitiser admits", async () => {

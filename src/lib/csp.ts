@@ -21,6 +21,18 @@ import { INLINE_SCRIPTS } from "../views/clientjs";
 /** The image hosts imageAllowed() admits. Keep in step with IMAGE_HOSTS in lib/markdown.ts. */
 const IMG = ["'self'", "data:", "https://github.com", "https://*.githubusercontent.com", "https://img.shields.io", "https://opengraph.githubassets.com"];
 
+/**
+ * Cloudflare Web Analytics. The zone injects beacon.min.js into every HTML response before it leaves the
+ * edge, so it arrives after this worker has run and there is nothing to hash -- the first policy blocked it
+ * and silently took the site's analytics with it. The script comes from static.cloudflareinsights.com and
+ * reports to cloudflareinsights.com/cdn-cgi/rum, so both are named, and neither is a wildcard.
+ *
+ * This is the only third-party script the policy admits. If Browser Insights is ever turned off for the
+ * zone, both entries can go.
+ */
+const BEACON_SRC = "https://static.cloudflareinsights.com";
+const BEACON_REPORT = "https://cloudflareinsights.com";
+
 let cached: string | null = null;
 
 async function sha256(s: string): Promise<string> {
@@ -36,11 +48,11 @@ export async function csp(): Promise<string> {
   const hashes = (await Promise.all(INLINE_SCRIPTS.map(sha256))).join(" ");
   cached = [
     "default-src 'self'",
-    `script-src 'self' ${hashes}`,
+    `script-src 'self' ${BEACON_SRC} ${hashes}`,
     "style-src 'self' 'unsafe-inline'",
     `img-src ${IMG.join(" ")}`,
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src 'self' ${BEACON_REPORT}`,
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",

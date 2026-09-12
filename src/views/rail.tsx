@@ -1,6 +1,7 @@
 import type { FC } from "hono/jsx";
 import { MINIMAL_EXAMPLE, SAMPLE_BUCKETS } from "../lib/slopmd";
 import { Mascot, StepIcon } from "./art";
+import { SITE } from "./layout";
 
 export interface RailData {
   stats: { listed: number; queued: number; users: number; votes: number; comments: number };
@@ -52,6 +53,10 @@ export const Rail: FC<{ data: RailData }> = ({ data }) => (
         <tr><td>comments</td><td>{data.stats.comments}</td></tr>
       </table>
       <p class="muted"><a href="/stats">more stats</a> · <a href="/log">mod log</a></p>
+    </div>
+    <div class="box manifesto">
+      <h3>Why public?</h3>
+      <p>{SITE.manifesto}</p>
     </div>
   </aside>
 );

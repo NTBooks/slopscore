@@ -114,7 +114,6 @@ async function feedPage(c: Context<AppEnv>, opts: {
                 <Mascot size={150} class="hero-pig" />
                 <div><h1>SlopScore — {SITE.tagline}</h1><p><em>{SITE.slogan}</em> {SITE.description} A public leaderboard for AI-generated software: opt in by committing one file, humans and agents grade it.</p></div>
               </div>
-              <div class="manifesto"><strong>Why public?</strong> {SITE.manifesto}</div>
               {d.winner ? (
                 <div class="strip"><Stamp class="strip-stamp" title={`Certified Slop of the Day ${d.winner.period}`} /><span class="stamp">Slop of the Day · {d.winner.period}</span> <a href={`/r/${d.winner.full_name}`}><strong>{d.winner.title ?? d.winner.name}</strong></a> <span class="muted">— {d.winner.tagline}</span> <span class="muted">· score {d.winner.score}</span></div>
               ) : null}

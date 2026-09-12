@@ -71,8 +71,9 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
       {thumb ? <a href={repoUrl(repo)} class="thumbwrap"><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank thumbwrap">🐷</a>}
       <div>
         <div class="title">
-          <a href={ghUrl(repo)} target="_blank" rel="noopener">{repo.title ?? repo.name}</a> <span class="domain">(github.com/{repo.owner})</span>
+          <a href={repoUrl(repo)}>{repo.title ?? repo.name}</a>
         </div>
+        <div class="repolink"><a href={ghUrl(repo)} rel="noopener">github.com/{repo.full_name}</a> <span class="arrow">↗</span></div>
         <div class="tagline">{repo.tagline}</div>
         <div class="meta">
           {repo.language ? <span><i class="langdot"></i>{repo.language} · </span> : null}
@@ -81,7 +82,7 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
         <div class="meta">
           {showStatus ? <span class={`chip ${repo.status === "rejected" ? "bad" : "warn"}`}>{repo.status}{repo.queue_reason ? ` · ${repo.queue_reason}` : ""}</span> : null}{" "}
           {repo.status === "listed" ? <>listed {ago(repo.listed_at)}</> : <>found {ago(repo.first_seen)}</>} by <a href={`/u/${repo.owner}`}>{repo.owner}</a>
-          {gh.owner_avatar ? null : null} · <a href={`${repoUrl(repo)}#comments`}>{repo.comment_count} comments</a> · <a href={repoUrl(repo)}>details</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
+          {gh.owner_avatar ? null : null} · <a href={`${repoUrl(repo)}#comments`}>{repo.comment_count} comments</a> · <a href={`${repoUrl(repo)}#report`} class="report"><Flag /> report</a>
           {repo.status === "rejected" && repo.reject_reason ? <div class="muted">✗ {repo.reject_reason}</div> : null}
           {user && isOwnerOf(repo, user.login, user.id) ? (
             <div class="ownerline">

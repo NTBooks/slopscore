@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { GhRepo } from "../src/lib/github";
-import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason } from "../src/lib/virtual";
+import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason, TRAWL_QUERIES, QUERIES_PER_RUN, groundOfQuery } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
 import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed } from "../src/lib/virtual";
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
@@ -47,8 +47,40 @@ describe("virtual paperwork", () => {
   });
   it("queries carry the date floor and quality qualifiers", () => {
     const q = trawlQueries(AT);
-    expect(q.length).toBe(6);
-    expect(q[0]).toMatch(/pushed:>=2026-06-14 stars:5\.\.2000/);
+    expect(q.length).toBe(TRAWL_QUERIES.length);
+    for (const one of q) expect(one).toMatch(/pushed:>=2026-06-14 stars:5\.\.2000/);
+  });
+  it("does not fish mostly for one company's tool", () => {
+    // The net was four-sixths Claude, which said more about who wrote the crawler than about who is
+    // writing the slop. No single tool gets more than a quarter of the searches.
+    const claude = TRAWL_QUERIES.filter((q) => /claude/i.test(q)).length;
+    expect(claude / TRAWL_QUERIES.length).toBeLessThanOrEqual(0.25);
+  });
+  it("casts over every tool the claim gate will actually accept", () => {
+    // CLAIM_RE has accepted these all along; searching for only some of them is how the net stayed narrow.
+    const net = TRAWL_QUERIES.join(" ").toLowerCase();
+    for (const tool of ["claude", "cursor", "copilot", "chatgpt", "gemini", "lovable", "v0"]) {
+      expect(net).toContain(tool);
+    }
+    expect(net).toContain("ai-generated");
+  });
+  it("still lets a repo through on its own words, whichever tool it names", () => {
+    for (const tool of ["Cursor", "GitHub Copilot", "ChatGPT", "Gemini CLI", "Windsurf", "v0", "Claude Code"]) {
+      expect(claimSnippet(`A little tool. Built with ${tool} over a weekend.`)).toBeTruthy();
+    }
+  });
+  it("names the tool in the signal rather than just saying a machine did it", () => {
+    const sig = trawlSignals({ topics: [], description: "A tiny CLI, built with Cursor in an afternoon." } as never);
+    expect(sig.join(" ")).toContain("Cursor");
+  });
+  it("recognises a tool topic from any vendor, not only Claude's", () => {
+    for (const t of ["built-with-cursor", "built-with-copilot", "built-with-gemini", "ai-generated"]) {
+      expect(trawlSignals({ topics: [t], description: "" } as never).length).toBeGreaterThan(0);
+    }
+  });
+  it("works a bounded number of searches a night, however long the list grows", () => {
+    expect(QUERIES_PER_RUN).toBeLessThanOrEqual(8);
+    expect(QUERIES_PER_RUN).toBeLessThanOrEqual(TRAWL_QUERIES.length);
   });
 });
 

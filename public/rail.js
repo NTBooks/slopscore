@@ -141,7 +141,10 @@
 
     var off = offsetOf(chart);
     var cursor = num(chart.dataset.cursor);
-    var grounds = num(chart.dataset.grounds) || 6;
+    // The cursor indexes searches; this maps each one to the ground it belongs to. Several searches share
+    // a ground now that the net covers a dozen tools, so the two cannot be the same number any more.
+    var groundOf = (chart.dataset.groundof || '').split(',').map(Number).filter(function (n) { return n >= 0; });
+    if (!groundOf.length) return;
     var DAY = 86400;
     // Mirrors LEGS in src/lib/sea.ts, which is the copy under test.
     var OUT = 0.15, GROUNDS_END = 0.6, HOME = 0.8;
@@ -158,7 +161,8 @@
       var rolled = Math.floor(since / DAY);
       var phase = (since % DAY) / DAY;
 
-      var q = ((Math.floor(cursor + rolled) % grounds) + grounds) % grounds;
+      var n = groundOf.length;
+      var q = groundOf[((Math.floor(cursor + rolled) % n) + n) % n];
       var path = chart.querySelector('#ss-track-' + q);
       if (!path) return;
 

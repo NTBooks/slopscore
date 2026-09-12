@@ -7,7 +7,7 @@
 import { GitHub } from "../lib/github";
 import type { Env } from "../env";
 import { loadDenyRows } from "../lib/denylist";
-import { pickCandidates, trawlQueries, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, type Pick } from "../lib/virtual";
+import { pickCandidates, trawlQueries, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, type Pick } from "../lib/virtual";
 import { judgeCandidate } from "../lib/judge";
 import { markDirty } from "../lib/cache";
 import { now } from "../lib/time";
@@ -127,7 +127,11 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   const queries = trawlQueries(t);
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
   const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
-  for (let qi = 0; qi < queries.length && out.queued.length < budget; qi++) {
+  // A night works a slice of the list, not all of it: the net covers a dozen tools now, and walking every
+  // search every night would spend the GitHub search allowance on the first one. The cursor still moves one
+  // a night, so each search comes round soon enough.
+  const work = Math.min(QUERIES_PER_RUN, queries.length);
+  for (let qi = 0; qi < work && out.queued.length < budget; qi++) {
     const q = queries[(start + qi) % queries.length];
     for (let page = 1; page <= 2 && out.queued.length < budget; page++) {
       if (gh.throttled()) { out.note = "github rate limit"; break; }

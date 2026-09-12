@@ -12,6 +12,7 @@
 // point along the course. The two never contradict each other; one is just less precise.
 import type { FC } from "hono/jsx";
 import { DEEPS, GROUNDS, SHOALS, TROUGH, groundFor, voyage, voyageText, type Ground } from "../lib/sea";
+import { TRAWL_QUERIES, groundOfQuery } from "../lib/virtual";
 import { isoDateTime } from "../lib/time";
 import { now } from "../lib/time";
 
@@ -54,6 +55,11 @@ const Ship: FC<{ working: boolean }> = ({ working }) => (
   </g>
 );
 
+/** One ground index per search, in cursor order. The cursor counts searches and the chart draws grounds,
+ *  and since the net covers a dozen tools those are no longer the same number -- so the client is handed
+ *  the mapping rather than left to assume it. Constant: it changes only when the net does. */
+const GROUND_OF_QUERY = TRAWL_QUERIES.map((_, i) => groundOfQuery(i)).join(",");
+
 export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
   const at = now();
   const v = voyage(at, sea.last_run);
@@ -71,7 +77,7 @@ export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
       data-now={at}
       data-last={sea.last_run ?? ""}
       data-cursor={sea.cursor}
-      data-grounds={GROUNDS.length}
+      data-groundof={GROUND_OF_QUERY}
     >
       <h3>The Slop Triangle <span class="muted">· <a href="/orphanage">the Cap'm</a></span></h3>
       <svg viewBox="0 0 280 180" class="chart-svg" role="img" aria-labelledby="seatitle seadesc">

@@ -1,10 +1,10 @@
 // The Slop Triangle: where the Sloptrawler is, drawn as a chart in the rail.
 //
 // The fiction is thin on purpose, because a made-up map of made-up water would be decoration and this
-// is meant to say something true. The trawl works six GitHub searches (trawlQueries, src/lib/virtual.ts)
-// and keeps a rotating start position in crawl_state under trawl:cursor, so there really are six grounds
-// and one of them really is where she starts tonight. A ground's index IS its query's index; get those
-// out of step and the chart is lying.
+// is meant to say something true. The grounds ARE the trawl's own grounds -- TRAWL_GROUNDS in
+// src/lib/virtual.ts, imported rather than retyped -- and trawl:cursor really is where she starts
+// tonight. All this file adds is where each one sits on the chart. Nothing here can drift from the net,
+// because there is nothing here to drift: rename a ground over there and the chart renames itself.
 //
 // The triangle is the shape of the work: a home port, the four topic: queries at one corner, the two
 // in:description queries at another. The voyage is the shape of the clock: the trawl fires once a day
@@ -12,13 +12,14 @@
 //
 // Everything here is pure. What the browser does with it is public/rail.js, which mirrors LEGS and
 // nothing else: all the arithmetic that could be wrong lives in this file, where it is tested.
-import { trawlQueries } from "./virtual";
+import { TRAWL_GROUNDS, groundOfQuery } from "./virtual";
 
-/** One fishing ground. `q` indexes trawlQueries(), and the chart coordinates are in the 280x180 viewBox. */
+/** One fishing ground: a TRAWL_GROUNDS entry with a place on the 280x180 chart. */
 export interface Ground {
+  /** Index into TRAWL_GROUNDS, which is what groundOfQuery returns. */
   q: number;
   name: string;
-  /** What the query actually is, in words, so the joke can be checked against the code. */
+  /** Which searches this ground is, in words, so the joke can be checked against the code. */
   blurb: string;
   x: number;
   y: number;
@@ -29,24 +30,25 @@ export const TROUGH = { x: 38, y: 150, name: "The Trough" };
 export const SHOALS = { x: 148, y: 26, name: "Topic Shoals" };
 export const DEEPS = { x: 248, y: 142, name: "Description Deeps" };
 
-/**
- * The six grounds, in the order trawlQueries() returns them. Four along the Shoals leg and two along
- * the Deeps leg, which is the 4/2 split of topic: to in:description queries in the source.
- */
-export const GROUNDS: Ground[] = [
-  { q: 0, name: "The Vibe Banks", blurb: "repos that tagged themselves vibe-coded", x: 84, y: 96 },
-  { q: 1, name: "Unhyphen Reef", blurb: "the same water, spelled vibecoded", x: 116, y: 58 },
-  { q: 2, name: "Claude Cay", blurb: "repos tagged built-with-claude", x: 178, y: 50 },
-  { q: 3, name: "Clawcode Shelf", blurb: "repos tagged built-with-claude-code", x: 212, y: 70 },
-  { q: 4, name: "The Boasting Narrows", blurb: "repos that say they were built with Claude Code, in the description", x: 238, y: 114 },
-  { q: 5, name: "Deadman's Description", blurb: "repos that say they were vibe coded, in the description", x: 170, y: 138 },
+/** Where each ground sits. One entry per TRAWL_GROUNDS entry, in the same order; a ground added over
+ *  there without a berth here falls back to the middle of the water rather than off the chart. */
+const BERTHS: { x: number; y: number }[] = [
+  { x: 84, y: 96 }, { x: 116, y: 54 }, { x: 178, y: 46 },
+  { x: 216, y: 74 }, { x: 238, y: 116 }, { x: 166, y: 132 },
 ];
 
-/** Tonight's ground. The cursor is a counter that only ever goes up, so it wraps; a negative one still lands. */
+export const GROUNDS: Ground[] = TRAWL_GROUNDS.map((g, i) => ({
+  q: i, name: g.name, blurb: g.blurb, ...(BERTHS[i] ?? { x: 150, y: 92 }),
+}));
+
+/**
+ * Tonight's ground, from trawl:cursor.
+ *
+ * The cursor indexes the flattened query list, not the grounds, because that is what autoTrawl walks and
+ * advances. groundOfQuery does the mapping, and it wraps, so a counter that only ever goes up still lands.
+ */
 export function groundFor(cursor: number): Ground {
-  const n = GROUNDS.length;
-  const i = Math.floor(Number(cursor) || 0) % n;
-  return GROUNDS[((i % n) + n) % n];
+  return GROUNDS[groundOfQuery(cursor)] ?? GROUNDS[0];
 }
 
 /** One trawl to the next: the cron is `5 0 * * *`. */

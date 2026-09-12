@@ -1,27 +1,46 @@
 import { describe, it, expect } from "vitest";
 import { GROUNDS, LEGS, TROUGH, VOYAGE_PERIOD, groundFor, rolledCursor, voyage, voyageText, type Leg } from "../src/lib/sea";
-import { trawlQueries } from "../src/lib/virtual";
+import { TRAWL_GROUNDS, TRAWL_QUERIES, groundOfQuery } from "../src/lib/virtual";
 
 const SAILED = Date.parse("2026-09-12T00:05:00Z") / 1000;
 const into = (frac: number) => SAILED + Math.round(frac * VOYAGE_PERIOD);
 
-describe("the Slop Triangle has one ground per trawl query", () => {
-  it("names exactly as many grounds as the Cap'm has queries", () => {
-    // The chart claims each ground is a search. If these drift apart the chart is decoration, or worse, a lie.
-    expect(GROUNDS.length).toBe(trawlQueries(SAILED).length);
+describe("the Slop Triangle is the water the Cap'm actually works", () => {
+  it("draws exactly the grounds the trawl has, and no invented ones", () => {
+    // The chart claims each ground is real water. If these drift apart it is decoration, or worse, a lie.
+    expect(GROUNDS.map((g) => g.name)).toEqual(TRAWL_GROUNDS.map((g) => g.name));
   });
-  it("keeps every ground at its own query index", () => {
+  it("keeps every ground at its own index", () => {
     GROUNDS.forEach((g, i) => expect(g.q).toBe(i));
+  });
+  it("puts every single search in exactly one ground", () => {
+    // The cursor indexes searches, the chart draws grounds; a search in no ground is water she works
+    // while the chart shows her somewhere else.
+    expect(TRAWL_GROUNDS.flatMap((g) => g.queries)).toEqual(TRAWL_QUERIES);
+    for (let i = 0; i < TRAWL_QUERIES.length; i++) {
+      expect(groundOfQuery(i)).toBeGreaterThanOrEqual(0);
+      expect(groundOfQuery(i)).toBeLessThan(GROUNDS.length);
+    }
+    expect(new Set(TRAWL_QUERIES).size).toBe(TRAWL_QUERIES.length);
+  });
+  it("leaves no ground with nothing to fish in it", () => {
+    for (const g of TRAWL_GROUNDS) expect(g.queries.length).toBeGreaterThan(0);
   });
   it("gives every ground a name of its own and a blurb saying which query it is", () => {
     expect(new Set(GROUNDS.map((g) => g.name)).size).toBe(GROUNDS.length);
     for (const g of GROUNDS) expect(g.blurb.length).toBeGreaterThan(20);
   });
   it("wraps the cursor onto a ground in either direction", () => {
-    expect(groundFor(0)).toBe(groundFor(6));
-    expect(groundFor(13)).toBe(GROUNDS[1]);
-    expect(groundFor(-1)).toBe(GROUNDS[5]);
+    const n = TRAWL_QUERIES.length;
+    expect(groundFor(0)).toBe(groundFor(n));
+    expect(groundFor(-1)).toBe(GROUNDS[GROUNDS.length - 1]);
     expect(groundFor(NaN)).toBe(GROUNDS[0]);
+    for (let i = -n; i < 3 * n; i++) expect(GROUNDS).toContain(groundFor(i));
+  });
+  it("walks every ground as the cursor counts up through a full cycle", () => {
+    const visited = new Set<string>();
+    for (let i = 0; i < TRAWL_QUERIES.length; i++) visited.add(groundFor(i).name);
+    expect(visited.size).toBe(GROUNDS.length);
   });
   it("keeps every ground on the chart", () => {
     for (const g of GROUNDS) {
@@ -86,10 +105,10 @@ describe("the voyage is a day long and the ship is always somewhere real", () =>
     expect(v.t).toBe(0);
     expect(v.rolled).toBe(0);
   });
-  it("carries the counter forward by one ground for every voyage missed", () => {
+  it("carries the counter forward by one search for every voyage missed", () => {
     expect(rolledCursor(4, voyage(into(0.2), SAILED))).toBe(4);
     expect(rolledCursor(4, voyage(into(0.2) + 3 * VOYAGE_PERIOD, SAILED))).toBe(7);
-    expect(groundFor(rolledCursor(4, voyage(into(0.2) + 3 * VOYAGE_PERIOD, SAILED)))).toBe(GROUNDS[1]);
+    expect(groundFor(7)).toBe(GROUNDS[groundOfQuery(7)]);
   });
 });
 

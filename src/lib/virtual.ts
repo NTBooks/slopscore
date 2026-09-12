@@ -47,22 +47,99 @@ const VIBE_CODED = /\bvibe[- ]?coded\b/i;
 export const PUSHED_WITHIN_DAYS = 90;
 
 /** Topics that are the owner's own past-tense claim that the repo was made by AI. "vibe-coding" is not one: it mostly marks tools for vibe coders. */
-export const VIBE_TOPICS = ["vibe-coded", "vibecoded", "built-with-claude", "built-with-claude-code", "ai-generated"];
+export const VIBE_TOPICS = [
+  "vibe-coded", "vibecoded", "ai-generated", "ai-written", "llm-generated",
+  "built-with-claude", "built-with-claude-code", "built-with-cursor", "cursor-ai",
+  "built-with-chatgpt", "built-with-gpt", "built-with-copilot", "github-copilot",
+  "built-with-gemini", "gemini-cli", "built-with-v0", "built-with-bolt", "built-with-lovable",
+  "windsurf", "aider", "cline",
+];
+
+/** Named so the signal on the listing says which tool, not just "an AI". The tools match CLAIM_RE's list. */
+const TOOLS: [RegExp, string][] = [
+  [/\bclaude(\s+code)?\b/i, "Claude"], [/\bcursor\b/i, "Cursor"], [/\b(github\s+)?copilot\b/i, "Copilot"],
+  [/\bchatgpt\b|\bgpt-?\d\b/i, "ChatGPT"], [/\bcodex\b/i, "Codex"], [/\bgemini(\s+cli)?\b/i, "Gemini"],
+  [/\bwindsurf\b/i, "Windsurf"], [/\baider\b/i, "Aider"], [/\bcline\b/i, "Cline"],
+  [/\blovable\b/i, "Lovable"], [/\bbolt(\.new)?\b/i, "Bolt"], [/\bv0\b/i, "v0"], [/\breplit\b/i, "Replit"],
+];
+
+const BUILT_WITH_RE = /\b(?:built|made|written|coded|created|generated|developed)\s+(?:entirely\s+|mostly\s+|completely\s+|fully\s+|100%\s+|almost entirely\s+)?(?:with|using|by)\s+([a-z0-9.\- ]{2,20})/i;
 
 const DESCRIPTION_SIGNALS: [RegExp, string][] = [
   [VIBE_CODED, 'says "vibe coded" in its description'],
-  [/\bbuilt (entirely |mostly )?with claude code\b/i, 'says "built with Claude Code" in its description'],
   [/\b(100% )?ai[- ]generated\b/i, 'says "AI-generated" in its description'],
 ];
+
+/**
+ * The grounds the Cap'm works, and the searches that make up each one.
+ *
+ * Grouped rather than listed flat because the net used to be four-sixths Claude, which said more about who
+ * wrote the crawler than about who is writing the slop. Claude is one ground of six now. Everything
+ * downstream was already model-agnostic -- CLAIM_RE accepts a dozen tools and TOPIC_TOOL maps them onto
+ * built_with -- so this was the only narrow part.
+ *
+ * A ground is what the chart in the rail draws (src/lib/sea.ts); the queries inside it are the detail.
+ * trawl:cursor indexes the flattened QUERY list, not this one, so groundOfQuery() is how the chart knows
+ * which water she is working tonight.
+ */
+export const TRAWL_GROUNDS: { name: string; blurb: string; queries: string[] }[] = [
+  {
+    name: "The Vibe Banks",
+    blurb: "repos that call themselves vibe-coded and name no tool at all",
+    queries: ["topic:vibe-coded", "topic:vibecoded", '"vibe coded" in:description'],
+  },
+  {
+    name: "Claude Cay",
+    blurb: "repos that name Claude or Claude Code",
+    queries: ["topic:built-with-claude", "topic:built-with-claude-code", '"built with claude" in:description'],
+  },
+  {
+    name: "Cursor Shoals",
+    blurb: "repos that name Cursor",
+    queries: ["topic:built-with-cursor", "topic:cursor-ai", '"built with cursor" in:description'],
+  },
+  {
+    name: "The GPT Narrows",
+    blurb: "repos that name ChatGPT, GPT or Codex",
+    queries: ["topic:built-with-chatgpt", "topic:built-with-gpt", '"built with chatgpt" in:description'],
+  },
+  {
+    name: "Copilot Reach",
+    blurb: "repos that name GitHub Copilot or Gemini",
+    queries: ["topic:built-with-copilot", "topic:built-with-gemini", '"built with copilot" in:description'],
+  },
+  {
+    name: "The Generated Deeps",
+    blurb: "repos that say a machine wrote them, and the builder tools: v0, Bolt, Lovable, Windsurf",
+    queries: ["topic:ai-generated", "topic:built-with-v0", "topic:built-with-lovable", '"ai-generated" in:description'],
+  },
+];
+
+/** Every search, in ground order. trawl:cursor is an index into this. */
+export const TRAWL_QUERIES: string[] = TRAWL_GROUNDS.flatMap((g) => g.queries);
+
+/** Which ground a query belongs to. Wraps, because the cursor only ever counts up. */
+export function groundOfQuery(i: number): number {
+  const n = TRAWL_QUERIES.length;
+  const idx = (((Math.floor(Number(i) || 0) % n) + n) % n);
+  let seen = 0;
+  for (let g = 0; g < TRAWL_GROUNDS.length; g++) {
+    seen += TRAWL_GROUNDS[g].queries.length;
+    if (idx < seen) return g;
+  }
+  return 0;
+}
+
+/** How many searches one night's trawl works, starting at the cursor. Bounds the GitHub search calls per
+ *  invocation now that there are three times as many queries; the cursor still advances one a night, so
+ *  every search comes round often. */
+export const QUERIES_PER_RUN = 6;
 
 /** GitHub repository-search queries, rotated one start position per day. */
 export function trawlQueries(at: number): string[] {
   const since = isoDate(at - PUSHED_WITHIN_DAYS * 86400);
   const base = `fork:false archived:false template:false is:public pushed:>=${since} stars:${MIN_STARS}..${MAX_STARS}`;
-  return [
-    "topic:vibe-coded", "topic:vibecoded", "topic:built-with-claude", "topic:built-with-claude-code",
-    '"built with claude code" in:description', '"vibe coded" in:description',
-  ].map((q) => `${q} ${base}`);
+  return TRAWL_QUERIES.map((q) => `${q} ${base}`);
 }
 
 /** Why the Cap'm thinks this repo is proud vibe slop, in the owner's own words. Empty = no signal, don't pick. */
@@ -70,6 +147,13 @@ export function trawlSignals(g: GhRepo): string[] {
   const out: string[] = [];
   for (const t of g.topics ?? []) if (VIBE_TOPICS.includes(t.toLowerCase())) out.push(`tagged ${t.toLowerCase()}`);
   for (const [re, label] of DESCRIPTION_SIGNALS) if (re.test(g.description ?? "")) out.push(label);
+  // "built with <something>" where the something is a tool we know. Named rather than generic, because a
+  // listing that says "built with Cursor" is telling the reader more than "made by an AI" does.
+  const built = BUILT_WITH_RE.exec(g.description ?? "");
+  if (built) {
+    const tool = TOOLS.find(([re]) => re.test(built[1]));
+    if (tool) out.push(`says it was built with ${tool[1]} in its description`);
+  }
   return out;
 }
 

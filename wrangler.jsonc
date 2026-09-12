@@ -16,6 +16,8 @@
   "vars": {
     "SITE_NAME": "SlopScupper",
     "SITE_URL": "http://localhost:8787",
+    // Local dev mirrors production so the indexing behaviour can be checked before it ships.
+    "TRAWL_INDEX": "on",
     "PLAN_MODE": "free",
     "CONTACT_EMAIL": "hello@slopscore.org",
     "ABUSE_EMAIL": "abuse@slopscore.org",
@@ -47,7 +49,7 @@
         "SITE_NAME": "SlopScupper (test)",
         "SITE_URL": "https://test.slopscore.org",
         "PRIMARY_HOST": "test.slopscore.org",
-        "TRAWL_INDEX": "off",
+        "TRAWL_INDEX": "on",
     "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",
@@ -87,9 +89,11 @@
         "SITE_URL": "https://slopscore.org",
         // The one hostname every absolute URL we emit uses. Set to slopscupper.com to finish the move.
         "PRIMARY_HOST": "slopscore.org",
-        // "on" lets trawled listings into search and the sitemap: the challenge finds the maker, and so does
-        // anyone googling their handle. "off" keeps them readable and votable but unindexed. See docs/PLAN.md.
-        "TRAWL_INDEX": "off",
+        // "on" lets trawled listings into search, the sitemap and IndexNow. These are public repos on a public
+        // host whose owners said in public that a model wrote them, and the listing is commentary on that. It is
+        // indexed the way every other mirror and aggregator indexes them, with a takedown that needs no account.
+        // "off" keeps them readable, linkable and votable but invisible to search engines.
+        "TRAWL_INDEX": "on",
     "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",

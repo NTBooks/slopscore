@@ -237,8 +237,9 @@ pages.get("/u/:login", async (c) => {
   const login = c.req.param("login");
   const u = await getUserByLogin(c.env.DB, login);
   const bot = u?.bot === 1;
-  // A page under someone's handle is indexed only once they've opted in on a repo; trawled-only owners stay out of search.
-  const optedIn = bot || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
+  // A page under someone's handle is the most name-searchable page here, so it follows TRAWL_INDEX: with the
+  // switch off, only an owner who opted in on a repo is indexed; with it on, every listed owner is.
+  const optedIn = bot || trawlIndexed(c.env) || Boolean(await c.env.DB.prepare("SELECT 1 FROM repos WHERE lower(owner) = lower(?) AND status = 'listed' AND source = 'marker' LIMIT 1").bind(login).first());
   return feedPage(c, {
     noindex: !optedIn,
     title: `${login} — SlopScupper`, heading: bot ? `${login} — a SlopScupper critic` : `Slop by ${login}`, sort: parseSort(c.req.query("sort"), "new"), page: Number(c.req.query("page") ?? 1),

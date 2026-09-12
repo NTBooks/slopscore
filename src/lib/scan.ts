@@ -5,6 +5,7 @@ import { markDirty } from "./cache";
 import { GitHub, parseGhDate, fullNameFromRedirect, type GhRepo, type GhContentsEntry, type GhRelease, type GhCommunity, type GhUser } from "./github";
 import { parseSlopMd, type TagRow, type SlopMeta } from "./slopmd";
 import { pingIndexNow } from "./indexnow";
+import { trawlIndexed } from "./virtual";
 import { replaceTags, registerBuckets, logAction, type RepoRow } from "./db";
 import { dropTrawled } from "./virtual";
 import { renderMarkdown, sanitizeReadmeHtml, stripHtml } from "./markdown";
@@ -332,9 +333,9 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     if (status === "quarantined") await bump(db, "quarantined");
   }
 
-  // A brand-new opted-in listing is a brand-new URL: tell the engines now rather than waiting for a crawl.
-  // Trawled listings are noindex and stay out of the sitemap, so they are not announced either.
-  if (status === "listed" && existing?.status !== "listed" && !virtual) {
+  // A brand-new listing is a brand-new URL: tell the engines now rather than waiting for a crawl. A trawled
+  // one is announced only when TRAWL_INDEX lets it into search; there is no point announcing a noindex page.
+  if (status === "listed" && existing?.status !== "listed" && (!virtual || trawlIndexed(env))) {
     await pingIndexNow(env, [`/r/${g.full_name}`, "/"]);
   }
 

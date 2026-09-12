@@ -14,6 +14,8 @@ Written 2026-09-12, when the site was renamed to **SlopScupper** and started ans
   the GitHub OAuth app has a single registered callback and the state cookie has to be set on the host GitHub
   returns to. A visitor browsing `slopscupper.com` therefore looks logged out: session cookies belong to
   `slopscore.org`. That resolves itself when the primary flips.
+- **Trawled listings are indexed** (`TRAWL_INDEX=on`, all environments), the same as opted-in ones: repo
+  pages, owner pages, the sitemap and IndexNow. Turning it to anything else takes all four back out.
 - **The name changed, the file did not.** The site is SlopScupper. The marker file is still `slopscore.md`,
   the version key is still `slopscore: 2`, and the score is still a slopscore. Do not change any of those:
   `slopscore.md` is the one search term nobody else owns, and every committed file in the wild names it.
@@ -73,15 +75,73 @@ Nothing below is urgent. The site works indefinitely in its current state; this 
    node -e "const s=require('sharp'),f=require('fs');s(f.readFileSync('art/og.svg')).resize(1200,630).png({compressionLevel:9}).toFile('art/og.png').then(()=>f.copyFileSync('art/og.png','public/hero.png'))"
    ```
 
-8. **Search engines.** Add `slopscupper.com` as a property in Google Search Console and Bing Webmaster Tools
-   and submit `https://slopscupper.com/sitemap.xml`. IndexNow needs nothing: the key is served by the worker
-   at `/{key}.txt` on whichever host asks.
+8. **Search Console.** See the section below; the order matters and one of the tools is the wrong one.
 
 9. **Do not retire `slopscore.org`.** Links were emailed before the rename, listed repos carry
    `slopscore.org/badge/...` in their READMEs, and every `slopscore.md` in the wild names it in `spec:`. It
    costs nothing to keep answering. Once the flip has settled, a 301 from the old host is a change in
    `src/lib/host.ts` (return a redirect instead of rewriting the URL) — but `PRIMARY_HOST` already makes
    search prefer the new host without breaking anything, so there is no hurry.
+
+## Google Search Console
+
+There is an existing property for `slopscore.org`. Nothing about it needs to change today, and the tool that
+looks like it was built for this job is the wrong one.
+
+**Keep the old property. Do not delete it.** It holds every bit of historical performance data, and
+`slopscore.org` stays the canonical host until `PRIMARY_HOST` flips. Deleting a property throws the history
+away and gets none of it back.
+
+**Do not use the Change of Address tool.** It is for a site move where the old host 301-redirects to the new
+one, and it tells Google the old address is finished. Neither is true here: both hosts serve, on purpose,
+because links to `slopscore.org` were emailed and listed repos carry its badge URL. Using it would ask Google
+to drop a host that is still answering. If `slopscore.org` is ever actually retired behind a 301, that is when
+Change of Address applies, and it needs both properties verified and the redirect already live.
+
+What consolidates the two hosts instead is the canonical tag. Every page on `slopscupper.com` already points
+its canonical at the primary host, so Google indexes one copy and attributes it to one domain. Flipping
+`PRIMARY_HOST` flips every canonical at once, and Google follows it over the next few weeks.
+
+### Now, before the flip
+
+1. Add `slopscupper.com` as a **Domain property** (not URL-prefix: a domain property covers www, apex and both
+   schemes in one). Verification is a DNS TXT record, and Cloudflare hosts the zone, so it is one record and
+   about a minute to propagate.
+2. **Do not submit a sitemap for it yet.** While `PRIMARY_HOST` is `slopscore.org`, every URL in
+   `https://slopscupper.com/sitemap.xml` is a `slopscore.org` URL. Search Console rejects or ignores a sitemap
+   whose URLs belong to a different property, and the errors are noise, not signal. The sitemap becomes
+   submittable the moment step 4 of the flip lands.
+3. Nothing else. The new property will show almost no data until the canonicals move, and that is correct.
+
+### After the flip
+
+1. Submit `https://slopscupper.com/sitemap.xml` to the new property. Its URLs are now `slopscupper.com` URLs.
+2. Leave the `slopscore.org` sitemap submitted in the old property. It serves the same list, now pointing at
+   the new host, which is exactly the signal that moves the index across.
+3. Expect a dip. Impressions fall on the old property and climb on the new one over roughly two to six weeks,
+   and the total usually sags in the middle of that. Nothing is broken; do not react to week one.
+4. Watch **Page indexing** on the new property for "Alternate page with proper canonical tag" on
+   `slopscore.org` URLs. That message means the setup is working as designed, not that something failed.
+
+### While you are in there
+
+With `TRAWL_INDEX=on` the sitemap carries every listing, trawled included, so it went from about a dozen URLs
+to a couple of hundred. Two things follow:
+
+- A good share of those will sit in **"Crawled — currently not indexed"** for a while. A trawled page's body is
+  largely the repo's own README, and Google is slow to index text it can already find on github.com. This is
+  worth watching rather than fixing in a hurry: the fix, if it is needed, is making sure the parts of the page
+  that are *ours* (the Cap'm's reason for the pick, the scan report, the disclosure chips, votes and comments)
+  carry enough weight above the README that the page is not a near-duplicate of the source.
+- Use the old property's **Removals** tool if a takedown ever needs to be fast. A delisted trawled repo already
+  404s and drops out on the next crawl, but Removals pulls it from results in hours instead of days. It is
+  temporary (about six months) and buys time for the crawl to catch up; it is not a substitute for the delist.
+
+## Bing, and everything else
+
+Add the domain in Bing Webmaster Tools the same way, and submit the sitemap on the same schedule. IndexNow
+needs nothing at all: the key is served by the worker at `/{key}.txt` on whichever host asks, so it works on
+both domains the moment they answer.
 
 ## Verifying afterwards
 

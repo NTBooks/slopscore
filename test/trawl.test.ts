@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { GhRepo } from "../src/lib/github";
 import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
-import { claimSnippet, autoReason } from "../src/lib/virtual";
+import { claimSnippet, autoReason, trawlIndexed } from "../src/lib/virtual";
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
@@ -157,5 +157,17 @@ describe("critic votes", () => {
     expect(criticVoteRefusal(1, "alice", admins)).toBeNull();
     expect(criticVoteRefusal(0, "alice", admins)).toBeNull();
     expect(CRITIC_WEIGHT).toBe(0.5);
+  });
+});
+
+describe("TRAWL_INDEX is the switch, and only 'on' is on", () => {
+  it("lets trawled listings into search when set", () => {
+    expect(trawlIndexed({ TRAWL_INDEX: "on" })).toBe(true);
+    expect(trawlIndexed({ TRAWL_INDEX: " ON " })).toBe(true);
+  });
+  it("keeps them out for anything else, including unset and a typo", () => {
+    for (const v of [undefined, "", "off", "true", "1", "yes", "onn"]) {
+      expect(trawlIndexed({ TRAWL_INDEX: v })).toBe(false);
+    }
   });
 });

@@ -45,7 +45,6 @@ export const RepoPage: FC<{ d: RepoPageData }> = ({ d }) => {
       {d.flash ? <div class="notice">{d.flash}</div> : null}
       {d.donated ? <div class="notice">Thanks. The inspector is back from lunch. This page updates once the scan lands (refresh in a moment).</div> : null}
       <div class="row" style="border:0">
-        <span class="rank"></span>
         <VoteBox repo={r} mine={d.mine} user={user} />
         {gh.owner_avatar ? <img class="thumb thumbwrap" src={gh.owner_avatar} alt="" referrerpolicy="no-referrer" /> : <span class="thumb blank thumbwrap">🐷</span>}
         <div class="rowmain">

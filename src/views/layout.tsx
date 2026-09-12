@@ -2,7 +2,7 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import type { SessionUser } from "../env";
 import { visibleSorts, type Sort } from "../lib/db";
-import { Wordmark } from "./art";
+import { Wordmark, Icon } from "./art";
 
 export interface PageMeta {
   title: string;
@@ -77,7 +77,8 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             <a href="/b" class="more">all slopbuckets »</a>
           </div>
         ) : null}
-        <header class="top">
+        {/* .searching: on a phone the search box is hidden and reached by the tab-bar magnifier, except here, where it is the page. */}
+        <header class={`top${url.pathname === "/search" ? " searching" : ""}`}>
           <a class="wordmark" href="/" title={`${SITE.tagline} ${SITE.description}`}>
             <img src="/favicon.svg" alt="" class="mark" width="28" height="28" /> <Wordmark />
           </a>
@@ -88,16 +89,19 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
             {user ? <a href="/upvoted" class={url.pathname.startsWith("/upvoted") ? "on" : ""} title="everything you upvoted, newest first">upvoted</a> : null}
             <a href="/queue" class={url.pathname.startsWith("/queue") ? "on" : ""}>queue</a>
             <a href="/best" class={url.pathname.startsWith("/best") ? "on" : ""} title="truffles: what Schnitzel dug up">winners</a>
+            {user ? <a href="/me" class={`onphone${url.pathname === "/me" ? " on" : ""}`}>my repos</a> : null}
           </nav>
           <form class="search" action="/search" method="get" role="search">
             <input type="search" name="q" value={q ?? ""} placeholder="search slop… category:cli lang:python -tool:cursor" aria-label="Search" />
             <button type="submit">go</button>
           </form>
           <div class="who">
+            {/* The phone's search: the box below is hidden there, so this opens the page that keeps one. */}
+            <a href="/search" class="onphone mag" aria-label="Search"><Icon name="search" /></a>
             {user ? (
               <>
                 <a href={`/u/${user.login}`}><img src={user.avatar_url ?? ""} alt="" class="avatar" /> {user.login}</a>
-                <a href="/me" title="everything you own or maintain here">my repos</a>
+                <a href="/me" class="ondesk" title="everything you own or maintain here">my repos</a>
                 {user.isAdmin ? <a href="/mod" class="mod">mod</a> : null}
                 <form method="post" action="/auth/logout" class="inline"><input type="hidden" name="csrf" value={user.csrf} /><button class="link">logout</button></form>
               </>

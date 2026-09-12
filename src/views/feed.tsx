@@ -61,12 +61,11 @@ export const Chips: FC<{ repo: RepoRow; full?: boolean }> = ({ repo, full }) => 
   );
 };
 
-export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: SessionUser | null; showStatus?: boolean }> = ({ repo, rank, mine, user, showStatus }) => {
+export const FeedRow: FC<{ repo: RepoRow; mine: number; user: SessionUser | null; showStatus?: boolean }> = ({ repo, mine, user, showStatus }) => {
   const thumb = thumbUrl(repo);
   const gh = parseJson<{ owner_avatar?: string }>(repo.gh, {});
   return (
     <li class="row" id={`r${repo.id}`}>
-      <span class="rank">{rank}</span>
       <VoteBox repo={repo} mine={mine} user={user} />
       {thumb ? <a href={repoUrl(repo)} class="thumbwrap"><img class="thumb" src={thumb} alt="" loading="lazy" referrerpolicy="no-referrer" /></a> : <a href={repoUrl(repo)} class="thumb blank thumbwrap">🐷</a>}
       <div class="rowmain">
@@ -105,12 +104,11 @@ export const FeedRow: FC<{ repo: RepoRow; rank: number; mine: number; user: Sess
 
 export const FeedList: FC<{ rows: RepoRow[]; page: number; hasMore: boolean; votes: Map<number, number>; user: SessionUser | null; baseUrl: string; empty?: string; showStatus?: boolean }> = ({ rows, page, hasMore, votes, user, baseUrl, empty, showStatus }) => {
   const sep = baseUrl.includes("?") ? "&" : "?";
-  const offset = (page - 1) * 25;
   return (
     <>
       {rows.length === 0 ? <div class="empty">{empty ?? "No slop yet. Suspicious."}</div> : null}
       <ol class="feed">
-        {rows.map((r, i) => <FeedRow repo={r} rank={offset + i + 1} mine={votes.get(r.id) ?? 0} user={user} showStatus={showStatus} />)}
+        {rows.map((r) => <FeedRow repo={r} mine={votes.get(r.id) ?? 0} user={user} showStatus={showStatus} />)}
       </ol>
       {(page > 1 || hasMore) ? (
         <div class="pager">

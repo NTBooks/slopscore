@@ -126,7 +126,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
           ) : <h2 style="margin:8px 0">{opts.heading}</h2>}
           {opts.intro && !opts.showHero ? <p class="muted">{opts.intro}</p> : null}
           {!opts.hideSorts && (opts.showHero || opts.sort !== "hot") ? (
-            <div class="muted" style="margin:4px 0">
+            <div class={`sortbar muted${opts.showHero ? " dup" : ""}`} style="margin:4px 0">
               sort: {visibleSorts().filter((s) => s !== "upcoming").map((s) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${s}`} class={s === opts.sort ? "chip ok" : "chip"}>{s}</a>)}
               {opts.sort === "top" || opts.sort === "controversial" ? <> · window: {["day", "week", "month", "year", "all"].map((w) => <a href={`${opts.baseUrl}${opts.baseUrl.includes("?") ? "&" : "?"}sort=${opts.sort}&t=${w}`} class={w === (opts.t ?? "all") ? "chip ok" : "chip"}>{w}</a>)}</> : null}
             </div>

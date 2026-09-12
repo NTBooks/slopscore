@@ -181,6 +181,13 @@ details.reportform { display: inline; } details.reportform summary { display: in
 .verdict { padding: 8px 12px; border-radius: 4px; margin: 8px 0; } .verdict details { margin-top: 4px; }
 .scanreport { font-size: 12px; } .scanreport li { margin: 2px 0; } .gate-ok { color: #2e8b57; } .gate-bad { color: #c0392b; }
 .disclosures { margin: 6px 0; }
+/* Disclosures are short label/chip pairs. On a desktop-width column two pairs fit
+   side by side, so the block stops running down the page as a one-item-per-line ladder.
+   Row-major flow means pair order reads left-to-right, then down. */
+@media (min-width: 760px) {
+  .disclosures dl { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); }
+  .disclosures dl > dt:nth-child(4n+3) { padding-left: 16px; }
+}
 .owner { border: 1px solid var(--accent); border-radius: 4px; padding: 8px 12px; margin: 8px 0; background: var(--panel); }
 .owner h3 { margin: 0 0 4px; } .owner form { display: inline; margin-right: 6px; }
 .stamp-svg { color: var(--accent-2); }

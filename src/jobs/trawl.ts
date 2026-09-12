@@ -18,12 +18,13 @@ const MAX_PAGES = 3; // repository search allows 30 calls a minute; 6 queries x 
 
 export interface TrawlResult { picked: number; searched: number; skipped: number; repos: string[]; note?: string }
 
-function insertPick(db: D1Database, p: Pick): D1PreparedStatement {
+/** `verdict` is only present for auto-trawled picks: a hand-picked or backlog repo never went past a model. */
+function insertPick(db: D1Database, p: Pick, verdict?: { code: string | null; domain: string | null }): D1PreparedStatement {
   const g = p.repo;
   return db.prepare(
-    `INSERT OR IGNORE INTO repos (id, full_name, owner, name, owner_id, owner_type, title, tagline, stars, forks, language, license, is_fork, status, queue_reason, source, virtual_md, virtual_reason)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,'discovered','awaiting-scan','trawl',?,?)`,
-  ).bind(g.id, g.full_name, g.owner.login, g.name, g.owner.id, g.owner.type, g.name, g.description, g.stargazers_count, g.forks_count, g.language, g.license?.spdx_id ?? null, p.virtualMd, p.reason);
+    `INSERT OR IGNORE INTO repos (id, full_name, owner, name, owner_id, owner_type, title, tagline, stars, forks, language, license, is_fork, status, queue_reason, source, virtual_md, virtual_reason, judge_code, judge_domain)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,'discovered','awaiting-scan','trawl',?,?,?,?)`,
+  ).bind(g.id, g.full_name, g.owner.login, g.name, g.owner.id, g.owner.type, g.name, g.description, g.stargazers_count, g.forks_count, g.language, g.license?.spdx_id ?? null, p.virtualMd, p.reason, verdict?.code ?? null, verdict?.domain ?? null);
 }
 
 /** Hand-pick one repo straight into the scan queue (admin: /__cron?cron=trawl&repo=owner/name&reason=...). The hard rules apply; keyword signals don't. */
@@ -125,7 +126,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   const deny = await loadDenyRows(db);
   const queries = trawlQueries(t);
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
-  const skips: { full_name: string; why: string }[] = [];
+  const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
   for (let qi = 0; qi < queries.length && out.queued.length < budget; qi++) {
     const q = queries[(start + qi) % queries.length];
     for (let page = 1; page <= 2 && out.queued.length < budget; page++) {
@@ -156,14 +157,16 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
         if (!reason) { skips.push({ full_name: g.full_name.toLowerCase(), why: "could not build a reason" }); continue; }
         const verdict = await judgeCandidate(env, { full_name: g.full_name, description: g.description ?? "", topics: g.topics ?? [], language: g.language, stars: g.stargazers_count, claim, readme });
         out.judged++;
-        if (!verdict.keep) { skips.push({ full_name: g.full_name.toLowerCase(), why: `judge: ${verdict.code ?? verdict.error ?? "no"}` }); continue; }
-        await insertPick(db, curatedPick(g, reason, t)).run();
+        // The verdict is kept either way: what the trawl threw back is the larger, more interesting half of the
+        // sample, and /trends counts both. Only `code` decides anything; `domain` is recorded and nothing else.
+        if (!verdict.keep) { skips.push({ full_name: g.full_name.toLowerCase(), why: `judge: ${verdict.code ?? verdict.error ?? "no"}`, code: verdict.code, domain: verdict.domain }); continue; }
+        await insertPick(db, curatedPick(g, reason, t), verdict).run();
         out.queued.push(g.full_name);
       }
     }
   }
   out.skipped = skips.length;
-  if (skips.length) await db.batch(skips.slice(0, 100).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason) VALUES (?, ?)").bind(s.full_name, s.why.slice(0, 300))));
+  if (skips.length) await db.batch(skips.slice(0, 100).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason, judge_code, judge_domain) VALUES (?, ?, ?, ?)").bind(s.full_name, s.why.slice(0, 300), s.code ?? null, s.domain ?? null)));
   await setState(db, "trawl:cursor", String(start + 1));
   if (out.queued.length) { await bump(db, "found", out.queued.length); await markDirty(db); }
   return out;

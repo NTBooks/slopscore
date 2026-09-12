@@ -26,6 +26,7 @@ import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
 import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
+import { snapshotTrends } from "./jobs/trends";
 import { recordCron } from "./lib/crawlclock";
 import { indexNowKey } from "./lib/indexnow";
 
@@ -129,6 +130,7 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/feed.xml    RSS of new opted-in listings (?sort=updated for ones whose file changed)
 - ${origin}/trawl.xml   RSS of the trawl alone: repos the Cap'm found rather than ones that were submitted. Kept out of /feed.xml on purpose, so watching the hauls does not mean taking the whole feed
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
+- ${origin}/trends      what the corpus looks like from a distance: languages, tools, categories, and what the trawl threw back, counted nightly and split into the trawled sample and the self-selected opted-in one. .json is the whole snapshot as data
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
 - ${origin}/for-agents  how to hand SlopScupper to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
@@ -186,15 +188,17 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "*/15 * * * *": result = await sweep(env); break;
       case "*/5 * * * *": result = await scanQueue(env, opts.n ?? undefined); break;
       case "*/10 * * * *": result = await recrawl(env); break;
-      case "5 0 * * *": result = { awards: await awards(env), trawl: await trawlDaily(env), critics: await runCritics(env) }; break;
+      case "5 0 * * *": result = { awards: await awards(env), trawl: await trawlDaily(env), critics: await runCritics(env), trends: await snapshotTrends(env) }; break;
       // manual only: &release=N moves N backlog picks into the queue; &repo=owner/name[&reason=...] hand-picks one; &n=N runs the keyword search
       case "trawl": result = opts.release ? await releaseBacklog(env, opts.release) : opts.auto ? await autoTrawl(env, opts.auto) : opts.repo ? await trawlOne(env, opts.repo, opts.reason) : await trawl(env, opts.n); break;
       // manual: &n=N repos per critic this run, &dry=1 to read and score without voting or recording
       case "critics": result = await runCritics(env, { n: opts.n, dry: opts.dry }); break;
+      // manual: recount the dashboard now rather than waiting for 00:05. Idempotent: it replaces today's rows.
+      case "trends": result = await snapshotTrends(env); break;
       case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
         const d = new Date();
         const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;
-        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: daily ? await awards(env) : "skipped", trawl: daily ? await trawlDaily(env) : "skipped", critics: daily ? await runCritics(env) : "skipped" };
+        result = { sweep: await sweep(env), scan: await scanQueue(env), recrawl: await recrawl(env), awards: daily ? await awards(env) : "skipped", trawl: daily ? await trawlDaily(env) : "skipped", critics: daily ? await runCritics(env) : "skipped", trends: daily ? await snapshotTrends(env) : "skipped" };
         break;
       }
       default: result = { note: `unknown cron ${cron}` };

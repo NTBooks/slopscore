@@ -18,6 +18,8 @@ import { respond } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
+import { loadTrends } from "../jobs/trends";
+import { Trends, trendsMd } from "../views/trends";
 import { Layout, SITE } from "../views/layout";
 import { FeedList, ogImage } from "../views/feed";
 import { Rail, type RailData } from "../views/rail";
@@ -534,6 +536,7 @@ pages.get("/stats", async (c) => {
       <Layout meta={{ title: "Stats — SlopScupper" }} user={user} url={url}>
         <section class="wrap narrow" style="padding:0">
           <h2>Stats</h2>
+          <p class="muted">This site runs on Cloudflare's free tier on purpose. When the "deferred" column grows day over day, the AI budget is the bottleneck and it's time to pay. Numbers about the slop itself, rather than about the machine that counts it, live on <a href="/trends">/trends</a>.</p>
           <div class={`capacity ${d.cap.mode}`}>
             <div><span class="label">mode</span><strong>{d.cap.mode === "free" ? "free tier" : "paid plan"}</strong></div>
             <div><span class="label">AI budget today</span><strong>{d.cap.neurons_used} / {d.cap.budget}</strong> neurons · <strong>{d.cap.scans_left_today}</strong> of ~{d.cap.scans_per_day} free scans left</div>
@@ -561,6 +564,27 @@ pages.get("/stats", async (c) => {
           </table>
           {d.daily.length === 0 ? <div class="empty">No days recorded yet. The crons write one row per UTC day.</div> : null}
         </section>
+      </Layout>
+    ),
+  });
+});
+
+/** The dashboard. One query against last night's snapshot (src/jobs/trends.ts), cached between data versions. */
+pages.get("/trends", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const d = await loadTrends(c.env.DB);
+  const description = "What a few thousand self-declared AI-written repos look like from a distance: languages, tools, categories, and what the trawl throws back.";
+  return respond(c, d, {
+    json: (x) => x ?? { error: "no snapshot yet" },
+    md: (x) => (x ? trendsMd(x) : ["# Trends", "", "No snapshot yet. The nightly job writes one at 00:05 UTC."].join("\n")),
+    html: (x) => (
+      <Layout meta={{ title: "Trends — SlopScupper", description }} user={user} url={url}>
+        {x ? <Trends d={x} /> : (
+          <section class="wrap narrow" style="padding:0">
+            <h2>Trends</h2>
+            <div class="empty">No snapshot yet. The counting job runs at 00:05 UTC; come back tomorrow.</div>
+          </section>
+        )}
       </Layout>
     ),
   });
@@ -606,8 +630,12 @@ pages.get("/about", (c) => {
     "## What it is", "",
     "SlopScupper is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
+    "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits, and so are the [trends](/trends). The [source](https://github.com/NTBooks/slopscore) is public.", "",
     "## Trawled listings", "",
     "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, they stay out of the RSS feed, and they can't win awards. They are in the sitemap on purpose: searching for your own repo is how you find the listing, and the button that removes it. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
+    "## The Cap'm's classifier", "",
+    "One model reads every repo the trawl finds, before anything is listed. Keywords cannot tell a vibe-coded app from a tool built for people who vibe code, so a cheap model on OpenRouter is asked two multiple-choice questions about each candidate: what kind of thing it is, which decides whether the repo is listed at all, and what the software is for, which decides nothing.", "",
+    "It answers with two values off two fixed lists and nothing else. It cannot write a sentence that reaches this site, it cannot talk a repo into being listed (only out of one), and the public reason on a trawled listing is built from the owner's own words, never the model's. The two answers are kept for every candidate it sees, including the ones thrown back, and counted on [/trends](/trends) — where the labels are marked as the classifier's guess, because that is what they are.", "",
     "## Critics", "",
     `Some votes come from SlopScupper's own agent critics. They exist only here. There is no GitHub account behind any of them and there never will be: GitHub allows one account per person, so a cast of personas over there would be fake accounts. Each critic is a row in our database that reads listed repos with a small model, under a rubric you can read (\`src/lib/critics.ts\` in the source).`, "",
     ...CRITICS.map((cr) => `- [${cr.login}](/u/${cr.login}) — *${cr.name}.* ${cr.rubric}`), "",

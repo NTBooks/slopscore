@@ -320,3 +320,68 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .quip::before { content: "\201C"; } .quip::after { content: "\201D"; }
 .quip.muted { font-size: 12px; } .quip.muted::before, .quip.muted::after { content: ""; }
 @media (max-width: 600px) { .heckleline .when { margin-left: 0; width: 100%; } }
+
+/* ---- /trends: charts drawn with divs, because a chart library is 90kB of JavaScript to say "python is popular" ---- */
+/* One palette for every stacked chart. Seven is enough: a series with more bands than that is a table, not a chart. */
+:root { --c1: #e8669a; --c2: #7a6cd6; --c3: #c98a3a; --c4: #3f9e8a; --c5: #b5533c; --c6: #5f86c9; --c7: #9a8f7a; }
+@media (prefers-color-scheme: dark) { :root { --c1: #ff8fb5; --c2: #9d93ff; --c3: #e0ab63; --c4: #63c3ac; --c5: #e0846a; --c6: #86a8e6; --c7: #b8ac95; } }
+.c1 { background: var(--c1); } .c2 { background: var(--c2); } .c3 { background: var(--c3); } .c4 { background: var(--c4); }
+.c5 { background: var(--c5); } .c6 { background: var(--c6); } .c7 { background: var(--c7); }
+
+/* The dashboard is one long column of prose and charts, so it opts out of .wrap's 22px row gap and lets
+   ordinary heading and paragraph margins do the spacing. */
+.dash { gap: 0; }
+.dash > h3 { margin-top: 26px; }
+.dash > p { margin: 6px 0 10px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--goo); border-radius: 4px; padding: 4px 12px 10px; margin: 14px 0 18px; }
+.note h3 { margin-top: 10px; } .note p { margin: 6px 0; }
+
+.chart { margin: 18px 0; } .chart h3 { margin-bottom: 2px; }
+.cohorts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 22px; }
+/* The opted-in-only facets: two per row, one caveat for the lot of them. */
+.cohorts.declared { row-gap: 18px; margin: 8px 0 18px; }
+.cohead { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 2px; margin-bottom: 5px; }
+
+/* A bar row is a fixed-width label, a track that takes the slack, and a number that never wraps. */
+.bars { display: grid; gap: 3px; }
+.barrow { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3.4em; align-items: center; gap: 7px; font-size: 12px; }
+/* Bucket labels are sentences ("three months to a year"), so they wrap rather than ellipsing into nonsense. */
+.barkey { overflow-wrap: anywhere; line-height: 1.25; }
+/* Full-width charts have room for the whole label, so they do not squeeze it into 9.5em. */
+.bars.wide .barrow { grid-template-columns: minmax(0, 19em) 1fr 3.4em; }
+.bartrack { background: var(--panel-2); border-radius: 2px; height: 11px; overflow: hidden; }
+.bartrack i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.barn { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Counts beside the share: wider number cell, and the share rides along muted. */
+.bars.wide.withn .barrow { grid-template-columns: minmax(0, 19em) 1fr 6.8em; }
+.bars.wide.withn .barn { white-space: nowrap; }
+
+/* Tag cloud. Sized inline from the counts; alphabetical, so the eye can find a term as well as the big ones. */
+.cloud { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 11px; line-height: 1.45; margin: 6px 0 18px; }
+.cloud a { display: inline-block; }
+
+/* Column charts: each column is a flex stack whose segments are sized by flex-grow, so no percentage maths. */
+.cols { display: flex; align-items: flex-end; justify-content: flex-start; gap: 4px; height: 130px; margin: 10px 0 2px; }
+.cols.tall { height: 160px; }
+/* max-width keeps a two-column chart from turning into two billboards on a young site. */
+.col { flex: 1 1 0; max-width: 78px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.coln { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 12px; }
+.colstack { display: flex; flex-direction: column-reverse; width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; overflow: hidden; background: var(--panel-2); }
+.colstack.ghost { background: repeating-linear-gradient(45deg, var(--panel), var(--panel) 3px, var(--panel-2) 3px, var(--panel-2) 6px); }
+.colstack .seg { display: block; width: 100%; min-height: 1px; }
+.collabel { font-size: 10px; color: var(--muted); white-space: nowrap; line-height: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); margin: 2px 0 16px; }
+.lkey { display: inline-flex; align-items: center; gap: 4px; }
+.swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; }
+
+@media (max-width: 600px) {
+  /* Two cohorts side by side stops being a comparison and starts being two columns of ellipses. */
+  .cohorts { grid-template-columns: 1fr; gap: 12px; }
+  .cols { height: 110px; gap: 2px; } .cols.tall { height: 130px; }
+  /* A 19em label column leaves a phone about 40px of bar. The label wraps instead. */
+  .bars.wide .barrow { grid-template-columns: minmax(0, 9em) 1fr 3.4em; }
+  .bars.wide.withn .barrow { grid-template-columns: minmax(0, 8em) 1fr 5.6em; }
+  /* Dropping the year makes every label three characters, which fits upright: no rotated axis on a phone. */
+  .collabel { font-size: 9px; } .collabel .yr { display: none; }
+}

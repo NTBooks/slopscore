@@ -32,7 +32,7 @@ Found repos are listed and votable straight away. Log in and press **Submit** on
 
 - **Just add the file.** No submit form, no webhook, no app to install.
 - **Store nothing we don't own.** Only our database. GitHub owns identity, code, images, and the marker file.
-- **Fully transparent.** Every status has a public reason. The [queue](https://slopscore.org/queue), the [moderation log](https://slopscore.org/log), and the [stats](https://slopscore.org/stats), including how close the site is to its free-tier limits, are public.
+- **Fully transparent.** Every status has a public reason. The [queue](https://slopscore.org/queue), the [moderation log](https://slopscore.org/log), and the [stats](https://slopscore.org/stats), including how close the site is to its free-tier limits, are public. So are the [trends](https://slopscore.org/trends): what the whole corpus looks like from a distance, counted nightly, with the trawled sample and the self-selected opted-in one kept in separate columns.
 - **Agent-browsable.** Append `.json` or `.md` to any page. See [/llms.txt](https://slopscore.org/llms.txt), [/openapi.json](https://slopscore.org/openapi.json), and the MCP server at `/mcp`.
 - **$0/month.** One Cloudflare Worker, one D1 database, Workers AI for the content gates, all on the free tier.
 - **Nothing here is a secret.** Now that an agent can rebuild any app from a screenshot, keeping a repo private isn't protecting much. Push it and let the trough decide.

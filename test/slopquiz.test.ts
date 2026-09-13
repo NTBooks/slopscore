@@ -97,7 +97,11 @@ describe("the no-JS form", () => {
 
 describe("the draft slopscore.md", () => {
   // The one that matters: the page must never hand somebody a file its own crawler would turn away.
-  it("parses clean for every route through the questionnaire", () => {
+  // Every route means 4^7 = 16,384 answers, each one built into a file and put through the real parser, which
+  // is a few seconds of honest work rather than a hang. It ran at 4.6s of the default 5s budget on a shared CI
+  // runner until an unrelated push added enough parallel load to tip it over, so it gets a timeout of its own.
+  // Adding a question multiplies this by four: if it ever gets slow enough to notice, sample the routes.
+  it("parses clean for every route through the questionnaire", { timeout: 30_000 }, () => {
     for (const a of everyAnswer()) {
       const res = parseSlopMd(draftFile(a));
       expect(res.errors, `answers ${a.join("")}`).toEqual([]);

@@ -99,6 +99,18 @@ The five-minute tick claims it, clearing the row before the first repo is fetche
 however the run ends. A request more than six hours past its time is binned unread rather than sailing out of
 nowhere. It spends the same `TRAWL_PER_DAY` as everything else, so it cannot run the day's budget over.
 
+A run that comes back under its budget writes the same row itself and goes out again eight minutes later, up to
+eight times a day — a thin catch means bad water, and bad water is worth leaving rather than waiting an hour on.
+
+The rest of what the trawl remembers, all in `crawl_state`, one row per search:
+
+| key | what it holds |
+| --- | --- |
+| `trawl:yield:<n>` | `<matches>|<when>` — a search that matched nothing is skipped for 12 hours, then probed again |
+| `trawl:fresh:<n>` | when it last asked for new pushes, so the next ask starts there and re-reads nothing |
+| `trawl:before:<n>` | how far back the deep walk has got; 0 once it has reached the 90-day floor and wrapped |
+| `trawl:chase:<n/a>` | `trawl:chase:YYYY-MM-DD`, how many extra runs the day has already spent |
+
 ## Backups
 
 Two layers, both free at this size:

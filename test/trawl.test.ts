@@ -6,7 +6,8 @@ import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, M
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
-import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, clampDeep, pagesFor, nextDeep, readTrawlRequest, REQUEST_WINDOW } from "../src/jobs/trawl";
+import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, EMPTY_RETRY, searchWindows, nextBefore, worthWorking, isoStamp, readTrawlRequest, REQUEST_WINDOW } from "../src/jobs/trawl";
+import { cheapReject } from "../src/lib/virtual";
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
 const repo = (over: Partial<GhRepo> = {}): GhRepo => ({
@@ -89,42 +90,79 @@ describe("virtual paperwork", () => {
   });
 });
 
-describe("the deep page cursor", () => {
-  it("works page 1 every night, so a repo pushed today is seen tonight", () => {
-    for (const deep of [2, 7, MAX_PAGE]) expect(pagesFor(deep)[0]).toBe(1);
+describe("the date window", () => {
+  const DAY = 86400;
+  const AT = 1789300000;
+  const SINCE = AT - 90 * DAY;
+  const win = (o = {}) => searchWindows("topic:vibe-coded", { since: SINCE, fresh: 0, before: 0, at: AT, ...o });
+
+  it("asks for the whole 90 days when nothing has been worked yet, and skips the freshness pass", () => {
+    const w = win();
+    expect(w.fresh).toBeNull();
+    expect(w.deep).toBe(`topic:vibe-coded pushed:>=${isoStamp(SINCE)}`);
   });
-  it("carries on from where the last run stopped instead of re-reading the top", () => {
-    expect(pagesFor(2)).toEqual([1, 2, 3, 4]);
-    expect(pagesFor(8)).toEqual([1, 8, 9, 10]);
+  it("walks strictly older water once the deep cursor has moved", () => {
+    const before = AT - 10 * DAY;
+    expect(win({ before }).deep).toBe(`topic:vibe-coded pushed:${isoStamp(SINCE)}..${isoStamp(before)}`);
   });
-  it("never asks for a page past the 1,000 results GitHub will hand back", () => {
-    for (const deep of [MAX_PAGE - 2, MAX_PAGE - 1, MAX_PAGE]) {
-      for (const p of pagesFor(deep)) expect(p).toBeLessThanOrEqual(MAX_PAGE);
-    }
-    expect(pagesFor(MAX_PAGE)).toEqual([1, MAX_PAGE]);
+  it("asks the freshness pass only for repos pushed since the last look", () => {
+    const fresh = AT - 3600;
+    expect(win({ fresh }).fresh).toBe(`topic:vibe-coded pushed:>=${isoStamp(fresh)}`);
   });
-  it("advances past the pages it finished", () => {
-    expect(nextDeep(4, false)).toBe(5);
+  it("never re-reads: the two windows cannot overlap", () => {
+    const w = win({ fresh: AT - 3600, before: AT - 10 * DAY });
+    // fresh starts above the deep window's upper bound, so no repo can satisfy both.
+    expect(isoStamp(AT - 3600) > isoStamp(AT - 10 * DAY)).toBe(true);
+    expect(w.fresh).toContain("pushed:>=");
+    expect(w.deep).toContain("..");
   });
-  it("starts the search over when the water runs out or the cap is reached", () => {
-    expect(nextDeep(9, true)).toBe(2);
-    expect(nextDeep(MAX_PAGE, false)).toBe(2);
+  it("uses a full timestamp, so two windows do not share a day", () => {
+    const stamp = isoStamp(AT);
+    expect(stamp).toBe(new Date(AT * 1000).toISOString().slice(0, 19) + "Z");
+    expect(stamp.length).toBe(20);
+    expect(stamp).toContain("T");
   });
-  it("never lets a missing, junk or out-of-range cursor read page 1 twice", () => {
-    for (const n of [NaN, 0, 1, -5, MAX_PAGE + 1, 1e9]) expect(clampDeep(n)).toBe(2);
-    expect(clampDeep(6)).toBe(6);
+  it("wraps to the top when the walk reaches the 90-day floor", () => {
+    expect(nextBefore(SINCE - 1, SINCE)).toBe(0);
+    expect(nextBefore(0, SINCE)).toBe(0);
+    expect(nextBefore(AT - 5 * DAY, SINCE)).toBe(AT - 5 * DAY);
   });
-  it("reaches every result a search has, given enough nights", () => {
-    // The old net read pages 1 and 2 and nothing else, so a search sitting on 2,000 repos gave up 100.
-    let deep = clampDeep(NaN);
-    const seen = new Set<number>();
-    for (let night = 0; night < 40; night++) {
-      const pages = pagesFor(deep);
-      for (const p of pages) seen.add(p);
-      deep = nextDeep(pages[pages.length - 1], false);
-    }
-    for (let p = 1; p <= MAX_PAGE; p++) expect(seen.has(p)).toBe(true);
-    expect(PAGES_PER_QUERY).toBeGreaterThan(1);
+});
+
+describe("the rotation skipping empty water", () => {
+  const AT = 1789300000;
+  it("works a search nobody has measured yet", () => {
+    expect(worthWorking(null, AT)).toBe(true);
+  });
+  it("works a search that matched something", () => {
+    expect(worthWorking(`2340|${AT - 60}`, AT)).toBe(true);
+  });
+  it("leaves an empty search alone rather than spending a run's calls on it", () => {
+    expect(worthWorking(`0|${AT - 60}`, AT)).toBe(false);
+  });
+  it("probes an empty search again eventually, in case the topic catches on", () => {
+    expect(worthWorking(`0|${AT - EMPTY_RETRY - 1}`, AT)).toBe(true);
+  });
+  it("treats junk as unmeasured rather than skipping it for ever", () => {
+    expect(worthWorking("nonsense", AT)).toBe(true);
+  });
+});
+
+describe("the cheap sieve, before a README or a token is spent", () => {
+  const g = (over: Partial<GhRepo> = {}) => repo({ name: "thing", description: "", topics: [], ...over });
+  it("throws back lists and guides about vibe coding", () => {
+    expect(cheapReject(g({ name: "awesome-vibe-coding" }))).toMatch(/list, guide or prompt pack/);
+    expect(cheapReject(g({ description: "A curated cheatsheet of prompts" }))).toMatch(/list, guide/);
+  });
+  it("throws back tools for vibe coders", () => {
+    expect(cheapReject(g({ description: "An IDE for vibe coding" }))).toMatch(/tool for vibe coding/);
+  });
+  it("keeps a repo that says a machine wrote it, even when it also says vibe coding", () => {
+    expect(cheapReject(g({ description: "A vibe coding app that was vibe coded in a weekend" }))).toBeNull();
+    expect(cheapReject(g({ description: "An IDE for vibe coding", topics: ["vibe-coded"] }))).toBeNull();
+  });
+  it("lets an ordinary candidate through to be looked at properly", () => {
+    expect(cheapReject(g({ name: "snackbot", description: "A tiny CLI for snacks" }))).toBeNull();
   });
 });
 

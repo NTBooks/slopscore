@@ -7,7 +7,7 @@
 import { GitHub } from "../lib/github";
 import type { Env } from "../env";
 import { loadDenyRows } from "../lib/denylist";
-import { pickCandidates, trawlQueries, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, type Pick } from "../lib/virtual";
+import { pickCandidates, trawlQueries, trawlQueriesUnwindowed, cheapReject, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, type Pick } from "../lib/virtual";
 import { judgeCandidate } from "../lib/judge";
 import { markDirty } from "../lib/cache";
 import { now } from "../lib/time";
@@ -15,38 +15,64 @@ import { bump, getState, setState } from "./stats";
 
 const PER_PAGE = 50;
 const MAX_PAGES = 3; // repository search allows 30 calls a minute; 6 queries x 3 pages stays under it
-/** GitHub hands back at most 1,000 results for one search, which at 50 a page is where the water ends. */
+/** GitHub hands back at most 1,000 results for one search, which at 50 a page is where the water ends.
+ *  The date window below is how the trawl gets past that: each run asks for a slice it has never asked for. */
 export const MAX_PAGE = 20;
-/** Pages per search per night: page 1 for what is new, then three more from wherever the last run stopped. */
+/** Pages per search per run: one for what is new, the rest walking backwards through water never worked. */
 export const PAGES_PER_QUERY = 4;
 /** Search calls one run may spend. Repository search allows 30 a minute and a run is the best part of a minute. */
-export const SEARCH_CALLS = 24;
+export const SEARCH_CALLS = 26;
 /** Judge calls one run may spend, as a multiple of what it is allowed to keep. The budget caps repos kept, not
- *  repos read, and the judge is the one step that costs money: with the net reaching past page 2 a night can now
- *  put hundreds of candidates in front of it, where it used to see three in a lifetime. A run that spends this
- *  says so in its note and leaves the rest for the next one; nothing is lost, because what it did not reach
- *  stays unseen rather than being marked as checked. */
+ *  repos read, and the judge is the one step that costs money. A run that spends this says so in its note. */
 export const JUDGE_PER_KEPT = 3;
 export const MIN_JUDGE_CALLS = 10;
+/** How long a search that matched nothing is left alone before being tried again. Eight of the eighteen match
+ *  nothing at all today, and a rotation that gives them equal time spends most of a run on empty water — but a
+ *  topic can catch on, so none of them is written off for ever. */
+export const EMPTY_RETRY = 12 * 3600;
 
-/** A stored deep cursor, or page 2 when it is missing or out of range. Page 1 is never the deep cursor: it is
- *  worked every time regardless, because that is where a newly pushed repo appears. */
-export function clampDeep(n: number): number {
-  return Number.isFinite(n) && n >= 2 && n <= MAX_PAGE ? Math.floor(n) : 2;
+/** A search's remembered yield: how many it matched, and when we last looked. */
+export function parseYield(raw: string | null): { total: number; at: number } | null {
+  const [t, a] = String(raw ?? "").split("|");
+  const total = Number(t), at = Number(a);
+  return Number.isFinite(total) && Number.isFinite(at) ? { total, at } : null;
 }
 
-/** The pages one search works tonight: page 1 for the new arrivals, then a window from where we left off. */
-export function pagesFor(deep: number): number[] {
-  const pages = [1];
-  for (let k = 0; k < PAGES_PER_QUERY - 1 && deep + k <= MAX_PAGE; k++) pages.push(deep + k);
-  return pages;
+/** Whether tonight's rotation should bother with a search. Anything that matched something is worked; anything
+ *  that matched nothing is left alone until EMPTY_RETRY has passed, then probed again at the cost of one call. */
+export function worthWorking(raw: string | null, at: number): boolean {
+  const y = parseYield(raw);
+  return !y || y.total > 0 || at - y.at >= EMPTY_RETRY;
 }
 
-/** Where the deep cursor goes next. Back to the top when the search ran dry or the 1,000-result cap is reached:
- *  results are ordered by push date, so starting over means re-reading repos that have already been judged and
- *  are skipped in a single query, not re-judging them. */
-export function nextDeep(read: number, dry: boolean): number {
-  return dry || read >= MAX_PAGE ? 2 : Math.max(2, read + 1);
+/**
+ * The two date windows a search is worked through, and why there are two.
+ *
+ * Results come back newest-pushed first, so the top of a search is where a repo pushed an hour ago appears and
+ * the bottom is the oldest thing still inside the 90-day floor. Paging deeper each night reached further down
+ * but re-read everything above it every time; asking by date does not. `fresh` asks only for repos pushed since
+ * the last look — usually a handful, often none — and `deep` asks only for repos older than anything already
+ * walked. Between them they cover the whole search exactly once, and neither ever re-reads the other's water.
+ *
+ * `before` of 0 means the deep walk has not started (or has finished and wrapped), so it begins at the newest.
+ */
+export function searchWindows(q: string, o: { since: number; fresh: number; before: number; at: number }): { fresh: string | null; deep: string } {
+  const floor = isoStamp(o.since);
+  const deep = o.before > o.since ? `${q} pushed:${floor}..${isoStamp(o.before)}` : `${q} pushed:>=${floor}`;
+  // Nothing has been looked at yet: the deep walk starts at the top and the freshness pass would duplicate it.
+  const fresh = o.fresh > o.since && o.fresh < o.at ? `${q} pushed:>=${isoStamp(o.fresh)}` : null;
+  return { fresh, deep };
+}
+
+/** Where the deep walk resumes: just past the oldest repo it read. Zero when the water ran out or the run
+ *  reached the 90-day floor, which sends the next run back to the top — by then there is new water there. */
+export function nextBefore(oldest: number, since: number): number {
+  return oldest > since ? oldest : 0;
+}
+
+/** GitHub's search accepts a full timestamp, which is what keeps two windows from overlapping by a whole day. */
+export function isoStamp(t: number): string {
+  return new Date(Math.max(0, Math.floor(t)) * 1000).toISOString().replace(/\.\d+Z$/, "Z");
 }
 
 export interface TrawlResult { picked: number; searched: number; skipped: number; repos: string[]; note?: string }
@@ -153,75 +179,94 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   if (!env.OPENROUTER_API_KEY) return { ...out, note: "no OPENROUTER_API_KEY: the auto-trawl needs its judge" };
   const db = env.DB;
   const t = now();
+  const since = t - PUSHED_WITHIN_DAYS * 86400;
   const budget = Math.min(Math.max(0, Math.floor(n)), 50);
   if (!budget) return out;
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
   const deny = await loadDenyRows(db);
-  const queries = trawlQueries(t);
+  const queries = trawlQueriesUnwindowed();
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
   const maxJudged = Math.max(MIN_JUDGE_CALLS, budget * JUDGE_PER_KEPT);
   const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
-  // A night works a slice of the list, not all of it: the net covers a dozen tools now, and walking every
-  // search every night would spend the GitHub search allowance on the first one. The cursor still moves one
-  // a night, so each search comes round soon enough.
-  const work = Math.min(QUERIES_PER_RUN, queries.length);
   let calls = 0;
-  for (let i = 0; i < work && out.queued.length < budget && out.judged < maxJudged; i++) {
-    const qi = (start + i) % queries.length;
-    const q = queries[qi];
-    // Page 1 is whatever was pushed since this search last came round; the deep cursor is how the rest of the
-    // water gets worked. Without it the net only ever saw the hundred most recently pushed matches of a search
-    // and nothing else, so a query sitting on two thousand repos was dry inside a week and looked like proof
-    // there was nothing out there. Results are sorted by push date, so page 1 is always the new arrivals and
-    // the deep pages are the ones we never reached; what has already been judged is skipped either way.
-    const deep = clampDeep(Number(await getState(db, `trawl:page:${qi}`)));
-    const pages = pagesFor(deep);
-    let read = deep - 1; // the deepest page read all the way to the end this run
-    let dry = false;     // the search has no more results at that depth: back to the top next time
-    for (const page of pages) {
-      if (out.queued.length >= budget || out.judged >= maxJudged) break;
-      if (gh.throttled()) { out.note = "github rate limit"; break; }
-      if (calls >= SEARCH_CALLS) { out.note = `search budget spent (${SEARCH_CALLS} calls)`; break; }
-      const r = await gh.searchRepos(q, page, 50);
-      calls++;
-      out.searched++;
-      if (r.status !== 200 || !r.data) { await setState(db, "trawl:last_error", `${r.status}`); break; }
-      const items = r.data.items ?? [];
-      if (!items.length) { if (page > 1) dry = true; break; }
-      const names = items.map((i) => i.full_name.toLowerCase());
-      const ph = names.map(() => "?").join(",");
-      const [known, before] = await Promise.all([
-        db.prepare(`SELECT lower(full_name) AS n FROM repos WHERE lower(full_name) IN (${ph})`).bind(...names).all<{ n: string }>(),
-        db.prepare(`SELECT full_name AS n FROM trawl_skipped WHERE full_name IN (${ph})`).bind(...names).all<{ n: string }>(),
-      ]);
-      const knownSet = new Set([...(known.results ?? []), ...(before.results ?? [])].map((k) => k.n));
-      for (const g of items) {
-        if (out.queued.length >= budget || gh.throttled()) break;
-        if (out.judged >= maxJudged) { out.note = `judge budget spent (${maxJudged}); the rest waits for the next run`; break; }
-        if (knownSet.has(g.full_name.toLowerCase())) continue;
-        if (g.stargazers_count < MIN_STARS || g.stargazers_count > MAX_STARS) continue;
-        if ((Date.parse(g.pushed_at) / 1000 || 0) < t - PUSHED_WITHIN_DAYS * 86400) continue;
-        const hard = curatedCheck(g, { known: new Set(), deny });
-        if (hard) { skips.push({ full_name: g.full_name.toLowerCase(), why: hard }); continue; }
-        const readme = await gh.readmeText(g.owner.login, g.name);
-        const claim = claimSnippet(`${g.description ?? ""}. ${readme}`);
-        if (!claim) { skips.push({ full_name: g.full_name.toLowerCase(), why: "no past-tense claim that an AI tool wrote it" }); continue; }
-        const reason = autoReason(g, claim);
-        if (!reason) { skips.push({ full_name: g.full_name.toLowerCase(), why: "could not build a reason" }); continue; }
-        const verdict = await judgeCandidate(env, { full_name: g.full_name, description: g.description ?? "", topics: g.topics ?? [], language: g.language, stars: g.stargazers_count, claim, readme });
-        out.judged++;
-        // The verdict is kept either way: what the trawl threw back is the larger, more interesting half of the
-        // sample, and /trends counts both. Only `code` decides anything; `domain` is recorded and nothing else.
-        if (!verdict.keep) { skips.push({ full_name: g.full_name.toLowerCase(), why: `judge: ${verdict.code ?? verdict.error ?? "no"}`, code: verdict.code, domain: verdict.domain }); continue; }
-        await insertPick(db, curatedPick(g, reason, t), verdict).run();
-        out.queued.push(g.full_name);
-      }
-      // Only count the page as worked if we read past the last of it: stopping on a full budget must not
-      // carry the cursor over repos nobody has looked at.
-      if (page > 1 && out.queued.length < budget) read = page;
-    }
-    await setState(db, `trawl:page:${qi}`, String(nextDeep(read, dry)));
+
+  // Which searches are worth the run. The rotation used to give a search matching 2,340 repos and one matching
+  // none the same turn, so a run could spend every call it had on empty water and land nothing — which is
+  // exactly what happened on the night this was written. Empty ones are skipped until EMPTY_RETRY has passed.
+  const work: number[] = [];
+  for (let k = 0; k < queries.length && work.length < QUERIES_PER_RUN; k++) {
+    const qi = (start + k) % queries.length;
+    if (worthWorking(await getState(db, `trawl:yield:${qi}`), t)) work.push(qi);
   }
+
+  for (const qi of work) {
+    if (out.queued.length >= budget || out.judged >= maxJudged || calls >= SEARCH_CALLS) break;
+    const fresh = Number(await getState(db, `trawl:fresh:${qi}`)) || 0;
+    const before = Number(await getState(db, `trawl:before:${qi}`)) || 0;
+    const win = searchWindows(queries[qi], { since, fresh, before, at: t });
+    let oldest = 0;
+    let matched = 0;
+
+    // The freshness pass: only repos pushed since the last look, so it is usually one call returning nothing.
+    // Kept separate from the deep walk because it is the only part that is meant to cover the same ground twice.
+    const passes: { q: string; deep: boolean }[] = [];
+    if (win.fresh) passes.push({ q: win.fresh, deep: false });
+    passes.push({ q: win.deep, deep: true });
+
+    for (const pass of passes) {
+      const maxPages = pass.deep ? PAGES_PER_QUERY - (win.fresh ? 1 : 0) : 1;
+      for (let page = 1; page <= maxPages; page++) {
+        if (out.queued.length >= budget || out.judged >= maxJudged) break;
+        if (gh.throttled()) { out.note = "github rate limit"; break; }
+        if (calls >= SEARCH_CALLS) { out.note = `search budget spent (${SEARCH_CALLS} calls)`; break; }
+        const r = await gh.searchRepos(pass.q, page, 50);
+        calls++;
+        out.searched++;
+        if (r.status !== 200 || !r.data) { await setState(db, "trawl:last_error", `${r.status}`); break; }
+        const items = r.data.items ?? [];
+        matched += r.data.total_count ?? 0;
+        if (!items.length) break;
+        const names = items.map((i) => i.full_name.toLowerCase());
+        const ph = names.map(() => "?").join(",");
+        const [known, before2] = await Promise.all([
+          db.prepare(`SELECT lower(full_name) AS n FROM repos WHERE lower(full_name) IN (${ph})`).bind(...names).all<{ n: string }>(),
+          db.prepare(`SELECT full_name AS n FROM trawl_skipped WHERE full_name IN (${ph})`).bind(...names).all<{ n: string }>(),
+        ]);
+        const knownSet = new Set([...(known.results ?? []), ...(before2.results ?? [])].map((k) => k.n));
+        for (const g of items) {
+          const pushed = Math.floor(Date.parse(g.pushed_at) / 1000) || 0;
+          // The deep walk resumes below the oldest thing it read, whatever happened to that repo afterwards.
+          if (pass.deep && pushed > 0 && (oldest === 0 || pushed < oldest)) oldest = pushed;
+          if (out.queued.length >= budget || gh.throttled()) break;
+          if (out.judged >= maxJudged) { out.note = `judge budget spent (${maxJudged}); the rest waits for the next run`; break; }
+          if (knownSet.has(g.full_name.toLowerCase())) continue;
+          if (g.stargazers_count < MIN_STARS || g.stargazers_count > MAX_STARS) continue;
+          if (pushed < since) continue;
+          // Broad to fine, cheapest first: the hard rules and the description sieve cost nothing, a README is
+          // a GitHub call, and the judge is money. Nothing reaches the judge that could have been settled here.
+          const hard = curatedCheck(g, { known: new Set(), deny }) ?? cheapReject(g);
+          if (hard) { skips.push({ full_name: g.full_name.toLowerCase(), why: hard }); continue; }
+          const readme = await gh.readmeText(g.owner.login, g.name);
+          const claim = claimSnippet(`${g.description ?? ""}. ${readme}`);
+          if (!claim) { skips.push({ full_name: g.full_name.toLowerCase(), why: "no past-tense claim that an AI tool wrote it" }); continue; }
+          const reason = autoReason(g, claim);
+          if (!reason) { skips.push({ full_name: g.full_name.toLowerCase(), why: "could not build a reason" }); continue; }
+          const verdict = await judgeCandidate(env, { full_name: g.full_name, description: g.description ?? "", topics: g.topics ?? [], language: g.language, stars: g.stargazers_count, claim, readme });
+          out.judged++;
+          // The verdict is kept either way: what the trawl threw back is the larger, more interesting half of the
+          // sample, and /trends counts both. Only `code` decides anything; `domain` is recorded and nothing else.
+          if (!verdict.keep) { skips.push({ full_name: g.full_name.toLowerCase(), why: `judge: ${verdict.code ?? verdict.error ?? "no"}`, code: verdict.code, domain: verdict.domain }); continue; }
+          await insertPick(db, curatedPick(g, reason, t), verdict).run();
+          out.queued.push(g.full_name);
+        }
+      }
+    }
+    // What this search is worth, so the rotation can stop giving empty water equal time, and where to resume.
+    await setState(db, `trawl:yield:${qi}`, `${matched}|${t}`);
+    await setState(db, `trawl:fresh:${qi}`, String(t));
+    await setState(db, `trawl:before:${qi}`, String(nextBefore(oldest, since)));
+  }
+
   out.skipped = skips.length;
   if (skips.length) await db.batch(skips.slice(0, 100).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason, judge_code, judge_domain) VALUES (?, ?, ?, ?)").bind(s.full_name, s.why.slice(0, 300), s.code ?? null, s.domain ?? null)));
   await setState(db, "trawl:cursor", String(start + 1));
@@ -233,6 +278,13 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
  *  one that missed its slot because the worker was down for a few minutes should still sail, but one set days
  *  ago and forgotten must never fire out of nowhere. */
 export const REQUEST_WINDOW = 6 * 3600;
+
+/** A run that comes back under its budget goes out again after this, rather than waiting for the next hour.
+ *  Long enough that two ticks do not overlap, short enough that a bad patch of water costs minutes not a day. */
+export const CHASE_DELAY = 8 * 60;
+/** Chases one day may spend. The daily budget already stops the good case; this stops the bad one, where every
+ *  search is empty and the trawl would otherwise ask again every eight minutes until midnight. */
+export const CHASE_MAX = 8;
 
 /**
  * A trawl asked for out of band, rather than by the clock.
@@ -275,7 +327,7 @@ export async function claimTrawlRequest(env: Env, fallback: number): Promise<num
  *  what is left; the hourly slice passes a handful, so the front page gains a few repos an hour instead of all
  *  of them at midnight and none for the next twenty-three hours. Both go through the same gates and the same
  *  counter, so the day's total is what TRAWL_PER_DAY always said it was. */
-export async function trawlDaily(env: Env, cap?: number): Promise<{ queued: string[]; skipped: { repo: string; why: string }[]; left: number; note?: string; auto?: unknown }> {
+export async function trawlDaily(env: Env, cap?: number): Promise<{ queued: string[]; skipped: { repo: string; why: string }[]; left: number; note?: string; auto?: unknown; chase?: string }> {
   const db = env.DB;
   const stopAt = Number(env.TRAWL_STOP_AT || 300);
   const opted = await db.prepare("SELECT count(*) AS n FROM repos WHERE status = 'listed' AND source = 'marker'").first<{ n: number }>();
@@ -296,7 +348,20 @@ export async function trawlDaily(env: Env, cap?: number): Promise<{ queued: stri
   // Unconditional: a night that caught nothing still moved the chart, and releaseBacklog/autoTrawl only
   // mark dirty when they queued something.
   await markDirty(db);
-  return { ...res, auto };
+
+  // A thin catch is a reason to shoot the net again, not to wait an hour. The site should gain a healthy
+  // number a day, and whether the water was good is only knowable after looking — so a run that came back
+  // under its budget asks for another, through the same standing-request row anyone else would use. The
+  // day's budget stops this in the good case; CHASE_MAX stops it when every search is empty. A request
+  // already standing is left alone: somebody else has asked, and one net at a time is the whole point.
+  const landed = res.queued.length + (auto?.queued.length ?? 0);
+  const chases = Number((await getState(db, `trawl:chase:${day}`)) ?? 0);
+  const chase = landed < budget && chases < CHASE_MAX && !(await getState(db, "trawl:run_at"))?.trim();
+  if (chase) {
+    await setState(db, `trawl:chase:${day}`, String(chases + 1));
+    await setState(db, "trawl:run_at", String(now() + CHASE_DELAY));
+  }
+  return { ...res, auto, chase: chase ? `landed ${landed} of ${budget}; going out again in ${CHASE_DELAY / 60} min (chase ${chases + 1}/${CHASE_MAX})` : undefined };
 }
 
 export async function trawl(env: Env, n?: number): Promise<TrawlResult> {

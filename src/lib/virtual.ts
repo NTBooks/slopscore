@@ -140,6 +140,32 @@ export function groundOfQuery(i: number): number {
  *  costs one call and moves on, so reaching further down the list is close to free. */
 export const QUERIES_PER_RUN = 9;
 
+/** The same searches without a pushed clause: the auto-trawl supplies its own date window, because asking
+ *  by date is what stops it re-reading water it has already worked (src/jobs/trawl.ts). */
+export function trawlQueriesUnwindowed(): string[] {
+  const base = `fork:false archived:false template:false is:public stars:${MIN_STARS}..${MAX_STARS}`;
+  return TRAWL_QUERIES.map((q) => `${q} ${base}`);
+}
+
+/**
+ * The broad half of the sieve: everything that can be decided from the search result alone.
+ *
+ * Order matters for cost, not just correctness. Reading a README is a GitHub call and the judge is money, so
+ * anything knowable from the description and topics is decided here, before either is spent. Two things get
+ * through the hard rules and waste both: lists and guides *about* vibe coding, and tools *for* vibe coders —
+ * an IDE that writes your code is not a thing an AI wrote. Both say so plainly in their own description.
+ *
+ * Returns why it was thrown back, or null to look closer.
+ */
+export function cheapReject(g: GhRepo): string | null {
+  const text = `${g.name} ${g.description ?? ""}`;
+  if (NOT_SOFTWARE.test(text)) return "a list, guide or prompt pack about vibe coding, not vibe-coded software";
+  const topics = (g.topics ?? []).map((t) => t.toLowerCase());
+  const claimsPastTense = VIBE_CODED.test(text) || topics.some((t) => VIBE_TOPICS.includes(t));
+  if (FOR_VIBE_CODING.test(text) && !claimsPastTense) return "a tool for vibe coding, not something vibe coded";
+  return null;
+}
+
 /** GitHub repository-search queries, rotated one start position per day. */
 export function trawlQueries(at: number): string[] {
   const since = isoDate(at - PUSHED_WITHIN_DAYS * 86400);

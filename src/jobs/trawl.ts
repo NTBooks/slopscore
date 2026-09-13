@@ -229,6 +229,44 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   return out;
 }
 
+/** How long after its due time a standing request is still honoured. A request is somebody saying "go now";
+ *  one that missed its slot because the worker was down for a few minutes should still sail, but one set days
+ *  ago and forgotten must never fire out of nowhere. */
+export const REQUEST_WINDOW = 6 * 3600;
+
+/**
+ * A trawl asked for out of band, rather than by the clock.
+ *
+ * The alternative was an endpoint, and an endpoint is a door: it needs a guard, the guard needs a secret, and
+ * the secret ends up in somebody's shell history. This is a row in crawl_state instead — writing it already
+ * takes the Cloudflare token, so the permission that matters is the one that was always there.
+ *
+ * `trawl:run_at` is a unix time, optionally `<when>|<how many>`. The claim clears the row *before* the work
+ * starts, so two overlapping ticks cannot both sail on one request, and a run that dies partway does not leave
+ * a request that fires again for ever.
+ *
+ * Returns how many repos the run may land, or null when nothing was asked for. The decision is pure and the
+ * window is exported so it can be tested without a database.
+ */
+export function readTrawlRequest(raw: string | null, at: number, fallback: number): { clear: boolean; budget: number | null } {
+  const text = (raw ?? "").trim();
+  if (!text) return { clear: false, budget: null };
+  const [whenRaw, nRaw] = text.split("|");
+  const when = Number(whenRaw);
+  if (!Number.isFinite(when) || when <= 0) return { clear: true, budget: null };  // junk: bin it
+  if (at < when) return { clear: false, budget: null };                           // asked for, but not yet
+  if (at > when + REQUEST_WINDOW) return { clear: true, budget: null };           // too stale to be what anyone meant
+  const n = Number(nRaw);
+  return { clear: true, budget: Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 50) : fallback };
+}
+
+/** The IO half: read the row, clear it before a single repo is fetched, and hand back what the run may land. */
+export async function claimTrawlRequest(env: Env, fallback: number): Promise<number | null> {
+  const d = readTrawlRequest(await getState(env.DB, "trawl:run_at"), now(), fallback);
+  if (d.clear) await setState(env.DB, "trawl:run_at", "");
+  return d.budget;
+}
+
 /** The daily drip: hand-vetted backlog first, then the auto-trawl fills what is left of TRAWL_PER_DAY.
  *  Stops once TRAWL_STOP_AT opted-in repos are listed. Shares the trawl:YYYY-MM-DD counter, so setting it high in
  *  crawl_state pauses a day without a deploy.

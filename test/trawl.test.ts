@@ -6,7 +6,7 @@ import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, M
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
-import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, clampDeep, pagesFor, nextDeep } from "../src/jobs/trawl";
+import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, clampDeep, pagesFor, nextDeep, readTrawlRequest, REQUEST_WINDOW } from "../src/jobs/trawl";
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
 const repo = (over: Partial<GhRepo> = {}): GhRepo => ({
@@ -125,6 +125,40 @@ describe("the deep page cursor", () => {
     }
     for (let p = 1; p <= MAX_PAGE; p++) expect(seen.has(p)).toBe(true);
     expect(PAGES_PER_QUERY).toBeGreaterThan(1);
+  });
+});
+
+describe("a trawl asked for out of band", () => {
+  const NOW = 1789300000;
+  it("does nothing at all when nobody asked", () => {
+    for (const raw of [null, "", "   "]) expect(readTrawlRequest(raw, NOW, 3)).toEqual({ clear: false, budget: null });
+  });
+  it("waits until the time it was asked for, and leaves the request standing", () => {
+    expect(readTrawlRequest(String(NOW + 120), NOW, 3)).toEqual({ clear: false, budget: null });
+  });
+  it("sails once the time has come", () => {
+    expect(readTrawlRequest(String(NOW), NOW, 3)).toEqual({ clear: true, budget: 3 });
+    expect(readTrawlRequest(String(NOW - 60), NOW, 3)).toEqual({ clear: true, budget: 3 });
+  });
+  it("takes the count the request carries, capped at what one run may land", () => {
+    expect(readTrawlRequest(`${NOW}|8`, NOW, 3).budget).toBe(8);
+    expect(readTrawlRequest(`${NOW}|500`, NOW, 3).budget).toBe(50);
+    expect(readTrawlRequest(`${NOW}|0`, NOW, 3).budget).toBe(3);
+    expect(readTrawlRequest(`${NOW}|bananas`, NOW, 3).budget).toBe(3);
+  });
+  it("clears a request without sailing when it is too stale to be what anyone meant", () => {
+    expect(readTrawlRequest(String(NOW - REQUEST_WINDOW - 1), NOW, 3)).toEqual({ clear: true, budget: null });
+    // Inside the window a request that missed its slot still sails.
+    expect(readTrawlRequest(String(NOW - REQUEST_WINDOW + 60), NOW, 3).budget).toBe(3);
+  });
+  it("bins junk rather than sailing on it", () => {
+    for (const raw of ["soon", "0", "-1", "|4"]) expect(readTrawlRequest(raw, NOW, 3)).toEqual({ clear: true, budget: null });
+  });
+  it("is claimed exactly once: the second read of the same tick finds nothing", () => {
+    const first = readTrawlRequest(String(NOW), NOW, 3);
+    expect(first.clear).toBe(true);
+    // claimTrawlRequest writes "" the moment clear is true, before any repo is fetched.
+    expect(readTrawlRequest("", NOW, 3)).toEqual({ clear: false, budget: null });
   });
 });
 

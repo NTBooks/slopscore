@@ -25,7 +25,7 @@ import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
 import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
-import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl } from "./jobs/trawl";
+import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlRequest } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
 import { CRITIC_SLOT, criticForSlot, inFrenzy } from "./lib/critics";
 import { snapshotTrends } from "./jobs/trends";
@@ -262,7 +262,17 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
         critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
         lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
       }; break;
-      case "*/5 * * * *": result = await step(env, "scan", () => scanQueue(env, opts.n ?? undefined)); break;
+      // The five-minute tick also answers a standing request (crawl_state trawl:run_at), so a trawl can be
+      // asked for without an endpoint and lands within five minutes. Scan first: the request usually wants
+      // the queue moving, and a trawl that lands repos has them scanned on the next tick anyway.
+      case "*/5 * * * *": {
+        const asked = await claimTrawlRequest(env, HOURLY_TRAWL);
+        result = {
+          scan: await step(env, "scan", () => scanQueue(env, opts.n ?? undefined)),
+          trawl: asked == null ? "none asked for" : await step(env, "trawl", () => trawlDaily(env, asked)),
+        };
+        break;
+      }
       case "*/10 * * * *": result = await step(env, "recrawl", () => recrawl(env)); break;
       case "5 0 * * *": result = await dailyRound(env); break;
       // manual only: &release=N moves N backlog picks into the queue; &repo=owner/name[&reason=...] hand-picks one; &n=N runs the keyword search
@@ -274,11 +284,14 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
         const d = new Date();
         const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;
+        // A standing request works here too, so the two environments answer the same row rather than drifting.
+        const asked = daily ? null : await claimTrawlRequest(env, HOURLY_TRAWL);
         result = {
           sweep: await step(env, "sweep", () => sweep(env)),
           scan: await step(env, "scan", () => scanQueue(env)),
           recrawl: await step(env, "recrawl", () => recrawl(env)),
           critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
+          ...(asked == null ? {} : { trawl: await step(env, "trawl", () => trawlDaily(env, asked)) }),
           ...(daily ? await dailyRound(env) : { daily: "skipped" }),
           lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
         };

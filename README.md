@@ -84,6 +84,21 @@ docs/           PLAN.md, SPEC.md
 
 Cheapest first: GitHub's own enforcement (takedowns delist automatically), a denylist and link rules, a risk score that quarantines suspicious repos for a human, Google Safe Browsing, Llama Guard on the text and a vision check on the thumbnail, community reports with auto-hide, then admins. Nothing is votable until it's listed. Every action lands in the public log.
 
+## Asking for a trawl
+
+The trawl runs on the clock: an hourly slice on the sweep, and a full round at 00:05 UTC. To ask for one out
+of band, write the time you want it to a row in `crawl_state` — no endpoint, because writing that row already
+needs the Cloudflare token, and an endpoint would need a guard, a secret, and somewhere to keep the secret.
+
+```sh
+# sail in two minutes and land up to 8 repos; the value is <unix time>|<how many>, and |how many is optional
+npx wrangler d1 execute slopscore --remote --env production --command "INSERT INTO crawl_state (key, value) VALUES ('trawl:run_at', '$(( $(date +%s) + 120 ))|8') ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+```
+
+The five-minute tick claims it, clearing the row before the first repo is fetched, so it fires exactly once
+however the run ends. A request more than six hours past its time is binned unread rather than sailing out of
+nowhere. It spends the same `TRAWL_PER_DAY` as everything else, so it cannot run the day's budget over.
+
 ## Backups
 
 Two layers, both free at this size:

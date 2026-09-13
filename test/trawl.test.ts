@@ -6,6 +6,7 @@ import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, M
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
+import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, clampDeep, pagesFor, nextDeep } from "../src/jobs/trawl";
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
 const repo = (over: Partial<GhRepo> = {}): GhRepo => ({
@@ -79,8 +80,51 @@ describe("virtual paperwork", () => {
     }
   });
   it("works a bounded number of searches a night, however long the list grows", () => {
-    expect(QUERIES_PER_RUN).toBeLessThanOrEqual(8);
     expect(QUERIES_PER_RUN).toBeLessThanOrEqual(TRAWL_QUERIES.length);
+    // What costs calls is pages, not searches, so the ceiling that matters is the run's own cap.
+    // Repository search allows 30 a minute and a run is the best part of a minute.
+    expect(SEARCH_CALLS).toBeLessThan(30);
+    // GitHub returns at most 1,000 results for one search, and the trawl reads 50 to a page.
+    expect(MAX_PAGE * 50).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe("the deep page cursor", () => {
+  it("works page 1 every night, so a repo pushed today is seen tonight", () => {
+    for (const deep of [2, 7, MAX_PAGE]) expect(pagesFor(deep)[0]).toBe(1);
+  });
+  it("carries on from where the last run stopped instead of re-reading the top", () => {
+    expect(pagesFor(2)).toEqual([1, 2, 3, 4]);
+    expect(pagesFor(8)).toEqual([1, 8, 9, 10]);
+  });
+  it("never asks for a page past the 1,000 results GitHub will hand back", () => {
+    for (const deep of [MAX_PAGE - 2, MAX_PAGE - 1, MAX_PAGE]) {
+      for (const p of pagesFor(deep)) expect(p).toBeLessThanOrEqual(MAX_PAGE);
+    }
+    expect(pagesFor(MAX_PAGE)).toEqual([1, MAX_PAGE]);
+  });
+  it("advances past the pages it finished", () => {
+    expect(nextDeep(4, false)).toBe(5);
+  });
+  it("starts the search over when the water runs out or the cap is reached", () => {
+    expect(nextDeep(9, true)).toBe(2);
+    expect(nextDeep(MAX_PAGE, false)).toBe(2);
+  });
+  it("never lets a missing, junk or out-of-range cursor read page 1 twice", () => {
+    for (const n of [NaN, 0, 1, -5, MAX_PAGE + 1, 1e9]) expect(clampDeep(n)).toBe(2);
+    expect(clampDeep(6)).toBe(6);
+  });
+  it("reaches every result a search has, given enough nights", () => {
+    // The old net read pages 1 and 2 and nothing else, so a search sitting on 2,000 repos gave up 100.
+    let deep = clampDeep(NaN);
+    const seen = new Set<number>();
+    for (let night = 0; night < 40; night++) {
+      const pages = pagesFor(deep);
+      for (const p of pages) seen.add(p);
+      deep = nextDeep(pages[pages.length - 1], false);
+    }
+    for (let p = 1; p <= MAX_PAGE; p++) expect(seen.has(p)).toBe(true);
+    expect(PAGES_PER_QUERY).toBeGreaterThan(1);
   });
 });
 

@@ -208,6 +208,10 @@ async function step<T>(env: AppEnv["Bindings"], job: AnyJob, fn: () => Promise<T
   }
 }
 
+/** Repos the hourly slice may land in one go. Small on purpose: the front page should gain a few an hour,
+ *  not a day's worth at 01:00 and nothing after. The day's total is still TRAWL_PER_DAY. */
+const HOURLY_TRAWL = 3;
+
 /** The 00:05 UTC round, shared with the test environment's combined tick so the two cannot drift apart. */
 /**
  * The critics' turn on a sweep tick.
@@ -250,6 +254,11 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       // Sweep first, and the critics after: a model call that hangs must never hold up the sweep's writes.
       case "*/15 * * * *": result = {
         sweep: await step(env, "sweep", () => sweep(env)),
+        // The hourly slice. A find had to wait for 00:05 to appear, so by mid-afternoon the newest thing on the
+        // front page was eighteen hours old and the site looked abandoned between midnights. The free plan's five
+        // cron triggers are all spent, so this rides the sweep and works one tick in four. It spends the same
+        // TRAWL_PER_DAY the nightly round does, in hourly helpings, and 00:05 still takes whatever is left.
+        trawl: new Date().getUTCMinutes() < 15 ? await step(env, "trawl", () => trawlDaily(env, HOURLY_TRAWL)) : "not this tick",
         critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
         lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
       }; break;

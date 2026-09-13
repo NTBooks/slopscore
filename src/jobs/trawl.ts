@@ -15,6 +15,39 @@ import { bump, getState, setState } from "./stats";
 
 const PER_PAGE = 50;
 const MAX_PAGES = 3; // repository search allows 30 calls a minute; 6 queries x 3 pages stays under it
+/** GitHub hands back at most 1,000 results for one search, which at 50 a page is where the water ends. */
+export const MAX_PAGE = 20;
+/** Pages per search per night: page 1 for what is new, then three more from wherever the last run stopped. */
+export const PAGES_PER_QUERY = 4;
+/** Search calls one run may spend. Repository search allows 30 a minute and a run is the best part of a minute. */
+export const SEARCH_CALLS = 24;
+/** Judge calls one run may spend, as a multiple of what it is allowed to keep. The budget caps repos kept, not
+ *  repos read, and the judge is the one step that costs money: with the net reaching past page 2 a night can now
+ *  put hundreds of candidates in front of it, where it used to see three in a lifetime. A run that spends this
+ *  says so in its note and leaves the rest for the next one; nothing is lost, because what it did not reach
+ *  stays unseen rather than being marked as checked. */
+export const JUDGE_PER_KEPT = 3;
+export const MIN_JUDGE_CALLS = 10;
+
+/** A stored deep cursor, or page 2 when it is missing or out of range. Page 1 is never the deep cursor: it is
+ *  worked every time regardless, because that is where a newly pushed repo appears. */
+export function clampDeep(n: number): number {
+  return Number.isFinite(n) && n >= 2 && n <= MAX_PAGE ? Math.floor(n) : 2;
+}
+
+/** The pages one search works tonight: page 1 for the new arrivals, then a window from where we left off. */
+export function pagesFor(deep: number): number[] {
+  const pages = [1];
+  for (let k = 0; k < PAGES_PER_QUERY - 1 && deep + k <= MAX_PAGE; k++) pages.push(deep + k);
+  return pages;
+}
+
+/** Where the deep cursor goes next. Back to the top when the search ran dry or the 1,000-result cap is reached:
+ *  results are ordered by push date, so starting over means re-reading repos that have already been judged and
+ *  are skipped in a single query, not re-judging them. */
+export function nextDeep(read: number, dry: boolean): number {
+  return dry || read >= MAX_PAGE ? 2 : Math.max(2, read + 1);
+}
 
 export interface TrawlResult { picked: number; searched: number; skipped: number; repos: string[]; note?: string }
 
@@ -126,20 +159,35 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   const deny = await loadDenyRows(db);
   const queries = trawlQueries(t);
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
+  const maxJudged = Math.max(MIN_JUDGE_CALLS, budget * JUDGE_PER_KEPT);
   const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
   // A night works a slice of the list, not all of it: the net covers a dozen tools now, and walking every
   // search every night would spend the GitHub search allowance on the first one. The cursor still moves one
   // a night, so each search comes round soon enough.
   const work = Math.min(QUERIES_PER_RUN, queries.length);
-  for (let qi = 0; qi < work && out.queued.length < budget; qi++) {
-    const q = queries[(start + qi) % queries.length];
-    for (let page = 1; page <= 2 && out.queued.length < budget; page++) {
+  let calls = 0;
+  for (let i = 0; i < work && out.queued.length < budget && out.judged < maxJudged; i++) {
+    const qi = (start + i) % queries.length;
+    const q = queries[qi];
+    // Page 1 is whatever was pushed since this search last came round; the deep cursor is how the rest of the
+    // water gets worked. Without it the net only ever saw the hundred most recently pushed matches of a search
+    // and nothing else, so a query sitting on two thousand repos was dry inside a week and looked like proof
+    // there was nothing out there. Results are sorted by push date, so page 1 is always the new arrivals and
+    // the deep pages are the ones we never reached; what has already been judged is skipped either way.
+    const deep = clampDeep(Number(await getState(db, `trawl:page:${qi}`)));
+    const pages = pagesFor(deep);
+    let read = deep - 1; // the deepest page read all the way to the end this run
+    let dry = false;     // the search has no more results at that depth: back to the top next time
+    for (const page of pages) {
+      if (out.queued.length >= budget || out.judged >= maxJudged) break;
       if (gh.throttled()) { out.note = "github rate limit"; break; }
+      if (calls >= SEARCH_CALLS) { out.note = `search budget spent (${SEARCH_CALLS} calls)`; break; }
       const r = await gh.searchRepos(q, page, 50);
+      calls++;
       out.searched++;
       if (r.status !== 200 || !r.data) { await setState(db, "trawl:last_error", `${r.status}`); break; }
       const items = r.data.items ?? [];
-      if (!items.length) break;
+      if (!items.length) { if (page > 1) dry = true; break; }
       const names = items.map((i) => i.full_name.toLowerCase());
       const ph = names.map(() => "?").join(",");
       const [known, before] = await Promise.all([
@@ -149,6 +197,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
       const knownSet = new Set([...(known.results ?? []), ...(before.results ?? [])].map((k) => k.n));
       for (const g of items) {
         if (out.queued.length >= budget || gh.throttled()) break;
+        if (out.judged >= maxJudged) { out.note = `judge budget spent (${maxJudged}); the rest waits for the next run`; break; }
         if (knownSet.has(g.full_name.toLowerCase())) continue;
         if (g.stargazers_count < MIN_STARS || g.stargazers_count > MAX_STARS) continue;
         if ((Date.parse(g.pushed_at) / 1000 || 0) < t - PUSHED_WITHIN_DAYS * 86400) continue;
@@ -167,7 +216,11 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
         await insertPick(db, curatedPick(g, reason, t), verdict).run();
         out.queued.push(g.full_name);
       }
+      // Only count the page as worked if we read past the last of it: stopping on a full budget must not
+      // carry the cursor over repos nobody has looked at.
+      if (page > 1 && out.queued.length < budget) read = page;
     }
+    await setState(db, `trawl:page:${qi}`, String(nextDeep(read, dry)));
   }
   out.skipped = skips.length;
   if (skips.length) await db.batch(skips.slice(0, 100).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason, judge_code, judge_domain) VALUES (?, ?, ?, ?)").bind(s.full_name, s.why.slice(0, 300), s.code ?? null, s.domain ?? null)));
@@ -176,17 +229,23 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   return out;
 }
 
-/** The daily drip (00:05 UTC): hand-vetted backlog first, then the auto-trawl fills what is left of TRAWL_PER_DAY.
+/** The daily drip: hand-vetted backlog first, then the auto-trawl fills what is left of TRAWL_PER_DAY.
  *  Stops once TRAWL_STOP_AT opted-in repos are listed. Shares the trawl:YYYY-MM-DD counter, so setting it high in
- *  crawl_state pauses a day without a deploy. */
-export async function trawlDaily(env: Env): Promise<{ queued: string[]; skipped: { repo: string; why: string }[]; left: number; note?: string; auto?: unknown }> {
+ *  crawl_state pauses a day without a deploy.
+ *
+ *  `cap` is how much of the day's remaining budget this run may spend. The 00:05 round passes nothing and takes
+ *  what is left; the hourly slice passes a handful, so the front page gains a few repos an hour instead of all
+ *  of them at midnight and none for the next twenty-three hours. Both go through the same gates and the same
+ *  counter, so the day's total is what TRAWL_PER_DAY always said it was. */
+export async function trawlDaily(env: Env, cap?: number): Promise<{ queued: string[]; skipped: { repo: string; why: string }[]; left: number; note?: string; auto?: unknown }> {
   const db = env.DB;
   const stopAt = Number(env.TRAWL_STOP_AT || 300);
   const opted = await db.prepare("SELECT count(*) AS n FROM repos WHERE status = 'listed' AND source = 'marker'").first<{ n: number }>();
   if ((opted?.n ?? 0) >= stopAt) return { queued: [], skipped: [], left: 0, note: `expedition over: ${opted?.n} opted-in listings (TRAWL_STOP_AT ${stopAt})` };
   const day = new Date(now() * 1000).toISOString().slice(0, 10);
   const done = Number((await getState(db, `trawl:${day}`)) ?? 0);
-  const budget = Number(env.TRAWL_PER_DAY || 50) - done;
+  const remaining = Number(env.TRAWL_PER_DAY || 50) - done;
+  const budget = cap != null ? Math.min(remaining, Math.max(0, Math.floor(cap))) : remaining;
   if (budget <= 0) return { queued: [], skipped: [], left: 0, note: `today's releases are done (or paused): trawl:${day} = ${done}` };
   // She has put to sea. Recorded before the work, not after, so a rate limit halfway through still says
   // she sailed — and recorded only past the two returns above, which are the days she did not. This is

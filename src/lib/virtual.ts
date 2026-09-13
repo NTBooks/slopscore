@@ -135,8 +135,10 @@ export function groundOfQuery(i: number): number {
 
 /** How many searches one night's trawl works, starting at the cursor. Bounds the GitHub search calls per
  *  invocation now that there are three times as many queries; the cursor still advances one a night, so
- *  every search comes round often. */
-export const QUERIES_PER_RUN = 6;
+ *  every search comes round often. Half the list a night rather than a third: eight of these topics match
+ *  nothing at all right now, and a run could otherwise spend most of its slots on empty water. An empty search
+ *  costs one call and moves on, so reaching further down the list is close to free. */
+export const QUERIES_PER_RUN = 9;
 
 /** GitHub repository-search queries, rotated one start position per day. */
 export function trawlQueries(at: number): string[] {

@@ -13,3 +13,8 @@ backups/
 .tools/
 key.pem
 mcp-registry-auth
+
+# Screen recordings for the Slop Trawl videos: never commit these
+*.mp4
+*.mkv
+*.mov

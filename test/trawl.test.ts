@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { GhRepo } from "../src/lib/github";
 import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason, TRAWL_QUERIES, QUERIES_PER_RUN, groundOfQuery } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
-import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed } from "../src/lib/virtual";
+import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, MAX_STARS } from "../src/lib/virtual";
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
@@ -48,7 +48,7 @@ describe("virtual paperwork", () => {
   it("queries carry the date floor and quality qualifiers", () => {
     const q = trawlQueries(AT);
     expect(q.length).toBe(TRAWL_QUERIES.length);
-    for (const one of q) expect(one).toMatch(/pushed:>=2026-06-14 stars:5\.\.2000/);
+    for (const one of q) expect(one).toContain(`pushed:>=2026-06-14 stars:${MIN_STARS}..${MAX_STARS}`);
   });
   it("does not fish mostly for one company's tool", () => {
     // The net was four-sixths Claude, which said more about who wrote the crawler than about who is
@@ -98,7 +98,7 @@ describe("pickCandidates", () => {
     ["fork", { fork: true }],
     ["archived", { archived: true }],
     ["no description", { description: "" }],
-    ["too few stars", { stargazers_count: 2 }],
+    ["too few stars", { stargazers_count: 0 }],
     ["stale", { pushed_at: "2026-01-01T00:00:00Z" }],
     ["no vibe signal", { topics: ["cli"], description: "A tool" }],
     ["famous", { stargazers_count: 50000 }],

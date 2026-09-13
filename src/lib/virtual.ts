@@ -36,7 +36,10 @@ export function trawlOwnerIndexed(env: { TRAWL_OWNER_INDEX?: string }): boolean 
   return (env.TRAWL_OWNER_INDEX ?? "").trim().toLowerCase() === "on";
 }
 
-export const MIN_STARS = 5;
+/** One star, not five: the whole point is repos nobody starred. Five threw away about 95% of the
+ *  pool, including almost every zero-star weekend project the site exists for. Zero would also
+ *  drag in scaffolds nobody finished, so one is the floor that means somebody cared at all. */
+export const MIN_STARS = 1;
 /** Famous repos aren't the audience, and they're the likeliest to mind. */
 export const MAX_STARS = 2000;
 /** Lists, guides and prompt packs *about* vibe coding use the same topics; they aren't vibe-coded software. */

@@ -34,6 +34,11 @@
     "TRAWL_PER_DAY": "50",
     "TRAWL_STOP_AT": "300",
     "TAKEDOWN_AUTO_PER_DAY": "20",
+    // Where the weekly bulletin is mailed from. A newsletter somebody else operates, so the site keeps no
+    // mailing list and never stores a reader's address. Unset = no subscribe link; /report and /report.xml
+    // carry on regardless. Set it in test and production when the publication's name is settled.
+    "NEWSLETTER_URL": "https://slopscore.substack.com",
+    "NEWSLETTER_NAME": "SlopScore on Substack",
     // IndexNow: public by design, served at /{key}.txt so Bing, Yandex and Seznam can verify the host.
     "INDEXNOW_KEY": "f5d98c829cad74d917062e34ed1ec0a6"
   },
@@ -69,6 +74,12 @@
         "TRAWL_PER_DAY": "50",
         "TRAWL_STOP_AT": "300",
         "TAKEDOWN_AUTO_PER_DAY": "20",
+        // Where the weekly bulletin is mailed from — a newsletter somebody else operates, so the site keeps
+        // no mailing list and never stores a reader's address. Unset = no subscribe link, and /report plus
+        // /report.xml carry on regardless. Deliberately NOT a custom domain: the copy must never compete
+        // with slopscore.org/report, which is the citable original.
+        "NEWSLETTER_URL": "https://slopscore.substack.com",
+        "NEWSLETTER_NAME": "SlopScore on Substack",
         // IndexNow: public by design, served at /{key}.txt so Bing, Yandex and Seznam can verify the host.
         "INDEXNOW_KEY": "f5d98c829cad74d917062e34ed1ec0a6"
       }
@@ -116,6 +127,12 @@
         "TRAWL_PER_DAY": "50",
         "TRAWL_STOP_AT": "300",
         "TAKEDOWN_AUTO_PER_DAY": "20",
+        // Where the weekly bulletin is mailed from — a newsletter somebody else operates, so the site keeps
+        // no mailing list and never stores a reader's address. Unset = no subscribe link, and /report plus
+        // /report.xml carry on regardless. Deliberately NOT a custom domain: the copy must never compete
+        // with slopscore.org/report, which is the citable original.
+        "NEWSLETTER_URL": "https://slopscore.substack.com",
+        "NEWSLETTER_NAME": "SlopScore on Substack",
         // IndexNow: public by design, served at /{key}.txt so Bing, Yandex and Seznam can verify the host.
         "INDEXNOW_KEY": "f5d98c829cad74d917062e34ed1ec0a6"
       }

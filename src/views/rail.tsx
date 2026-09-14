@@ -13,6 +13,8 @@ export interface RailData {
   tags: { slug: string; title: string; blurb: string | null; n: number }[];
   /** A pool, not a screenful: each reader's window is sliced out of it at render time. Empty with -chatter. */
   chat?: ChatLine[];
+  /** The newest bulletin, for the box that advertises it. Null until the first one is written. */
+  report?: { slug: string; line: string } | null;
   /** The Sloptrawler's log, or null with -chart. */
   sea?: { last_run: number | null; cursor: number; lane: number; hauled: number } | null;
 }
@@ -50,6 +52,15 @@ export const Rail: FC<{ data: RailData; chat?: ChatWindow | null }> = ({ data, c
             <tr><td><a href={`/f/built_with/${t.value}`}>{t.value}</a></td><td>{t.n} · avg {t.mean.toFixed(1)}</td></tr>
           ))}
         </table>
+      </div>
+    ) : null}
+    {/* The bulletin, above Numbers rather than below it: a weekly document with a finding in it is a better
+        reason to stay on the site than a table of counts, and this is the only surface every visitor sees. */}
+    {data.report ? (
+      <div class="box">
+        <h3>The Trawl Report <span class="muted">· {data.report.slug}</span></h3>
+        <p class="small">{data.report.line}</p>
+        <p class="muted"><a href={`/report/${data.report.slug}`}>read it</a> · <a href="/report">every week</a> · <a href="/method">how we count</a></p>
       </div>
     ) : null}
     <div class="box">

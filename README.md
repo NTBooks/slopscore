@@ -33,13 +33,15 @@ Found repos are listed and votable straight away. Log in and press **Submit** on
 - **Just add the file.** No submit form, no webhook, no app to install.
 - **Store nothing we don't own.** Only our database. GitHub owns identity, code, images, and the marker file.
 - **Fully transparent.** Every status has a public reason. The [queue](https://slopscore.org/queue), the [moderation log](https://slopscore.org/log), and the [stats](https://slopscore.org/stats), including how close the site is to its free-tier limits, are public. So are the [trends](https://slopscore.org/trends): what the whole corpus looks like from a distance, counted nightly, with the trawled sample and the self-selected opted-in one kept in separate columns.
+- **The method is published before the numbers.** [How we count](https://slopscore.org/method) is a frozen, versioned document: the search grounds, the star and licence filters, what the judge decides, and the biases to read before quoting a figure. It changes by version bump and dated changelog, never in place.
+- **One bulletin a week.** [The Trawl Report](https://slopscore.org/report) counts the nightly snapshot against the one a week earlier and publishes the diff — what got listed, what the judge threw back, which tool its owners credited. Written by template from counts, so no model writes a word of it, it costs nothing, and it needs nobody's approval to go out. Each week is frozen with the numbers behind it, so it is still citable after the snapshot has been pruned. RSS at [/report.xml](https://slopscore.org/report.xml).
 - **Agent-browsable.** Append `.json` or `.md` to any page. See [/llms.txt](https://slopscore.org/llms.txt), [/openapi.json](https://slopscore.org/openapi.json), and the MCP server at `/mcp`.
 - **$0/month.** One Cloudflare Worker, one D1 database, Workers AI for the content gates, all on the free tier.
 - **Nothing here is a secret.** Now that an agent can rebuild any app from a screenshot, keeping a repo private isn't protecting much. Push it and let the trough decide.
 
 ## What's built
 
-Listing, voting (weighted, ring-checked, crowd votes shown separately), comments with maker flair, owner controls, the crawler with all gates (denylist, eligibility, contract, content via Safe Browsing + Llama Guard + a vision check, risk → quarantine), slopbuckets, a public moderation queue, mod console, public log and stats, device login for agents, RSS, sitemap, OpenAPI, an MCP server at `/mcp`, jump-the-line via Stripe or x402 with a public ledger, and an OSV dependency check. See [docs/PLAN.md](docs/PLAN.md) for the full design and what shipped when.
+Listing, voting (weighted, ring-checked, crowd votes shown separately), comments with maker flair, owner controls, the crawler with all gates (denylist, eligibility, contract, content via Safe Browsing + Llama Guard + a vision check, risk → quarantine), slopbuckets, a public moderation queue, mod console, public log and stats, device login for agents, RSS, sitemap, OpenAPI, an MCP server at `/mcp`, jump-the-line via Stripe or x402 with a public ledger, an OSV dependency check, a frozen published method at `/method`, and the weekly Trawl Report at `/report`. See [docs/PLAN.md](docs/PLAN.md) for the full design and what shipped when.
 
 ## Stack
 

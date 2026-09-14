@@ -5,6 +5,7 @@ import { feed, sortOn, visibleSorts, type RepoRow, type Sort } from "../lib/db";
 import { escapeHtml } from "../lib/markdown";
 import { isoDateTime } from "../lib/time";
 import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+import { listReports } from "../jobs/report";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
 
 export const feeds = new Hono<AppEnv>();
@@ -52,6 +53,34 @@ feeds.get("/trawl.xml", async (c) => {
   return send(c, rss(origin, "SlopScore — the Cap'm's hauls", "/trawl", "Repos the trawl found: public, AI-made by their owner's own account, and listed without being submitted. Any of them can be taken down from its page with no account.", rows));
 });
 
+// The bulletin's own channel. A weekly document is the one thing on this site somebody might actually want
+// pushed to them, and it is the whole distribution plan: the job writes, the feed carries, nobody presses send.
+// Each item links the frozen page rather than carrying the body, so a correction published later is one click
+// away from wherever the item was read.
+feeds.get("/report.xml", async (c) => {
+  const origin = new URL(c.req.url).origin;
+  const rows = await listReports(c.env.DB);
+  const items = rows.map((r) => `
+  <item>
+    <title>${escapeHtml(r.title)}</title>
+    <link>${origin}/report/${r.slug}</link>
+    <guid isPermaLink="true">${origin}/report/${r.slug}</guid>
+    <pubDate>${new Date(r.at * 1000).toUTCString()}</pubDate>
+    <description>${escapeHtml(`What the trawl hauled in and threw back in ${r.slug}, counted from the nightly snapshot under method v${r.method}. No model wrote a word of it.`)}</description>
+  </item>`).join("");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>SlopScore — the Trawl Report</title>
+  <link>${origin}/report</link>
+  <atom:link href="${origin}/report.xml" rel="self" type="application/rss+xml"/>
+  <description>One bulletin a week on what publicly self-declared AI-written software looks like in bulk: what got listed, what the judge threw back, and which tool its owners credited. Counted, never generated.</description>
+  <language>en</language>${items}
+</channel>
+</rss>`;
+  return send(c, xml);
+});
+
 feeds.get("/b/:file", async (c, next) => {
   if (!c.req.param("file").endsWith(".xml")) return next();
   const origin = new URL(c.req.url).origin;
@@ -94,7 +123,7 @@ feeds.get("/sitemap.xml", async (c) => {
   const facets = await c.env.DB.prepare(
     `SELECT rt.facet AS facet, rt.value AS value, count(*) AS n FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id WHERE r.status = 'listed'${onlyOptedInR} AND rt.facet IN ('built_with','language','category','model','platform') GROUP BY rt.facet, rt.value HAVING n >= 2 ORDER BY n DESC LIMIT 200`,
   ).all<{ facet: string; value: string }>().then((r) => r.results ?? []);
-  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/but-is-it-slop", "/spec", "/disclosure", "/for-agents", "/skill", "/trends", "/stats", "/log", "/balcony", "/scan", "/contact"];
+  const fixed = ["/", ...(sortOn("upcoming") ? ["/upcoming"] : []), "/queue", "/best", "/tools", "/b", "/about", "/orphanage", "/but-is-it-slop", "/spec", "/disclosure", "/for-agents", "/skill", "/trends", "/method", "/report", "/stats", "/log", "/balcony", "/scan", "/contact"];
   const url = (loc: string, lastmod?: number | null, pri = "0.5") => `<url><loc>${origin}${loc}</loc>${lastmod ? `<lastmod>${isoDateTime(lastmod).slice(0, 10)}</lastmod>` : ""}<priority>${pri}</priority></url>`;
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

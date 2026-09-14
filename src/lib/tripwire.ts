@@ -13,6 +13,7 @@
 // the call site wraps it in a try/catch and a request that trips a detector is still served normally
 // unless it earns a block.
 import type { Env } from "../env";
+import { encodeHeader } from "./mail";
 import { isoDate, now } from "./time";
 import { flagOn } from "./flags";
 
@@ -243,7 +244,7 @@ async function send(env: Env, to: string, day: string, trip: Trip, blocked: bool
   const raw = [
     `From: Schnitzel <${from}>`,
     `To: ${to}`,
-    `Subject: ${subject.replace(/[\r\n]/g, " ")}`,
+    `Subject: ${encodeHeader(subject)}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <trip-${day}-${Date.now()}@slopscore.org>`,
     "MIME-Version: 1.0",

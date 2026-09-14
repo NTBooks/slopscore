@@ -1,6 +1,7 @@
 // Contact: a login-gated form stored in D1 and shown in the mod console, plus an optional email ping through
 // Cloudflare's send-email binding. The public addresses (hello@ / abuse@) are Email Routing aliases, never a real inbox.
 import { Hono } from "hono";
+import { encodeHeader } from "../lib/mail";
 import type { AppEnv } from "../env";
 import { rateLimit, logAction } from "../lib/db";
 import { requireUser, body, wantsJson } from "../middleware";
@@ -65,7 +66,7 @@ export async function notify(env: AppEnv["Bindings"], m: { id: number; login: st
   const raw = [
     `From: Schnitzel <${from}>`,
     `To: ${env.CONTACT_NOTIFY}`,
-    `Subject: ${subject.replace(/[\r\n]/g, " ")}`,
+    `Subject: ${encodeHeader(subject)}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <msg-${m.id}-${Date.now()}@slopscore.org>`,
     "MIME-Version: 1.0",

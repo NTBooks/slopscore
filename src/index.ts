@@ -29,6 +29,7 @@ import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlReque
 import { runCritics } from "./jobs/critics";
 import { CRITIC_SLOT, criticForSlot, inFrenzy } from "./lib/critics";
 import { snapshotTrends } from "./jobs/trends";
+import { newsletter, writeReport } from "./jobs/report";
 import { recordCron, noteRun, everySeconds, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
 import { sweepTripwire } from "./lib/tripwire";
@@ -138,6 +139,8 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/trawl.xml   RSS of the trawl alone: repos the Cap'm found rather than ones that were submitted. Kept out of /feed.xml on purpose, so watching the hauls does not mean taking the whole feed
 - ${origin}/log         public moderation log · ${origin}/stats  public stats incl. free-tier headroom
 - ${origin}/trends      what the corpus looks like from a distance: languages, tools, categories, and what the trawl threw back, counted nightly and split into the trawled sample and the self-selected opted-in one. .json is the whole snapshot as data
+- ${origin}/method      how every number on this site is made: the sample, the filters, the judge, and the known biases. Versioned and frozen; reports stamp the version they were written under. Read this before quoting a figure
+- ${origin}/report      the Trawl Report: one bulletin a week, counted from the nightly snapshot, no model involved. /report is the latest and the archive, /report/{YYYY-Www} is one week, .json is the numbers it was written from, /report.xml is the feed${newsletter(c.env) ? ` and it is mailed weekly from ${newsletter(c.env)!.url}` : ""}
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
 - ${origin}/but-is-it-slop  a seven-question questionnaire for a human who is not sure whether their own repo counts. Ends with a slopscore.md drafted from the answers
 - ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
@@ -238,11 +241,13 @@ async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unkno
     // Off, this is the whole of it, exactly as it was before the rota existed.
     critics: flagOn("frenzy") ? "per-tick" : await step(env, "critics", () => runCritics(env)),
     trends: await step(env, "trends", () => snapshotTrends(env)),
+    // After the count, never before it: the bulletin is written from the snapshot this round just took.
+    report: await step(env, "report", () => writeReport(env)),
     tripwire: await step(env, "tripwire", () => sweepTripwire(env.DB).then(() => "swept")),
   };
 }
 
-export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?: number; repo?: string; reason?: string; release?: number; dry?: boolean; auto?: number } = {}): Promise<unknown> {
+export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?: number; repo?: string; reason?: string; release?: number; dry?: boolean; auto?: number; force?: boolean } = {}): Promise<unknown> {
   setFlags(env.MOD_FLAGS);
   const started = Date.now();
   let result: unknown;
@@ -281,6 +286,9 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "critics": result = await runCritics(env, { n: opts.n, dry: opts.dry }); break;
       // manual: recount the dashboard now rather than waiting for 00:05. Idempotent: it replaces today's rows.
       case "trends": result = await snapshotTrends(env); break;
+      // manual: write the week's bulletin now. &force=1 overwrites the week rather than declining it, which is
+      // how the first one gets published on a day that is not a Monday.
+      case "report": result = await writeReport(env, undefined, { force: Boolean(opts.force) }); break;
       case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
         const d = new Date();
         const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;

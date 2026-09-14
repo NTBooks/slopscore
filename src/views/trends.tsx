@@ -2,6 +2,11 @@
 // script tag, no chart library, no fetch. It prints, it works with JS off, and it costs one D1 query.
 import type { FC } from "hono/jsx";
 import { COHORTS, COHORT_LABEL, FACET_TITLE, TEMPLATED_ON_TRAWL, type Bar, type Cohort, type FacetChart, type JudgedChart, type ToolMonth, type TrendsView } from "../jobs/trends";
+import { MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS } from "../lib/virtual";
+
+/** The trawl's own window, spelled out for the reader. Read off the constants the trawl actually filters on
+ *  (../lib/virtual), so loosening the floor to one star rewrites the page instead of leaving it lying. */
+const STAR_WINDOW = `${MIN_STARS.toLocaleString("en-US")} to ${MAX_STARS.toLocaleString("en-US")}`;
 
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 /**
@@ -180,8 +185,9 @@ export const Trends: FC<{ d: TrendsView }> = ({ d }) => {
         <h3>Read this first, or you will read the charts wrong</h3>
         <p class="small"><strong>Trawled</strong> repos never asked to be here. The Cap'm found them because their owner said in public, in the past tense, that a model wrote the thing — then a cheap classifier checked it was software rather than a blog post about software. Nothing else was selected for, so as a sample of <em>publicly self-declared AI-written software</em> it is about as close to random as this gets. It is <em>not</em> a sample of AI-written software: most of that is never labelled, and the label is the only thing we can see.</p>
         <p class="small"><strong>Opted-in</strong> repos committed a <a href="/spec">slopscore.md</a>. That is a person choosing to file paperwork about their own work, which is self-selection with a capital S. Their column tells you about people who volunteer, and it is the only column that can answer a question the maker had to answer themselves.</p>
-        <p class="small">Two more ropes on the sample: the trawl only looks at repos with 5 to 2,000 stars, pushed in the last 90 days, under a licence permissive enough to quote from. So the ends of the star chart are a rule of ours, not a fact about the world.</p>
+        <p class="small">Two more ropes on the sample: the trawl only looks at repos with {STAR_WINDOW} stars, pushed in the last {PUSHED_WITHIN_DAYS} days, under a licence permissive enough to quote from. So the ends of the star chart are a rule of ours, not a fact about the world.</p>
         <p class="small">Two of the charts below — what the software is <em>for</em>, and what kind of thing it is — are a <strong>model's</strong> labels rather than a maker's, picked off a fixed list by the classifier the trawl already runs (<a href="/about">how that works</a>). They are the only numbers here that are somebody's opinion, they are marked where they appear, and they are the only way to ask that question of a sample nobody volunteered for. Everything else on this page is counted, not judged.</p>
+        <p class="small">All of that, and the biases we know about, written down in one frozen and versioned place: <a href="/method">how we count</a>. The same numbers once a week, as a document you can cite after this snapshot has been pruned: <a href="/report">the Trawl Report</a>.</p>
       </div>
 
       <h3>How much comes in, month by month</h3>
@@ -237,7 +243,7 @@ export const Trends: FC<{ d: TrendsView }> = ({ d }) => {
 
       <Pair title="How old it was when it turned up" note="Days between the repo being created on GitHub and being listed here." trawl={d.age.trawl} opted={d.age.opted} totals={d.totals} limit={6} />
 
-      <Pair title="Stars" note="The trawl's window is 5 to 2,000 by rule, so read the trawled column as a shape inside that window and nothing more." trawl={d.stars.trawl} opted={d.stars.opted} totals={d.totals} limit={6} />
+      <Pair title="Stars" note={`The trawl's window is ${STAR_WINDOW} by rule, so read the trawled column as a shape inside that window and nothing more.`} trawl={d.stars.trawl} opted={d.stars.opted} totals={d.totals} limit={6} />
 
       <h3>What the net throws back</h3>
       <p class="muted small">{netTotal ? <>Of {netTotal.toLocaleString()} candidates the trawl evaluated in the last 30 days and did not list, why. This is the most honest thing on the page about what is actually out there: the site only ever shows you the ones that got through.</> : <>Nothing evaluated in the last 30 days.</>}</p>
@@ -267,8 +273,9 @@ export function trendsMd(d: TrendsView): string {
     "# Trends", "",
     `Snapshot ${d.date}. Recounted once a night from data the site already holds. No model is called to build this page; the two "what people are building" charts below count labels the trawl's classifier applied at pick time, and are the only numbers here that are a judgement rather than a count.`, "",
     "## The sample", "",
-    "- **trawled**: found by us because the owner said in public that a model wrote it. Close to random within that label; 5-2000 stars, pushed within 90 days, permissive licence.",
+    `- **trawled**: found by us because the owner said in public that a model wrote it. Close to random within that label; ${MIN_STARS}-${MAX_STARS} stars, pushed within ${PUSHED_WITHIN_DAYS} days, permissive licence.`,
     "- **opted in**: committed a slopscore.md. Self-selected, and the only cohort that can answer a question a person had to answer.", "",
+    "Method, frozen and versioned: /method. The weekly bulletin counted from these same snapshots: /report.", "",
     `| | trawled | opted in |`, `|---|---|---|`,
     `| listed | ${t.listed ?? 0} | ${o.listed ?? 0} |`,
     `| makers | ${t.owners ?? 0} | ${o.owners ?? 0} |`,

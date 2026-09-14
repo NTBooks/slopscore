@@ -139,7 +139,7 @@ export function ageBucket(createdAt: number | null, listedAt: number | null): st
   return "over a year old";
 }
 
-/** Star buckets. The trawl only ever looks at 5..2000 stars, so its two ends are a rule, not a finding. */
+/** Star buckets. The trawl only ever looks at MIN_STARS..MAX_STARS (../lib/virtual), so its two ends are a rule, not a finding. */
 export function starBucket(stars: number): string {
   if (stars < 5) return "under 5";
   if (stars < 10) return "5 to 9";

@@ -60,6 +60,17 @@ export interface Env {
   TAKEDOWN_AUTO_PER_DAY?: string;
   /** IndexNow key (public by design; served at /{key}.txt). Unset = no engine pings. See src/lib/indexnow.ts. */
   INDEXNOW_KEY?: string;
+  /**
+   * Where the weekly bulletin is mailed from — a newsletter we do not run.
+   *
+   * Public, rendered on /report as a subscribe link, and deliberately not a mailing list of our own: a list
+   * means storing strangers' email addresses, and this site stores nothing it does not own. Substack today;
+   * the name is generic because moving is a config change, not a migration. Unset = no subscribe link
+   * anywhere, and the bulletin is still published, still on RSS, still readable.
+   */
+  NEWSLETTER_URL?: string;
+  /** What to call it in the subscribe line. Defaults to the host of NEWSLETTER_URL. */
+  NEWSLETTER_NAME?: string;
 }
 
 export interface SessionUser {

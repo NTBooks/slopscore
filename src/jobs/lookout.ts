@@ -14,6 +14,7 @@
 import type { Env } from "../env";
 import { crawlClock, HEALTH_LABEL, type JobClock } from "../lib/crawlclock";
 import { ago, isoDate, isoDateTime, now } from "../lib/time";
+import { encodeHeader } from "../lib/mail";
 
 export interface LookoutResult { ailing: string[]; mailed: boolean; note?: string }
 
@@ -67,7 +68,7 @@ async function send(env: Env, to: string, ailing: JobClock[], at: number): Promi
   const raw = [
     `From: Schnitzel <${from}>`,
     `To: ${to}`,
-    `Subject: ${subject.replace(/[\r\n]/g, " ").slice(0, 200)}`,
+    `Subject: ${encodeHeader(subject)}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <lookout-${isoDate(at)}-${Date.now()}@slopscore.org>`,
     "MIME-Version: 1.0",

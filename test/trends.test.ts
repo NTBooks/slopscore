@@ -6,6 +6,7 @@ import {
 import { JUDGE_CODES, JUDGE_DOMAINS, parseDomain, parseJudge } from "../src/lib/judge";
 import { FACET_TITLE } from "../src/jobs/trends";
 import { trendsMd } from "../src/views/trends";
+import { MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS } from "../src/lib/virtual";
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
 const row = (over: Partial<TrendRow>): TrendRow => ({ cohort: "trawl", metric: "language", period: "", key: "python", n: 1, mean_score: null, ...over });
@@ -214,5 +215,12 @@ describe("an empty site", () => {
     expect(d.use.n_listed).toBe(0);
     expect(d.totals.trawl).toEqual({});
     expect(trendsMd(d)).toMatch(/# Trends/);
+  });
+});
+
+describe("the sample's small print", () => {
+  it("quotes the window the trawl actually filters on, not a number somebody typed", () => {
+    const md = trendsMd(shapeTrends("2026-09-12", []));
+    expect(md).toContain(`${MIN_STARS}-${MAX_STARS} stars, pushed within ${PUSHED_WITHIN_DAYS} days`);
   });
 });

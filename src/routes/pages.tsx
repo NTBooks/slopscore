@@ -1,6 +1,7 @@
 // HTML pages (each also answers as .json / .md via respond()).
 import { cached } from "../lib/cache";
 import { Hono, type Context } from "hono";
+import type { FC } from "hono/jsx";
 import type { AppEnv } from "../env";
 import { adminLogins } from "../env";
 import {
@@ -23,6 +24,8 @@ import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
 import { loadTrends } from "../jobs/trends";
+import { listReports, loadReport, newsletter, reportTeaser, teaserLine, type ReportRow } from "../jobs/report";
+import { METHOD_VERSION, methodJson, methodMd } from "../lib/method";
 import { Trends, trendsMd } from "../views/trends";
 import { Layout, SITE } from "../views/layout";
 import { FeedList, ogImage } from "../views/feed";
@@ -59,7 +62,7 @@ async function railData(db: D1Database): Promise<RailData> {
   // the rest of the six-hour TTL after somebody turned a box on.
   const key = `rail:${flagOn("chatter") ? "c" : ""}${flagOn("chart") ? "s" : ""}`;
   return cached(db, key, async () => {
-    const [stats, tags, tools, chat, sea] = await Promise.all([
+    const [stats, tags, tools, chat, sea, teaser] = await Promise.all([
       siteStats(db),
       curatedTags(db),
       db.prepare(
@@ -77,8 +80,11 @@ async function railData(db: D1Database): Promise<RailData> {
           ).bind(CHAT_POOL).all<CriticReviewRow>().then((r) => chatLines(r.results ?? []))
         : Promise.resolve([] as ChatLine[]),
       flagOn("chart") ? seaData(db) : Promise.resolve(null),
+      // One indexed row, read off the frozen JSON. writeReport calls markDirty, so the box changes the
+      // moment a new bulletin lands rather than at the end of the cache's six hours.
+      reportTeaser(db),
     ]);
-    return { stats, tools, tags, chat, sea };
+    return { stats, tools, tags, chat, sea, report: teaser ? { slug: teaser.slug, line: teaserLine(teaser) } : null };
   });
 }
 
@@ -690,6 +696,115 @@ pages.get("/trends", async (c) => {
   });
 });
 
+/**
+ * How we count. A frozen, versioned method sitting next to the numbers it produces.
+ *
+ * Static: no database, no snapshot, no clock. Everything it states is either prose or read off the constants
+ * the crawler actually filters on, so a loosened filter rewrites this page rather than leaving it lying.
+ */
+pages.get("/method", (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const md = methodMd();
+  return respond(c, { md }, {
+    json: () => methodJson(),
+    md: (d) => d.md,
+    html: (d) => (
+      <Layout meta={{ title: `How we count — method v${METHOD_VERSION} — SlopScore`, description: "The rules behind every number on SlopScore: what the trawl samples, what it filters out, what the judge decides, what is counted and what is judged, and the biases to read before quoting any of it. Versioned and frozen." }} user={user} url={url}>
+        <section class="wrap narrow" style="padding:0">
+          <div dangerouslySetInnerHTML={{ __html: renderMarkdown(d.md) }} />
+        </section>
+      </Layout>
+    ),
+  });
+});
+
+/** The archive line every report page prints, newest first. */
+const ReportArchive: FC<{ rows: { slug: string; at: number; method: number }[]; current?: string }> = ({ rows, current }) => (
+  rows.length > 1 ? (
+    <p class="muted small">Every bulletin: {rows.map((r, i) => (
+      <>{i ? " · " : ""}{r.slug === current ? <strong>{r.slug}</strong> : <a href={`/report/${r.slug}`}>{r.slug}</a>}</>
+    ))}</p>
+  ) : null
+);
+
+/**
+ * Where to subscribe, when there is somewhere.
+ *
+ * A link, not a form. The site keeps no mailing list and never asks for an address: somebody else operates the
+ * newsletter, handles the unsubscribe, and carries the compliance, and this page's whole job is to hand the
+ * reader over to them. Unset NEWSLETTER_URL and the line disappears; the bulletin is still published and still
+ * on RSS, which is the channel that needs nobody's permission.
+ */
+const Subscribe: FC<{ list: { url: string; name: string } | null }> = ({ list }) => (
+  <p class="muted small">
+    Get it weekly: {list ? <><a href={list.url} rel="noopener">{list.name}</a> by email, or </> : null}
+    <a href="/report.xml">RSS</a>. Free, and it stays free — it is how the numbers get cited, not how they get sold.
+    {list ? <> We never see your address: the list lives with them, not here.</> : null}
+  </p>
+);
+
+/** One bulletin, rendered from the markdown frozen into its row. Never re-derived: an old week reads as it read. */
+const ReportPage: FC<{ row: ReportRow; archive: { slug: string; at: number; method: number }[]; list: { url: string; name: string } | null }> = ({ row, archive, list }) => (
+  <section class="wrap narrow" style="padding:0">
+    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(row.body) }} />
+    <Subscribe list={list} />
+    <p class="muted small">
+      Written {isoDateTime(row.at)} · method v{row.method} · <a href={`/report/${row.slug}.md`}>markdown</a> · <a href={`/report/${row.slug}.json`}>the numbers</a> · <a href="/report.xml">RSS</a> · <a href="/trends">the live dashboard</a>
+    </p>
+    <ReportArchive rows={archive} current={row.slug} />
+  </section>
+);
+
+const NO_REPORT = "No bulletin yet. One is written from the nightly snapshot as soon as there is a week to count.";
+
+pages.get("/report", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const [row, archive, teaser] = await Promise.all([loadReport(c.env.DB), listReports(c.env.DB), reportTeaser(c.env.DB)]);
+  return respond(c, { row, archive, teaser }, {
+    json: (d) => (d.row ? { ...d.row, data: parseJson(d.row.data, {}), archive: d.archive.map((a) => a.slug), newsletter: newsletter(c.env), rss: "/report.xml" } : { error: "no report yet", newsletter: newsletter(c.env), rss: "/report.xml" }),
+    md: (d) => (d.row ? d.row.body : ["# The Trawl Report", "", NO_REPORT].join("\n")),
+    html: (d) => (
+      <Layout meta={{
+        title: "The Trawl Report — SlopScore",
+        // The card leads with this week's finding rather than the standing blurb: a share of /report is a
+        // share of whatever is current, and "86.4% was software somebody made" travels where "one bulletin a
+        // week" does not. Falls back to the blurb before the first bulletin exists.
+        description: d.teaser ? `${teaserLine(d.teaser)} Counted, never generated — and the method is published before the numbers are.` : "One bulletin a week, counted from the nightly snapshot of every AI-built repo the trawl has seen: what got listed, what the judge threw back, and which tool its owners credited. No model writes it.",
+      }} user={user} url={url}>
+        {d.row ? <ReportPage row={d.row} archive={d.archive} list={newsletter(c.env)} /> : (
+          <section class="wrap narrow" style="padding:0"><h2>The Trawl Report</h2><div class="empty">{NO_REPORT}</div><Subscribe list={newsletter(c.env)} /></section>
+        )}
+      </Layout>
+    ),
+  });
+});
+
+pages.get("/report/:slug", async (c) => {
+  const user = c.get("user"); const url = new URL(c.req.url);
+  const slug = c.req.param("slug");
+  const [row, archive, teaser] = await Promise.all([loadReport(c.env.DB, slug), listReports(c.env.DB), reportTeaser(c.env.DB)]);
+  if (!row) return respond(c, null, {
+    json: () => ({ error: "no such report", slug }),
+    md: () => `# ${slug}\n\nNo bulletin for that week.`,
+    html: () => <Layout meta={{ title: `${slug} — SlopScore`, noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>{slug}</h2><div class="empty">No bulletin for that week. <a href="/report">The latest one</a>.</div></section></Layout>,
+  }, 404);
+  return respond(c, { row, archive, teaser }, {
+    json: (d) => ({ ...d.row, data: parseJson(d.row.data, {}) }),
+    md: (d) => d.row.body,
+    html: (d) => (
+      <Layout meta={{
+        title: `${d.row.title} — SlopScore`,
+        description: `${d.teaser ? teaserLine(d.teaser) + " " : ""}The SlopScore bulletin for ${d.row.slug}, counted from the snapshot of ${d.row.covers_to} under method v${d.row.method}.`,
+        // A dated bulletin is its own canonical address. /report shows the same body while it is the newest,
+        // and without this the two would compete over which one search should keep.
+        canonical: `${url.origin}/report/${d.row.slug}`,
+      }} user={user} url={url}>
+        <ReportPage row={d.row} archive={d.archive} list={newsletter(c.env)} />
+      </Layout>
+    ),
+  });
+});
+
 pages.get("/spec", (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const v = vocabJson();
@@ -731,6 +846,7 @@ pages.get("/about", (c) => {
     "SlopScore is a public, tongue-in-cheek leaderboard for AI-generated software. A repo owner opts in by committing a `slopscore.md` file. A crawler finds it, checks the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents (we call them slopsmiths) upvote, downvote, comment, and (quietly) report.", "",
     "## What we store", "", "Only our own database: listings, votes, comments, reports, and the moderation log. GitHub owns identity, code, images, and the marker file. Log in with GitHub; we keep your id, login, and avatar, and discard the token.", "",
     "## Transparency", "", "Every status has a public reason. The scan report is on every repo page. The [moderation log](/log) is public. The [queue](/queue) is public. The [stats](/stats) are public, including how close the site is to its free-tier limits, and so are the [trends](/trends). The [source](https://github.com/NTBooks/slopscore) is public.", "",
+    "The rules behind the numbers are public too, and frozen: [how we count](/method) says what the trawl samples, what it filters out, what the judge decides, and which biases to read before quoting any of it. It is versioned, it is never edited in place, and every [Trawl Report](/report) stamps the version it was written under. If a number here is wrong, the correction is published rather than applied quietly.", "",
     "## Trawled listings", "",
     "To fill the trough early, the Cap'm goes on a truffle trawl. He reads public repos whose owners say they were vibe coded or built with an AI tool, keeps the ones with a permissive license (MIT, Apache-2.0, BSD, ISC, 0BSD, Unlicense or CC0) that nobody submitted, and lets a few into the trough each day. Their pages say so at the top, their paperwork is his best guess from GitHub data, they sort below every repo that opted in, they stay out of the RSS feed, and they can't win awards. They are in the sitemap on purpose: searching for your own repo is how you find the listing, and the button that removes it. The owner can replace his paperwork with their own `slopscore.md`, or remove the listing in one click. Anyone who can't log in as the owner can request a takedown without logging in, and it comes down right away. The trawl stops for good once enough repos opt in.", "",
     "## The Cap'm's classifier", "",
@@ -864,7 +980,8 @@ pages.get("/__cron", async (c) => {
   const release = c.req.query("release");
   const dry = c.req.query("dry");
   const auto = c.req.query("auto");
-  return c.json({ cron, result: await runCron(cron, c.env, { n: n ? Number(n) : undefined, repo: c.req.query("repo"), reason: c.req.query("reason"), release: release ? Number(release) : undefined, dry: dry === "1" || dry === "true", auto: auto ? Number(auto) : undefined }) });
+  const force = c.req.query("force");
+  return c.json({ cron, result: await runCron(cron, c.env, { n: n ? Number(n) : undefined, repo: c.req.query("repo"), reason: c.req.query("reason"), release: release ? Number(release) : undefined, dry: dry === "1" || dry === "true", auto: auto ? Number(auto) : undefined, force: force === "1" || force === "true" }) });
 });
 
 // Admin/localhost: accept the Workers AI vision model license and show the raw result.

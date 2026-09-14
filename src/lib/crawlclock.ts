@@ -15,7 +15,7 @@ import { flagOn } from "./flags";
 /** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons. */
 export const JOBS = ["sweep", "scan", "recrawl"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
-export const DAILY_JOBS = ["awards", "trawl", "critics", "trends", "tripwire"] as const;
+export const DAILY_JOBS = ["awards", "trawl", "critics", "trends", "tripwire", "report"] as const;
 
 export type Job = (typeof JOBS)[number];
 export type DailyJob = (typeof DAILY_JOBS)[number];
@@ -32,6 +32,9 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   critics: { label: "next critics turn", does: "one of the cast reads a listing or two and votes" },
   trends: { label: "next trends count", does: "counts the corpus for /trends" },
   tripwire: { label: "next tripwire sweep", does: "expires blocks and prunes the probe counters" },
+  // Checked nightly, writes weekly: on six nights in seven it reads one row and declines. A job that runs
+  // and does nothing is still a job that ran, so it is watched like the rest rather than left unaccounted for.
+  report: { label: "next report check", does: "writes the weekly Trawl Report when a week is owed one" },
 };
 
 /** Which jobs each cron drives. Mirrors the switch in runCron (src/index.ts). */

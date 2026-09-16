@@ -75,7 +75,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     if (metaRes.status === 404 || metaRes.status === 451 || metaRes.status === 403 || metaRes.status === 410) {
       if (existingByName && existingByName.status !== "delisted") {
         const reason = metaRes.status === 451 ? "dmca" : ("blocked" in metaRes && metaRes.blocked) ? "tos-block" : "404";
-        await delist(db, existingByName.id, reason);
+        await delist(db, existingByName.id, reason, existingByName.full_name);
         return { repo: { ...existingByName, status: "delisted", removed_reason: reason }, outcome: { status: "missing", error: `GitHub returned ${metaRes.status}` } };
       }
     }
@@ -91,7 +91,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const mdText = virtual ? existing!.virtual_md! : raw.status === 200 ? raw.text : null;
   if (!mdText) {
     if (existing && existing.status !== "delisted") {
-      await delist(db, existing.id, "marker-removed");
+      await delist(db, existing.id, "marker-removed", existing.full_name);
       return { repo: { ...existing, status: "delisted", removed_reason: "marker-removed" }, outcome: { status: "missing", error: "slopscore.md not found on the default branch" } };
     }
     return { repo: null, outcome: { status: "missing", error: `no slopscore.md on ${g.default_branch} (raw fetch returned ${raw.status})` } };
@@ -316,6 +316,9 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   if (g.license?.spdx_id && g.license.spdx_id !== "NOASSERTION") tags.push({ facet: "license", value: normalizeValue(g.license.spdx_id), source: "detected", recognized: true });
   await replaceTags(db, g.id, dedupe(tags));
 
+  if (status === "delisted" && existing && existing.status !== "delisted") {
+    await logAction(db, { actor: "system", role: "system", action: "delist", targetType: "repo", targetId: g.id, label: g.full_name, note: removedReasonLabel(removed.reason) });
+  }
   if (trawled && !virtual) {
     // The owner committed a real slopscore.md: it's theirs now, and it joins the opted-in feed as a fresh listing.
     await db.prepare("UPDATE repos SET source = 'marker', virtual_md = NULL, virtual_reason = NULL, listed_at = CASE WHEN status = 'listed' THEN unixepoch() ELSE listed_at END WHERE id = ?").bind(g.id).run();
@@ -358,9 +361,19 @@ export function metadataGate(g: GhRepo): GateResult {
   return { gate: "metadata", ok: reasons.length === 0, reasons, notes };
 }
 
-export async function delist(db: D1Database, id: number, reason: string): Promise<void> {
-  await db.prepare("UPDATE repos SET status = 'delisted', removed_at = unixepoch(), removed_reason = ?, last_crawled = unixepoch(), next_crawl = unixepoch() + 30 * 86400 WHERE id = ? AND status != 'delisted'").bind(reason, id).run();
-  await markDirty(db);
+/** Why a listing was removed, in the words the repo page and the public log both use. */
+export const REMOVED_REASON_LABELS: Record<string, string> = {
+  "owner-request": "the owner asked", "marker-removed": "slopscore.md was removed", dmca: "DMCA takedown on GitHub",
+  "tos-block": "blocked by GitHub for a terms-of-service violation", takedown: "a takedown request", "404": "gone from GitHub", admin: "a moderator",
+};
+export function removedReasonLabel(reason: string | null | undefined): string { return (reason && REMOVED_REASON_LABELS[reason]) || reason || "unknown"; }
+
+/** Remove a listing the crawler can no longer stand behind. Every removal lands in the public log, so a moderator
+ *  reading "1 delisted" can find out which one and why without opening the database. */
+export async function delist(db: D1Database, id: number, reason: string, label?: string): Promise<void> {
+  const r = await db.prepare("UPDATE repos SET status = 'delisted', removed_at = unixepoch(), removed_reason = ?, last_crawled = unixepoch(), next_crawl = unixepoch() + 30 * 86400 WHERE id = ? AND status != 'delisted'").bind(reason, id).run();
+  if (!r.meta.changes) return;
+  await logAction(db, { actor: "system", role: "system", action: "delist", targetType: "repo", targetId: id, label, note: removedReasonLabel(reason) });
 }
 
 /** Seconds until the next recrawl: 1 h … 7 d by how recently the repo was pushed; ≤ 6 h when it's hot. */

@@ -5,7 +5,7 @@ import { parseJson } from "../lib/db";
 import type { SessionUser } from "../env";
 import type { TagRow, SlopMeta } from "../lib/slopmd";
 import type { ScanReport } from "../lib/scan";
-import { POLICY_LABELS } from "../lib/scan";
+import { POLICY_LABELS, removedReasonLabel } from "../lib/scan";
 import { ago, isoDate } from "../lib/time";
 import { VoteBox, ghUrl, Chips } from "./feed";
 import { FromTheBalcony, type RepoVerdict } from "./balcony";
@@ -198,7 +198,7 @@ const StatusBox: FC<{ r: RepoRow; scan: ScanReport | null }> = ({ r, scan }) => 
     case "hidden":
       return <div class="status queued"><strong>Under review.</strong> <span class="muted">Reported by several graders; hidden from feeds until a moderator decides.</span></div>;
     case "delisted":
-      return <div class="status delisted"><strong>Removed {isoDate(r.removed_at)}.</strong> <span class="muted">Reason: {r.removed_reason === "owner-request" ? "the owner asked" : r.removed_reason === "marker-removed" ? "slopscore.md was removed" : r.removed_reason === "dmca" ? "DMCA takedown on GitHub" : r.removed_reason === "takedown" ? "a takedown request" : r.removed_reason === "404" ? "gone from GitHub" : r.removed_reason}. Votes and comments stay readable.</span></div>;
+      return <div class="status delisted"><strong>Removed {isoDate(r.removed_at)}.</strong> <span class="muted">Reason: {removedReasonLabel(r.removed_reason)}. Votes and comments stay readable.</span></div>;
   }
 };
 

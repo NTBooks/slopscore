@@ -7,11 +7,11 @@ import type { RepoRow } from "../lib/db";
 import { now } from "../lib/time";
 import { setState } from "./stats";
 
-export interface RecrawlResult { checked: number; unchanged: number; rescanned: number; delisted: number; renamed: number; revived: number }
+export interface RecrawlResult { checked: number; unchanged: number; rescanned: number; delisted: number; renamed: number; revived: number; removed: { full_name: string; reason: string }[] }
 
 export async function recrawl(env: Env, limit = 40): Promise<RecrawlResult> {
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
-  const out: RecrawlResult = { checked: 0, unchanged: 0, rescanned: 0, delisted: 0, renamed: 0, revived: 0 };
+  const out: RecrawlResult = { checked: 0, unchanged: 0, rescanned: 0, delisted: 0, renamed: 0, revived: 0, removed: [] };
   const rows = await env.DB.prepare(
     "SELECT * FROM repos WHERE status IN ('listed','rejected','quarantined','hidden','delisted') AND (next_crawl IS NULL OR next_crawl <= ?) ORDER BY next_crawl ASC LIMIT ?",
   ).bind(now(), limit).all<RepoRow>().then((r) => r.results ?? []);
@@ -48,8 +48,9 @@ export async function checkOne(env: Env, gh: GitHub, r: RepoRow, out?: RecrawlRe
       await env.DB.prepare("UPDATE repos SET last_crawled = ?, next_crawl = ? WHERE id = ?").bind(t, t + 30 * 86400, r.id).run();
       return "unchanged";
     }
-    await delist(env.DB, r.id, res.status === 451 ? "dmca" : res.status === 403 ? "tos-block" : "404");
-    if (out) out.delisted++;
+    const reason = res.status === 451 ? "dmca" : res.status === 403 ? "tos-block" : "404";
+    await delist(env.DB, r.id, reason, r.full_name);
+    if (out) { out.delisted++; out.removed.push({ full_name: r.full_name, reason }); }
     return "delisted";
   }
   if (res.status !== 200) {
@@ -78,7 +79,10 @@ export async function checkOne(env: Env, gh: GitHub, r: RepoRow, out?: RecrawlRe
     return "unchanged";
   }
   const scanned = await scanRepo(env.DB, env, gh, g.owner.login, g.name);
-  if ("error" in scanned.outcome) { if (out) out.delisted++; return "delisted"; }
+  if ("error" in scanned.outcome) {
+    if (out) { out.delisted++; out.removed.push({ full_name: scanned.repo?.full_name ?? r.full_name, reason: scanned.repo?.removed_reason ?? scanned.outcome.error }); }
+    return "delisted";
+  }
   if (out) out.rescanned++;
   return "rescanned";
 }

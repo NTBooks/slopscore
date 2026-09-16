@@ -860,8 +860,9 @@ pages.get("/r/:owner/:name", async (c) => {
       html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
-  if (r.source === "trawl" && (r.status === "delisted" || (r.status === "hidden" && r.queue_reason === "takedown")) && !isOwnerOf(r, user?.login, user?.id)) {
-    // A removed trawled listing leaves no tombstone: it never asked to be here. The owner still sees the page (and Refresh).
+  if (r.source === "trawl" && (r.status === "delisted" || (r.status === "hidden" && r.queue_reason === "takedown")) && !isOwnerOf(r, user?.login, user?.id) && !user?.isAdmin) {
+    // A removed trawled listing leaves no tombstone: it never asked to be here. The owner still sees the page (and Refresh),
+    // and so does a moderator, who needs the removal reason to answer for it.
     // A listing hidden by a takedown request reads the same from outside: it is gone, and the deletion follows.
     const note = "was listed by the Cap'm's trawl and has been removed, by its owner or on their behalf. We kept only the name, so the trawl never brings it back.";
     return respond(c, { full_name: r.full_name }, {

@@ -6,7 +6,7 @@ import { requireUser, body, wantsJson } from "../middleware";
 import { Layout } from "../views/layout";
 import { ago, isoDate, now } from "../lib/time";
 import { GitHub } from "../lib/github";
-import { scanRepo } from "../lib/scan";
+import { scanRepo, removedReasonLabel } from "../lib/scan";
 import { flagsSnapshot, ALL_FLAGS } from "../lib/flags";
 import { crawlClock, parseManual, JOBS, MANUAL_COOLDOWN, type Job } from "../lib/crawlclock";
 import { CrawlClockBox } from "../views/crawlclock";
@@ -63,7 +63,7 @@ mod.get("/", async (c) => {
     "SELECT day, sum(CASE WHEN severity = 'targeted' THEN n ELSE 0 END) AS targeted, sum(CASE WHEN severity != 'targeted' THEN n ELSE 0 END) AS noise FROM tripwire GROUP BY day ORDER BY day DESC LIMIT 14",
   ).all<{ day: string; targeted: number; noise: number }>().then((r) => r.results ?? []);
   const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.settle_at, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; settle_at: number | null; created_at: number; status: string | null }>().then((r) => r.results ?? []);
-  const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
+  const [reports, quarantined, hidden, delisted, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
       `SELECT rp.id, rp.target_type, rp.target_id, rp.reason, rp.note, rp.created_at, u.login AS reporter,
          CASE rp.target_type WHEN 'repo' THEN r.full_name ELSE r2.full_name END AS label,
@@ -78,6 +78,7 @@ mod.get("/", async (c) => {
     ).all<ReportRow>().then((r) => r.results ?? []),
     db.prepare("SELECT * FROM repos WHERE status = 'quarantined' ORDER BY first_seen ASC LIMIT 100").all<RepoRow>().then((r) => r.results ?? []),
     db.prepare("SELECT * FROM repos WHERE status = 'hidden' ORDER BY first_seen DESC LIMIT 100").all<RepoRow>().then((r) => r.results ?? []),
+    db.prepare("SELECT * FROM repos WHERE status = 'delisted' ORDER BY removed_at DESC, id DESC LIMIT 50").all<RepoRow>().then((r) => r.results ?? []),
     db.prepare("SELECT c.id, c.body_md, c.held_reason, c.created_at, u.login, r.full_name FROM comments c JOIN users u ON u.id = c.user_id JOIN repos r ON r.id = c.repo_id WHERE c.hidden_at IS NOT NULL AND c.deleted_at IS NULL ORDER BY c.created_at DESC LIMIT 100").all<{ id: number; body_md: string; held_reason: string | null; created_at: number; login: string; full_name: string }>().then((r) => r.results ?? []),
     db.prepare("SELECT id, login, banned_at, ban_reason FROM users WHERE banned_at IS NOT NULL ORDER BY banned_at DESC LIMIT 100").all<{ id: number; login: string; banned_at: number; ban_reason: string | null }>().then((r) => r.results ?? []),
     allBuckets(db),
@@ -252,6 +253,19 @@ mod.get("/", async (c) => {
         <h3>Hidden by reports <span class="muted">· {hidden.length}</span></h3>
         {hidden.length === 0 ? <div class="empty">Nothing hidden.</div> : null}
         {hidden.map((r) => <RepoCard r={r} csrf={csrf} act={act} kind="hidden" />)}
+
+        <h3>Delisted <span class="muted">· newest first · {delisted.length}{delisted.length === 50 ? "+" : ""}</span></h3>
+        <p class="muted small">Removed by the crawler (gone from GitHub, marker deleted, DMCA), by the owner, or by a moderator. Each one is in the <a href="/log">public log</a> with its reason. Restore relists it and clears any lock; rescan asks GitHub again first.</p>
+        {delisted.length === 0 ? <div class="empty">Nothing delisted.</div> : null}
+        {delisted.map((r) => (
+          <div class="modcard">
+            <div><strong><a href={`/r/${r.full_name}`}>{r.full_name}</a></strong> {r.tagline ? <span class="muted">— {r.tagline}</span> : null} · <span class={`chip ${r.removed_reason === "admin" ? "warn" : "bad"}`}>{removedReasonLabel(r.removed_reason)}</span> · removed {r.removed_at ? ago(r.removed_at) : "at an unknown time"}{r.source === "trawl" ? " · trawled" : ""}{r.locked_by ? ` · locked by ${r.locked_by}` : ""}{r.mod_note ? <span class="muted"> · {r.mod_note}</span> : null}</div>
+            <div class="actions">
+              {act("rescan", "rescan", `/mod/repo/${r.id}`)}
+              {act("restore", "restore (list)", `/mod/repo/${r.id}`, "btn secondary", r.removed_reason === "owner-request" ? "The owner asked for this removal. Relist it anyway?" : "Relist it? The next recrawl still delists it if it is gone from GitHub.")}
+            </div>
+          </div>
+        ))}
 
         <h3>Held comments <span class="muted">· {held.length}</span></h3>
         {held.length === 0 ? <div class="empty">No comments held.</div> : null}
@@ -527,7 +541,8 @@ const RUN: Record<Job, (env: AppEnv["Bindings"]) => Promise<string>> = {
   },
   recrawl: async (env) => {
     const r = await recrawl(env);
-    return `Recrawl checked ${r.checked}: ${r.rescanned} rescanned, ${r.unchanged} unchanged, ${r.delisted} delisted${r.renamed ? `, ${r.renamed} renamed` : ""}${r.revived ? `, ${r.revived} revived` : ""}.`;
+    const gone = r.removed.length ? ` Delisted: ${r.removed.map((x) => `${x.full_name} (${removedReasonLabel(x.reason)})`).join(", ")}.` : "";
+    return `Recrawl checked ${r.checked}: ${r.rescanned} rescanned, ${r.unchanged} unchanged, ${r.delisted} delisted${r.renamed ? `, ${r.renamed} renamed` : ""}${r.revived ? `, ${r.revived} revived` : ""}.${gone}`;
   },
   trawl: async (env) => {
     // One hourly slice, exactly what the cron would do: leased, budgeted against the day, and no more.

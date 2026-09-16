@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { denylistGate, extractLinks } from "../src/lib/denylist";
 import { riskScore } from "../src/lib/risk";
 import { findSecrets, judgeGuard, estimateGuardNeurons } from "../src/lib/content";
-import { nextInterval } from "../src/lib/scan";
+import { nextInterval, removedReasonLabel } from "../src/lib/scan";
 import { isoWeek } from "../src/jobs/awards";
 import type { GhRepo } from "../src/lib/github";
 
@@ -94,6 +94,17 @@ describe("recrawl interval + awards week", () => {
   it("iso week", () => {
     expect(isoWeek(new Date(Date.UTC(2026, 0, 1)))).toBe("2026-W01");
     expect(isoWeek(new Date(Date.UTC(2026, 8, 7)))).toBe("2026-W37");
+  });
+});
+
+describe("removal reasons read as words", () => {
+  it("names every reason the crawler, the owner or a moderator can give", () => {
+    expect(removedReasonLabel("404")).toBe("gone from GitHub");
+    expect(removedReasonLabel("marker-removed")).toBe("slopscore.md was removed");
+    expect(removedReasonLabel("owner-request")).toBe("the owner asked");
+    expect(removedReasonLabel("admin")).toBe("a moderator");
+    expect(removedReasonLabel("something-new")).toBe("something-new");
+    expect(removedReasonLabel(null)).toBe("unknown");
   });
 });
 

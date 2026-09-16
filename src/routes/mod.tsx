@@ -101,7 +101,7 @@ mod.get("/", async (c) => {
         <div class="capacity free" style="margin:8px 0">
           <div style="grid-column:1/-1"><span class="label">feature flags · MOD_FLAGS var, deploy to change</span>
             {ALL_FLAGS.map((f) => <span class={`chip ${flagsSnapshot()[f] ? "ok" : "bad"}`} title={FLAG_HELP[f]}>{f}: {flagsSnapshot()[f] ? "on" : "off"}</span>)}
-            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score · tripwire = probe counting and the daily email · tripblock = a probe costs that source 24 hours · rising/controversial/updated/upcoming = that feed sort is on offer</span>
+            <span class="muted small"> · weight = trust-weighted votes · ring = vote-ring zeroing · burst = votes capped by visitors · crowd = anonymous votes shown · fuzz = displayed score jitter · guard = Llama Guard on comments · risk = quarantine by risk score · tripwire = probe counting and the daily email · tripblock = three targeted probes in a day cost that source 24 hours · rising/controversial/updated/upcoming = that feed sort is on offer</span>
           </div>
         </div>
 
@@ -110,7 +110,7 @@ mod.get("/", async (c) => {
           Requests shaped like an attack (src/lib/tripwire.ts). <strong>Targeted</strong> means nobody's accident:
           SQL tautologies, our own &lt;repo&gt; prompt delimiter in a query string, path traversal. <strong>Noise</strong>
           is the background radiation of the public internet — .env probes, wp-admin, a crawler following a mangled
-          link — and never blocks anyone or sends mail. If the source count climbs, turn on Bot Fight Mode
+          link — and never blocks anyone or sends mail. A source is shut out only after three targeted hits in a day, only for SQL and traversal shapes, and /contact still answers it. If the source count climbs, turn on Bot Fight Mode
           (Cloudflare → slopscore.org → Security → Bots). One email a day at most, whatever arrives.
         </p>
         <div class={`capacity ${trip.targeted ? "paid" : "free"}`} style="margin:8px 0">

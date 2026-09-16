@@ -9,8 +9,10 @@
 //   guard   comments pass through Llama Guard and can be held
 //   risk    risk score can quarantine (off = risk is recorded but never quarantines)
 //   tripwire   requests shaped like an attack are counted, and one email a day goes out (lib/tripwire.ts)
-//   tripblock  a targeted probe also shuts that source out for 24 hours. Needs tripwire. Verified search
-//              crawlers and logged-in admins are never blocked; off = counted and emailed, nobody locked out
+//   tripblock  BLOCK_AFTER targeted probes from one source in a day shut it out for 24 hours (SQL and
+//              traversal shapes only; a prompt-shaped search never blocks). Needs tripwire. Verified search
+//              crawlers and logged-in admins are never blocked, and /contact always answers a blocked
+//              address; off = counted and emailed, nobody locked out
 //   frenzy  the critics take the stand a few at a time all day and spend what the day's allowance still
 //           owes them in its last hour (off = the one nightly batch at 00:05, which is all this ever was)
 //   chatter the critics' verdicts as a chat in the rail, a window at a time, newest the reader hasn't read

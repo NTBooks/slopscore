@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classify, severityOf, type TripKind } from "../src/lib/tripwire";
+import { classify, severityOf, blockable, doorExempt, shouldShut, BLOCK_AFTER, type TripKind } from "../src/lib/tripwire";
 import { csp } from "../src/lib/csp";
 import { INLINE_SCRIPTS } from "../src/views/clientjs";
 
@@ -35,6 +35,37 @@ describe("tripwire: what it catches", () => {
     expect(kind("/?page=-1")).toBe("bad-page");
     expect(kind("/?page=1e999")).toBe("bad-page");
     expect(kind(`/search?q=${"x".repeat(4100)}`)).toBe("oversize");
+  });
+
+  it("blocks only on shapes that are nobody's search: a prompt-shaped query counts and mails, never blocks", () => {
+    expect(blockable("sql-probe")).toBe(true);
+    expect(blockable("traversal")).toBe(true);
+    // This site lists prompt-injection suites. Searching for one must never cost a NAT a day.
+    expect(blockable("prompt-probe")).toBe(false);
+    expect(blockable("oversize")).toBe(false);
+    expect(blockable("scanner")).toBe(false);
+    expect(blockable("bad-page")).toBe(false);
+  });
+
+  it("shuts the door on the third targeted hit of the day, not the first", () => {
+    const base = { kind: "sql-probe" as TripKind, exempt: false, hash: "h", blocking: true };
+    expect(shouldShut({ ...base, targetedToday: 1 })).toBe(false);
+    expect(shouldShut({ ...base, targetedToday: BLOCK_AFTER - 1 })).toBe(false);
+    expect(shouldShut({ ...base, targetedToday: BLOCK_AFTER })).toBe(true);
+    expect(shouldShut({ ...base, targetedToday: 50 })).toBe(true);
+    // And never for an exempt source, an unknown source, a non-blocking deploy, or a non-blockable kind.
+    expect(shouldShut({ ...base, targetedToday: 50, exempt: true })).toBe(false);
+    expect(shouldShut({ ...base, targetedToday: 50, hash: null })).toBe(false);
+    expect(shouldShut({ ...base, targetedToday: 50, blocking: false })).toBe(false);
+    expect(shouldShut({ ...base, targetedToday: 50, kind: "prompt-probe" })).toBe(false);
+  });
+
+  it("leaves the appeal route open to a blocked address, and nothing else", () => {
+    expect(doorExempt("/contact")).toBe(true);
+    expect(doorExempt("/contact/")).toBe(true);
+    expect(doorExempt("/contacts")).toBe(false);
+    expect(doorExempt("/")).toBe(false);
+    expect(doorExempt("/search")).toBe(false);
   });
 
   it("splits what blocks and mails from what only counts", () => {

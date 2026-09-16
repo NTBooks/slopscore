@@ -6,7 +6,7 @@ import { getUser } from "./lib/db";
 import { now } from "./lib/time";
 import { setFlags, flagOn } from "./lib/flags";
 import { csp } from "./lib/csp";
-import { classify, isShut, record, BLOCK_SECONDS } from "./lib/tripwire";
+import { classify, doorExempt, isShut, record, BLOCK_SECONDS } from "./lib/tripwire";
 import { ipHash } from "./lib/trust";
 import { isPreviewHost } from "./lib/host";
 
@@ -107,12 +107,14 @@ export const tripwire: MiddlewareHandler<AppEnv> = async (c, next) => {
   let hash: string | null = null;
   try {
     hash = await ipHash(c.req.header("cf-connecting-ip"), c.env.SESSION_SECRET);
-    if (await isShut(c.env.DB, hash)) {
+    // The appeal route stays open to a shut-out address, or the refusal below would be telling people to
+    // use a page it refuses to show them.
+    if (!doorExempt(url.pathname) && await isShut(c.env.DB, hash)) {
       c.header("retry-after", String(BLOCK_SECONDS));
       return c.text(
-        `Refused. This address sent something shaped like an attack, so it is shut out for 24 hours.
+        `Refused. This address sent several things shaped like an attack today, so it is shut out for 24 hours.
 
-If that was not you, or it was and you were only curious, say so at ${c.env.SITE_URL ?? "https://slopscore.org"}/contact and it will be lifted.
+If that was not you (a shared connection, say), or it was and you were only curious, say so at ${c.env.SITE_URL ?? "https://slopscore.org"}/contact -- that page still answers you -- and it will be lifted.
 `,
         403,
       );

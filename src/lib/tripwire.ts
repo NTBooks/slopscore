@@ -20,8 +20,17 @@ import { flagOn } from "./flags";
 export const TRIP_KINDS = ["sql-probe", "prompt-probe", "traversal", "oversize", "bad-page", "scanner"] as const;
 export type TripKind = (typeof TRIP_KINDS)[number];
 
-/** Only these close the door. The rest are counted and reported, never blocked. */
-const BLOCKABLE = new Set<TripKind>(["sql-probe", "prompt-probe", "traversal"]);
+/**
+ * Only these close the door. The rest are counted and reported, never blocked.
+ *
+ * `prompt-probe` is deliberately not here. This site lists AI tooling, and "ignore all previous
+ * instructions" typed into its search box is at least as likely to be somebody looking for a
+ * prompt-injection test suite as somebody running one. It is still counted and still raises the email;
+ * it just never costs a whole NAT a day of access. SQL and traversal shapes carry their own punctuation
+ * and are nobody's search.
+ */
+const BLOCKABLE = new Set<TripKind>(["sql-probe", "traversal"]);
+export const blockable = (k: TripKind): boolean => BLOCKABLE.has(k);
 
 /** Only these raise the email. `scanner` and `bad-page` are the weather, not an event. */
 const TARGETED = new Set<TripKind>(["sql-probe", "prompt-probe", "traversal", "oversize"]);
@@ -29,6 +38,29 @@ const TARGETED = new Set<TripKind>(["sql-probe", "prompt-probe", "traversal", "o
 export const severityOf = (k: TripKind): "targeted" | "noise" => (TARGETED.has(k) ? "targeted" : "noise");
 
 export const BLOCK_SECONDS = 24 * 3600;
+
+/**
+ * Targeted hits from one source in a UTC day before the door shuts on it. One is a curious person or a
+ * shared address's one bad tenant; three in a day is a tool. A probe run trips this on its first
+ * screenful, so the attacker loses nothing an earlier block would have cost them.
+ */
+export const BLOCK_AFTER = 3;
+
+/**
+ * Paths a shut-out address may still reach. The refusal tells people to say so at /contact, which means
+ * /contact has to answer them; a block that also blocks the appeal is a block with no appeal.
+ */
+export const DOOR_EXEMPT = ["/contact"] as const;
+export const doorExempt = (pathname: string): boolean =>
+  DOOR_EXEMPT.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+/**
+ * Whether this hit shuts the door. Pure, so the policy is the tested part: the IO around it only supplies
+ * the count. `targetedToday` includes the hit being decided.
+ */
+export function shouldShut(o: { kind: TripKind; exempt: boolean; hash: string | null; targetedToday: number; blocking: boolean }): boolean {
+  return o.blocking && !o.exempt && o.hash != null && BLOCKABLE.has(o.kind) && o.targetedToday >= BLOCK_AFTER;
+}
 
 /**
  * Shapes that are nobody's accident.
@@ -158,14 +190,19 @@ export async function record(env: Env, trip: Trip, hash: string | null, exempt: 
     ).bind(day, trip.kind, sev, t, t, trip.sample),
     ...(hash
       ? [env.DB.prepare(
-        `INSERT INTO tripwire_ips (day, ip_hash, n, last_at) VALUES (?, ?, 1, ?)
-           ON CONFLICT(day, ip_hash) DO UPDATE SET n = tripwire_ips.n + 1, last_at = excluded.last_at`,
-      ).bind(day, hash, t)]
+        `INSERT INTO tripwire_ips (day, ip_hash, n, targeted, last_at) VALUES (?, ?, 1, ?, ?)
+           ON CONFLICT(day, ip_hash) DO UPDATE SET n = tripwire_ips.n + 1, targeted = tripwire_ips.targeted + excluded.targeted, last_at = excluded.last_at`,
+      ).bind(day, hash, sev === "targeted" ? 1 : 0, t)]
       : []),
   ]);
 
-  const blocked = !exempt && hash != null && BLOCKABLE.has(trip.kind) && flagOn("tripblock");
-  if (blocked) await shut(env.DB, hash, trip.kind);
+  // The count is only fetched when it could matter: a blockable kind from a source that can be blocked.
+  const candidate = hash != null && !exempt && BLOCKABLE.has(trip.kind) && flagOn("tripblock");
+  const targetedToday = candidate
+    ? (await env.DB.prepare("SELECT targeted FROM tripwire_ips WHERE day = ? AND ip_hash = ?").bind(day, hash).first<{ targeted: number }>())?.targeted ?? 1
+    : 0;
+  const blocked = shouldShut({ kind: trip.kind, exempt, hash, targetedToday, blocking: flagOn("tripblock") });
+  if (blocked) await shut(env.DB, hash!, trip.kind);
   if (sev === "targeted") await maybeAlert(env, day, trip, blocked);
   return { kind: trip.kind, blocked };
 }
@@ -222,7 +259,7 @@ async function send(env: Env, to: string, day: string, trip: Trip, blocked: bool
     "",
     `  what:    ${trip.kind}`,
     `  sample:  ${trip.sample}`,
-    `  blocked: ${blocked ? "yes, that source is shut out for 24 hours" : "no (tripblock is off, or the source was exempt)"}`,
+    `  blocked: ${blocked ? "yes, that source is shut out for 24 hours" : `no (under ${BLOCK_AFTER} targeted hits from it today, a kind that never blocks, tripblock off, or an exempt source)`}`,
     "",
     `Today (${day}) so far:`,
     `  targeted attempts: ${t.targeted}`,

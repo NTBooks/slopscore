@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "./env";
 import { loadUser, secure, tripwire } from "./middleware";
 import { rewriteFormat } from "./lib/negotiate";
-import { homeUrl, SECONDARY_REDIRECT } from "./lib/host";
+import { homeUrl, isPreviewHost, siteOrigin, SECONDARY_REDIRECT } from "./lib/host";
 import { pages } from "./routes/pages";
 import { api } from "./routes/api";
 import { auth } from "./routes/auth";
@@ -37,6 +37,16 @@ import { indexNowKey } from "./lib/indexnow";
 
 const app = new Hono<AppEnv>();
 
+// Any domain that is not home sends you home, path and query intact (src/lib/host.ts). This runs before the
+// www rule below so a www secondary domain is one hop, not two -- and, just as important, so the marketing
+// domain never hands out a permanent redirect (the www rule's 301) that a browser would cache for ever. It
+// also means the OAuth callback, the session cookie and the canonical URL only ever exist on one hostname.
+// The order is pinned by test/app.test.ts; the two blocks are not interchangeable.
+app.use("*", async (c, next) => {
+  const home = homeUrl(c.req.raw, c.env);
+  return home ? c.redirect(home, SECONDARY_REDIRECT) : next();
+});
+
 // One host, one copy. www and the apex both resolve to this worker; letting both answer splits every
 // link and every crawl budget in two, so www redirects permanently to the canonical apex.
 app.use("*", async (c, next) => {
@@ -44,14 +54,6 @@ app.use("*", async (c, next) => {
   if (!url.hostname.startsWith("www.")) return next();
   url.hostname = url.hostname.slice(4);
   return c.redirect(url.toString(), 301);
-});
-
-// Any domain that is not home sends you home, path and query intact (src/lib/host.ts). This runs before the
-// www rule below so a www secondary domain is one hop, not two, and it means the OAuth callback, the session
-// cookie and the canonical URL only ever exist on one hostname.
-app.use("*", async (c, next) => {
-  const home = homeUrl(c.req.raw, c.env);
-  return home ? c.redirect(home, SECONDARY_REDIRECT) : next();
 });
 
 app.use("*", secure);
@@ -76,7 +78,11 @@ app.route("/", disclosure);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => {
-  const origin = new URL(c.req.url).origin;
+  const url = new URL(c.req.url);
+  const origin = siteOrigin(c.req.raw, c.env);
+  // The test environment and preview deploys are copies of the site with their own database. Indexing one
+  // would put a second, staler version of every page beside the real one, so they refuse every crawler.
+  if (isPreviewHost(url.hostname)) return c.text("User-agent: *\nDisallow: /\n", 200, { "cache-control": "public, max-age=3600" });
   // Disallowed paths are either side-effecting (/ping runs a scan), private (/mod, /auth, /me),
   // or an endless duplicate of the feed (/search). Everything a reader would want stays open.
   const rules = [

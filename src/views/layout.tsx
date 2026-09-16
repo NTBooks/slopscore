@@ -44,9 +44,22 @@ function jsonLd(meta: PageMeta, url: URL) {
   return <script type="application/ld+json">{raw(JSON.stringify(graph).replace(/</g, "\\u003c"))}</script>;
 }
 
+/** Query parameters that only reorder or page the same rows. A feed sorted three ways is one page to a
+ *  search engine, so none of these belong in its canonical address. Everything else (?kind=, ?q=, ?critic=)
+ *  names a different page and stays. */
+export const VARIANT_PARAMS = ["sort", "t", "page"] as const;
+
+/** The query string a page is canonical under: the request's own, minus the variant parameters. */
+export function canonicalSearch(url: URL): string {
+  const p = new URLSearchParams(url.search);
+  for (const k of VARIANT_PARAMS) p.delete(k);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
 export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | null; url: URL; sort?: Sort; q?: string; tags?: { slug: string; title: string }[] }>> = ({ meta, user, url, sort, q, tags, children }) => {
   const image = meta.image ?? `${url.origin}/hero.png`;
-  const canonical = meta.canonical ?? `${url.origin}${url.pathname}${url.search}`;
+  const canonical = meta.canonical ?? `${url.origin}${url.pathname}${canonicalSearch(url)}`;
   return (
     <html lang="en">
       <head>

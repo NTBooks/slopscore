@@ -7,6 +7,7 @@ import { isoDateTime } from "../lib/time";
 import { DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { listReports } from "../jobs/report";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
+import { siteOrigin } from "../lib/host";
 
 export const feeds = new Hono<AppEnv>();
 
@@ -49,6 +50,10 @@ feeds.get("/feed.xml", async (c) => {
 // taken down without an account.
 feeds.get("/trawl.xml", async (c) => {
   const origin = new URL(c.req.url).origin;
+  // The feed follows the same switch as the sitemap. With TRAWL_INDEX off the listings are noindex pages,
+  // and a feed is syndication: handing a reader a channel of pages we keep out of search would be the switch
+  // saying one thing to crawlers and another to everyone else.
+  if (!trawlIndexed(c.env)) return c.text("Not here. The trawl's listings are kept out of search on this deploy (TRAWL_INDEX is off), and so is their feed.\n", 404);
   const { rows } = await feed(c.env.DB, { sort: "new", page: 1, source: "trawl" });
   return send(c, rss(origin, "SlopScore — the Cap'm's hauls", "/trawl", "Repos the trawl found: public, AI-made by their owner's own account, and listed without being submitted. Any of them can be taken down from its page with no account.", rows));
 });
@@ -107,7 +112,9 @@ feeds.get("/u/:file", async (c, next) => {
 });
 
 feeds.get("/sitemap.xml", async (c) => {
-  const origin = new URL(c.req.url).origin;
+  // SITE_URL, not the request: a sitemap is handed to third parties, and one fetched through the test host
+  // must still point at the real site. IndexNow already builds on the same origin (lib/indexnow.ts).
+  const origin = siteOrigin(c.req.raw, c.env);
   // Trawled listings follow TRAWL_INDEX: a page we keep out of search has no business in the sitemap either.
   const indexed = trawlIndexed(c.env);
   const onlyOptedIn = indexed ? "" : " AND source = 'marker'";

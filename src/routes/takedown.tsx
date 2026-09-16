@@ -22,14 +22,16 @@ type Outcome = keyof typeof CANNED;
 takedown.get("/:owner/:name/takedown", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
-  const done = c.req.query("done") as Outcome | undefined;
+  const doneRaw = c.req.query("done");
+  // Own keys only: ?done=constructor must not print a function's source as a notice.
+  const done = doneRaw && Object.hasOwn(CANNED, doneRaw) ? (doneRaw as Outcome) : undefined;
   const error = c.req.query("error");
   const name = r?.full_name ?? `${c.req.param("owner")}/${c.req.param("name")}`;
   return c.html(
     <Layout meta={{ title: `Takedown · ${name} — SlopScore`, noindex: true }} user={user} url={url}>
       <section class="wrap narrow" style="padding:0">
         <h2>Takedown request</h2>
-        {done && CANNED[done] ? <div class="notice">{CANNED[done]}</div> : null}
+        {done ? <div class="notice">{CANNED[done]}</div> : null}
         {error ? <div class="notice">{error}</div> : null}
         {!r ? <p>Nothing is listed as <code>{name}</code>, so there's nothing to take down.</p>
           : r.source !== "trawl" ? <p>{CANNED.opted} <a href="/contact">Contact</a>.</p>

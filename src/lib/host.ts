@@ -5,9 +5,26 @@
 // PRIMARY_HOST is the home. Any other domain this worker answers on redirects to it, path and query intact;
 // nothing else in the codebase knows a hostname, so moving the site is one var.
 
+/** A copy of the site that must never be indexed: a preview deploy or the test environment. Local dev is
+ *  neither -- nothing can crawl it -- so it keeps production's robots.txt, which is what it is there to check. */
+export function isPreviewHost(hostname: string): boolean {
+  return hostname.endsWith(".workers.dev") || hostname.startsWith("test.");
+}
+
 /** Hosts that are always themselves: dev, preview deploys, and the test environment's own domain. */
 function isLocal(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".workers.dev") || hostname.startsWith("test.");
+  return hostname === "localhost" || hostname === "127.0.0.1" || isPreviewHost(hostname);
+}
+
+/**
+ * The origin every absolute URL handed to a third party is built on: the sitemap, the robots Sitemap line,
+ * IndexNow. SITE_URL when it is set, else the request's own origin. Built from the request alone, a sitemap
+ * fetched from the test host would be a sitemap full of test URLs.
+ */
+export function siteOrigin(request: Request, env: { SITE_URL?: string }): string {
+  const site = (env.SITE_URL ?? "").trim();
+  if (site) { try { return new URL(site).origin; } catch { /* a bad var falls through to the request */ } }
+  return new URL(request.url).origin;
 }
 
 /**

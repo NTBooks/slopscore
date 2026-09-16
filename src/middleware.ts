@@ -8,6 +8,7 @@ import { setFlags, flagOn } from "./lib/flags";
 import { csp } from "./lib/csp";
 import { classify, isShut, record, BLOCK_SECONDS } from "./lib/tripwire";
 import { ipHash } from "./lib/trust";
+import { isPreviewHost } from "./lib/host";
 
 /** Loads the session user (cookie or bearer) into c.var.user. Never blocks. */
 export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -81,6 +82,9 @@ export const secure: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
   c.header("x-content-type-options", "nosniff");
   c.header("referrer-policy", "strict-origin-when-cross-origin");
+  // The test environment and preview deploys are never indexed, on every format: robots.txt says so for
+  // crawlers that ask, and this says so for the ones that arrive by a link.
+  if (isPreviewHost(new URL(c.req.url).hostname)) c.header("x-robots-tag", "noindex, nofollow");
   if ((c.res.headers.get("content-type") ?? "").includes("text/html")) {
     c.header("content-security-policy", await csp());
     c.header("x-frame-options", "DENY");

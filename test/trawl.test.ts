@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { GhRepo } from "../src/lib/github";
 import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason, TRAWL_QUERIES, QUERIES_PER_RUN, groundOfQuery } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
-import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, MAX_STARS } from "../src/lib/virtual";
+import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, MAX_STARS, takedownPlan, TAKEDOWN_GRACE } from "../src/lib/virtual";
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
@@ -350,6 +350,18 @@ describe("curated picks", () => {
 describe("feed order", () => {
   it("puts opted-in repos above trawled ones in every sort", () => {
     for (const s of SORTS) expect(feedOrder(s).startsWith("r.source ASC")).toBe(true);
+  });
+});
+
+describe("a takedown hides now and deletes later", () => {
+  it("hides at once with a settle date, or queues for a human once the day's allowance is spent", () => {
+    const at = 1789300000;
+    expect(takedownPlan(true, at)).toEqual({ outcome: "hidden", settle_at: at + TAKEDOWN_GRACE });
+    expect(takedownPlan(false, at)).toEqual({ outcome: "queued", settle_at: null });
+  });
+  it("gives a moderator days, not hours, to catch a bad-faith request, and never leaves it hidden for weeks", () => {
+    expect(TAKEDOWN_GRACE).toBeGreaterThanOrEqual(2 * 86400);
+    expect(TAKEDOWN_GRACE).toBeLessThanOrEqual(7 * 86400);
   });
 });
 

@@ -33,6 +33,7 @@ import { newsletter, writeReport } from "./jobs/report";
 import { recordCron, noteRun, everySeconds, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
 import { sweepTripwire } from "./lib/tripwire";
+import { settleTakedowns } from "./lib/virtual";
 import { indexNowKey } from "./lib/indexnow";
 
 const app = new Hono<AppEnv>();
@@ -165,7 +166,7 @@ Requires a GitHub identity. Agents: POST ${origin}/auth/device/start → {device
 Votes and comments return 409 until a repo is listed. Without a login, POST /vote counts as an anonymous "crowd" vote: shown next to the score, capped by that repo's visitors, never part of ranking or awards. Accounts need to be ${c.env.MIN_ACCOUNT_AGE_DAYS} days old or have a public repo.
 
 ## Trawled listings
-Repos with "source": "trawl" never opted in. The Cap'm picked them by reading their READMEs (the owner says it was vibe coded or built with an AI tool; permissive license) and wrote their paperwork from GitHub data. They sort below opted-in repos, stay out of the RSS feed, and never win awards. Owners replace the paperwork by committing slopscore.md and pressing Refresh, or remove the listing. Anyone may POST /r/{owner}/{repo}/takedown {"message"} without a login; the listing comes down right away.
+Repos with "source": "trawl" never opted in. The Cap'm picked them by reading their READMEs (the owner says it was vibe coded or built with an AI tool; permissive license) and wrote their paperwork from GitHub data. They sort below opted-in repos, stay out of the RSS feed, and never win awards. Owners replace the paperwork by committing slopscore.md and pressing Refresh, or remove the listing. Anyone may POST /r/{owner}/{repo}/takedown {"message"} without a login; the listing is hidden right away and deleted for good three days later unless a moderator restores it.
 
 ## Jump the line (paid, optional)
 Agents: POST ${origin}/r/{owner}/{repo}/rush returns 402 with an x402 'accepts' block (USDC on Base); pay and retry with X-PAYMENT. Humans: log in as the owner and press "Jump the line · $5" (Stripe). Both buy the wait only, never a gate, vote, or award; every payment is in the public log and the ledger on /stats.
@@ -246,6 +247,8 @@ async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unkno
     // After the count, never before it: the bulletin is written from the snapshot this round just took.
     report: await step(env, "report", () => writeReport(env)),
     tripwire: await step(env, "tripwire", () => sweepTripwire(env.DB).then(() => "swept")),
+    // Takedowns hide a listing at once and delete it for good only after TAKEDOWN_GRACE; this is the deletion.
+    takedowns: await step(env, "takedowns", () => settleTakedowns(env.DB, Math.floor(Date.now() / 1000))),
   };
 }
 

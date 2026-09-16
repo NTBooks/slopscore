@@ -349,6 +349,56 @@ export function validateTakedown(b: { message?: string; contact?: string }): { o
   return { ok: true, message, contact };
 }
 
+/**
+ * How long a listing hidden by a takedown request stays recoverable before it is deleted for good.
+ *
+ * Anyone may ask, without a login, and the listing leaves the site the moment they do -- that part has
+ * to be immediate, because the owner may not be able to log in. What must not be immediate is the
+ * deletion nobody can undo: with that on a public button, seven addresses could scrub the whole trawl.
+ * Three days is long enough for the daily mod pass to see a bad-faith request and short enough that a
+ * real one is never left "hidden" for long.
+ */
+export const TAKEDOWN_GRACE = 3 * 86400;
+
+export type TakedownOutcome = "hidden" | "delisted" | "queued";
+
+/** What a fresh request gets: hidden now with a settle date, or queued for a human once the day's automatic
+ *  allowance is spent. Pure, so the policy is the tested part. */
+export function takedownPlan(autoAllowed: boolean, at: number): { outcome: TakedownOutcome; settle_at: number | null } {
+  return autoAllowed ? { outcome: "hidden", settle_at: at + TAKEDOWN_GRACE } : { outcome: "queued", settle_at: null };
+}
+
+/** A takedown's first step: off every feed and page at once, content kept so a restore is a real restore. */
+export async function hideTrawled(db: D1Database, id: number): Promise<void> {
+  await db.prepare("UPDATE repos SET status = 'hidden', queue_reason = 'takedown' WHERE id = ? AND source = 'trawl' AND status != 'delisted'").bind(id).run();
+  await markDirty(db);
+}
+
+/** A moderator's undo, only for a listing this module hid: anything hidden for another reason stays hidden. */
+export async function relistTrawled(db: D1Database, id: number): Promise<boolean> {
+  const r = await db.prepare("UPDATE repos SET status = 'listed', queue_reason = NULL WHERE id = ? AND source = 'trawl' AND status = 'hidden' AND queue_reason = 'takedown'").bind(id).run();
+  if (r.meta.changes) await markDirty(db);
+  return Boolean(r.meta.changes);
+}
+
+/** The daily settle: every open takedown past its grace retires the listing for good. A listing a moderator
+ *  restored in the meantime is left alone and the request closed as such. */
+export async function settleTakedowns(db: D1Database, at: number): Promise<{ retired: string[]; kept: string[] }> {
+  const due = await db.prepare(
+    `SELECT t.id, t.repo_id, t.full_name, r.status, r.queue_reason FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id
+      WHERE t.resolved_at IS NULL AND t.settle_at IS NOT NULL AND t.settle_at <= ? ORDER BY t.settle_at LIMIT 200`,
+  ).bind(at).all<{ id: number; repo_id: number | null; full_name: string; status: string | null; queue_reason: string | null }>().then((r) => r.results ?? []);
+  const out = { retired: [] as string[], kept: [] as string[] };
+  for (const t of due) {
+    const stillHidden = t.repo_id != null && t.status === "hidden" && t.queue_reason === "takedown";
+    if (stillHidden) await retireTrawled(db, t.repo_id!, "takedown");
+    await db.prepare("UPDATE takedowns SET outcome = ?, resolved_at = ?, resolved_by = 'system', note = ? WHERE id = ?")
+      .bind(stillHidden ? "delisted" : "hidden", at, stillHidden ? "grace passed; removed for good" : "listing was restored or removed by a moderator before the grace passed", t.id).run();
+    (stillHidden ? out.retired : out.kept).push(t.full_name);
+  }
+  return out;
+}
+
 /** Owner removal or takedown of a trawled listing: delist and forget its content. The row stays so the trawl never re-adds it. */
 export async function retireTrawled(db: D1Database, id: number, reason: "takedown" | "owner-request"): Promise<void> {
   await db.prepare(

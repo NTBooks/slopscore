@@ -17,7 +17,7 @@ import { flagOn } from "./flags";
  *  can do no more harm than the hour would. */
 export const JOBS = ["sweep", "scan", "recrawl", "trawl"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
-export const DAILY_JOBS = ["awards", "critics", "trends", "tripwire", "report"] as const;
+export const DAILY_JOBS = ["awards", "critics", "trends", "tripwire", "report", "takedowns"] as const;
 
 export type Job = (typeof JOBS)[number];
 export type DailyJob = (typeof DAILY_JOBS)[number];
@@ -37,6 +37,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   // Checked nightly, writes weekly: on six nights in seven it reads one row and declines. A job that runs
   // and does nothing is still a job that ran, so it is watched like the rest rather than left unaccounted for.
   report: { label: "next report check", does: "writes the weekly Trawl Report when a week is owed one" },
+  takedowns: { label: "next takedown settle", does: "deletes for good the listings whose takedown grace has passed" },
 };
 
 /** Which jobs each cron drives. Mirrors the switch in runCron (src/index.ts). */

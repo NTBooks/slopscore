@@ -4,7 +4,7 @@ import type { AppEnv } from "../env";
 import { allBuckets, logAction, getRepoById, type RepoRow } from "../lib/db";
 import { requireUser, body, wantsJson } from "../middleware";
 import { Layout } from "../views/layout";
-import { ago, now } from "../lib/time";
+import { ago, isoDate, now } from "../lib/time";
 import { GitHub } from "../lib/github";
 import { scanRepo } from "../lib/scan";
 import { flagsSnapshot, ALL_FLAGS } from "../lib/flags";
@@ -14,7 +14,7 @@ import { sweep } from "../jobs/sweep";
 import { scanQueue } from "../jobs/scan";
 import { recrawl } from "../jobs/recrawl";
 import { getState, setState } from "../jobs/stats";
-import { retireTrawled } from "../lib/virtual";
+import { retireTrawled, relistTrawled } from "../lib/virtual";
 import { addToBacklog, releaseBacklog, trawlDaily, HOURLY_TRAWL, type CuratedInput } from "../jobs/trawl";
 import { counts as tripCounts, BLOCK_SECONDS } from "../lib/tripwire";
 
@@ -36,7 +36,8 @@ const FLAG_HELP: Record<string, string> = {
   guard: "comments pass through Llama Guard; flagged ones are held here",
   risk: "risk score at or above RISK_QUARANTINE sends a repo to quarantine",
   tripwire: "requests shaped like an attack are counted, and one email a day goes out",
-  tripblock: "a targeted probe also shuts that source out for 24 hours (never a verified crawler or an admin)",
+  tripblock: "three targeted probes in a day shut that source out for 24 hours; SQL and traversal shapes only, never a verified crawler or an admin, and /contact still answers",
+  critics: "the disclosed critics read and vote at all; off = no model calls from the cast, every verdict already written stays",
   rising: "the rising sort is on offer: a tab, a chip, and ?sort=rising",
   controversial: "the controversial sort is on offer: a tab, a chip, and ?sort=controversial",
   updated: "the updated sort is on offer: a tab, a chip, and ?sort=updated",
@@ -61,7 +62,7 @@ mod.get("/", async (c) => {
   const trend = await db.prepare(
     "SELECT day, sum(CASE WHEN severity = 'targeted' THEN n ELSE 0 END) AS targeted, sum(CASE WHEN severity != 'targeted' THEN n ELSE 0 END) AS noise FROM tripwire GROUP BY day ORDER BY day DESC LIMIT 14",
   ).all<{ day: string; targeted: number; noise: number }>().then((r) => r.results ?? []);
-  const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; created_at: number; status: string | null }>().then((r) => r.results ?? []);
+  const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.settle_at, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; settle_at: number | null; created_at: number; status: string | null }>().then((r) => r.results ?? []);
   const [reports, quarantined, hidden, held, banned, buckets, deny] = await Promise.all([
     db.prepare(
       `SELECT rp.id, rp.target_type, rp.target_id, rp.reason, rp.note, rp.created_at, u.login AS reporter,
@@ -228,10 +229,17 @@ mod.get("/", async (c) => {
         {takedowns.length === 0 ? <div class="empty">No takedown requests.</div> : null}
         {takedowns.map((t) => (
           <div class="modcard" id={`td${t.id}`}>
-            <div><a href={`/r/${t.full_name}`}>{t.full_name}</a> · {t.outcome === "delisted" ? <span class="chip ok">removed automatically</span> : <span class="chip warn">queued: daily limit hit</span>} · from {t.login ? <a href={`/u/${t.login}`}>{t.login}</a> : "someone not logged in"}{t.contact ? <> · contact: {t.contact}</> : null} · {ago(t.created_at)}</div>
+            <div>
+              <a href={`/r/${t.full_name}`}>{t.full_name}</a> ·{" "}
+              {t.outcome === "hidden" ? <span class="chip warn">hidden · removed for good on {t.settle_at ? isoDate(t.settle_at) : "the next settle"}</span>
+                : t.outcome === "delisted" ? <span class="chip ok">removed</span>
+                : <span class="chip warn">queued: daily limit hit</span>}
+              {" "}· from {t.login ? <a href={`/u/${t.login}`}>{t.login}</a> : "someone not logged in"}{t.contact ? <> · contact: {t.contact}</> : null} · {ago(t.created_at)}
+            </div>
             <blockquote>{t.message}</blockquote>
             <div class="actions">
-              {t.outcome === "queued" && t.status !== "delisted" ? act("apply", "remove the listing", `/mod/takedown/${t.id}`, "btn") : null}
+              {t.status !== "delisted" ? act("apply", "remove now", `/mod/takedown/${t.id}`, "btn", "Remove for good? This cannot be undone.") : null}
+              {t.outcome === "hidden" && t.status === "hidden" ? act("restore", "restore the listing", `/mod/takedown/${t.id}`) : null}
               {act("resolve", "resolve", `/mod/takedown/${t.id}`)}
             </div>
           </div>
@@ -470,12 +478,17 @@ mod.post("/takedown/:id", requireUser, async (c) => {
   const db = c.env.DB;
   const t = await db.prepare("SELECT id, repo_id, full_name FROM takedowns WHERE id = ?").bind(id).first<{ id: number; repo_id: number | null; full_name: string }>();
   if (!t) return c.json({ error: "unknown takedown" }, 404);
+  let outcome: string | null = null;
   if (b.action === "apply" && t.repo_id != null) {
     await retireTrawled(db, t.repo_id, "takedown");
+    outcome = "delisted";
     await logAction(db, { actor: admin, role: "admin", action: "takedown", targetType: "repo", targetId: t.repo_id, label: t.full_name, note: "trawled listing removed on request" });
+  } else if (b.action === "restore" && t.repo_id != null) {
+    // The undo the grace period exists for. Only a listing hidden by a takedown comes back this way.
+    if (await relistTrawled(db, t.repo_id)) await logAction(db, { actor: admin, role: "admin", action: "takedown-restored", targetType: "repo", targetId: t.repo_id, label: t.full_name, note: "takedown declined; listing restored" });
   }
   // the message stays private; the log only records that the request was handled
-  await db.prepare("UPDATE takedowns SET resolved_at = unixepoch(), resolved_by = ?, note = ? WHERE id = ?").bind(admin, (b.note ?? "").slice(0, 300) || null, id).run();
+  await db.prepare("UPDATE takedowns SET outcome = COALESCE(?, outcome), resolved_at = unixepoch(), resolved_by = ?, note = ? WHERE id = ?").bind(outcome, admin, (b.note ?? "").slice(0, 300) || null, id).run();
   return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod#takedowns");
 });
 

@@ -1,13 +1,17 @@
 /* SlopScore — old.reddit density, warm paper, one accent (slop orange), goo green for the pig's dinner. */
 :root {
   /* retro pig: pink + brown. */
-  --bg: #fdf6f7; --fg: #2a1a14; --muted: #7a6560; --line: #ecd9dc; --panel: #f9e9ec; --panel-2: #f3dde2;
+  --bg: #fdf6f7; --fg: #2a1a14; --muted: #6f5a55; --line: #ecd9dc; --panel: #f9e9ec; --panel-2: #f3dde2;
   --accent: #e8669a; --accent-2: #c94a7c; --goo: #8a5a30; --goo-2: #5c3a1c;
-  --up: #e8669a; --down: #7a6cd6; --link: #8a4a2a; --visited: #a06a9a;
+  --up: #e8669a; --down: #7a6cd6; --link: #8a4a2a; --visited: #7d4a78;
   --chip: #f3dde2; --chip-fg: #5c3a3a; --warn: #fbe9c8; --bad: #f9d0d4; --ok: #dff0d2;
   /* Filled buttons and other accent-on-accent text. White reads on the light theme's deep rose; the dark
      theme's accent is a pale pink, where white lands at 2.1:1 and the deep brown at 7.5:1. */
   --btn-fg: #fff; --btn-sh: 0 1px 0 rgba(0,0,0,.15);
+  /* Text-sized uses of the accent, and filled surfaces white sits on. The accent itself stays the brand pink for
+     borders, bars and icons; as 11px text on a panel it was 3.4:1, and white on it 3.1:1. These are the same hues,
+     deep enough to read. test/contrast.test.ts holds every pair here to 4.5:1 in both themes. */
+  --btn-bg: #cc3f79; --accent-text: #a0305a; --ok-fg: #1e6b3f; --bad-fg: #a93226; --login-bg: #5c3a1c;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --sans: verdana, "Segoe UI", arial, helvetica, sans-serif;
   --serif: Georgia, "Times New Roman", serif;
@@ -19,6 +23,7 @@
     --up: #ff8fb5; --down: #9d93ff; --link: #e6b08a; --visited: #d1a3c6;
     --chip: #2f2122; --chip-fg: #e2cfd2; --warn: #3f2e14; --bad: #452022; --ok: #1e3320;
     --btn-fg: #3a1520; --btn-sh: 0 1px 0 rgba(255,255,255,.22);
+    --btn-bg: #ff8fb5; --accent-text: #ffb0c9; --ok-fg: #6cc78c; --bad-fg: #f28b82; --login-bg: #8f6136;
   }
 }
 * { box-sizing: border-box; }
@@ -38,22 +43,22 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 
 /* tag bar (subreddit bar) */
 .tagbar { display: flex; gap: 14px; overflow-x: auto; white-space: nowrap; padding: 5px 14px; font-size: 11px; text-transform: lowercase; background: var(--panel-2); border-bottom: 1px solid var(--line); scrollbar-width: none; }
-.tagbar a { color: var(--muted); } .tagbar a.on { color: var(--accent); font-weight: bold; } .tagbar .more { margin-left: auto; color: var(--link); padding-left: 12px; }
+.tagbar a { color: var(--muted); } .tagbar a.on { color: var(--accent-text); font-weight: bold; } .tagbar .more { margin-left: auto; color: var(--link); padding-left: 12px; }
 
 /* top bar */
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 6px 14px; background: var(--panel); border-bottom: 2px solid var(--accent); }
 .wordmark { display: inline-flex; align-items: center; gap: 6px; color: var(--fg) !important; } .wordmark .mark { width: 28px; height: 28px; border-radius: 6px; }
 .wordmark-svg { height: 26px; width: auto; display: block; }
-.tabs { display: flex; flex-wrap: wrap; gap: 2px; } .tabs a { text-transform: lowercase; padding: 3px 7px; color: var(--muted); border-bottom: 2px solid transparent; } .tabs a.on { color: var(--accent); font-weight: bold; border-bottom-color: var(--accent); }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; } .tabs a { text-transform: lowercase; padding: 3px 7px; color: var(--muted); border-bottom: 2px solid transparent; } .tabs a.on { color: var(--accent-text); font-weight: bold; border-bottom-color: var(--accent); }
 .onphone { display: none; }
 .search { display: flex; gap: 4px; flex: 1; min-width: 220px; } .search input { flex: 1; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); font: inherit; }
-.search button, .btn, .btn:visited, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--accent); color: var(--btn-fg); text-shadow: var(--btn-sh); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
+.search button, .btn, .btn:visited, form.owner button, .commentform button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--accent-2); background: var(--btn-bg); color: var(--btn-fg); text-shadow: var(--btn-sh); border-radius: 4px; cursor: pointer; font: inherit; font-weight: bold; }
 .btn.secondary, form.owner button.secondary { background: var(--panel); color: var(--fg); border-color: var(--line); font-weight: normal; }
 .btn[disabled], form.owner button[disabled] { opacity: .5; cursor: not-allowed; }
 .who { display: flex; gap: 10px; align-items: center; margin-left: auto; } .avatar { width: 18px; height: 18px; border-radius: 3px; vertical-align: middle; }
-.who .mod { color: var(--accent); font-weight: bold; }
-.login { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--goo-2); color: #fff !important; border-radius: 5px; font-weight: bold; border: 1px solid var(--fg); white-space: nowrap; }
-.login:hover { text-decoration: none; background: var(--accent); border-color: var(--accent-2); color: var(--btn-fg) !important; }
+.who .mod { color: var(--accent-text); font-weight: bold; }
+.login { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--login-bg); color: #fff !important; border-radius: 5px; font-weight: bold; border: 1px solid var(--fg); white-space: nowrap; }
+.login:hover { text-decoration: none; background: var(--btn-bg); border-color: var(--accent-2); color: var(--btn-fg) !important; }
 .login { border-color: var(--goo-2); }
 .login svg { width: 16px; height: 16px; fill: currentColor; }
 
@@ -69,11 +74,11 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .strip { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 14px; background: var(--panel-2); border: 1px solid var(--line); padding: 8px 14px; margin: 8px 0; border-radius: 4px; }
 .strip-stamp { height: 48px; width: auto; color: var(--accent-2); }
 .stripmain { min-width: 0; }
-.striplabel { font-weight: bold; color: var(--accent-2); text-transform: uppercase; letter-spacing: .5px; font-size: 11px; line-height: 1.4; }
+.striplabel { font-weight: bold; color: var(--accent-text); text-transform: uppercase; letter-spacing: .5px; font-size: 11px; line-height: 1.4; }
 .striptitle { font-family: var(--serif); font-size: 16px; line-height: 1.3; }
 .striptag { font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stripscore { display: grid; justify-items: center; align-content: center; padding-left: 14px; border-left: 1px solid var(--line); color: var(--fg) !important; }
-.stripscore:hover { text-decoration: none; } .stripscore strong { font-size: 18px; color: var(--accent-2); line-height: 1.1; }
+.stripscore:hover { text-decoration: none; } .stripscore strong { font-size: 18px; color: var(--accent-text); line-height: 1.1; }
 .stripscore span { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
 
 /* feed rows */
@@ -105,7 +110,7 @@ button.link { background: none; border: 0; color: var(--link); cursor: pointer; 
 .cvote { display: inline-flex; gap: 2px; } .cvote .act:hover { color: var(--up); }
 .chips { display: inline; } .chip { display: inline-block; background: var(--chip); color: var(--chip-fg); border-radius: 3px; padding: 1px 6px; font-size: 11px; margin: 1px 2px 1px 0; line-height: 17px; }
 .chip.warn { background: var(--warn); } .chip.bad { background: var(--bad); } .chip.ok { background: var(--ok); } .chip.unrec { border: 1px dashed var(--muted); }
-.chip.tier { border: 1px solid var(--accent); color: var(--accent); background: transparent; }
+.chip.tier { border: 1px solid var(--accent); color: var(--accent-text); background: transparent; }
 .report { color: var(--muted); opacity: .75; } .report:hover { opacity: 1; } .flag-icon { width: 10px; height: 10px; vertical-align: -1px; }
 details.reportform { display: inline; } details.reportform summary { display: inline; cursor: pointer; list-style: none; } details.reportform form { display: inline-flex; gap: 4px; margin-left: 6px; }
 .pager { padding: 10px 0; display: flex; gap: 12px; }
@@ -183,7 +188,7 @@ details.reportform { display: inline; } details.reportform summary { display: in
 .readmebox > summary { cursor: pointer; font-weight: bold; font-size: 13px; padding: 2px 0; } .readmebox > summary .muted { font-weight: normal; font-size: 12px; }
 .readmebox .readme { max-height: 55vh; overflow: auto; margin-top: 6px; }
 .verdict { padding: 8px 12px; border-radius: 4px; margin: 8px 0; } .verdict details { margin-top: 4px; }
-.scanreport { font-size: 12px; } .scanreport li { margin: 2px 0; } .gate-ok { color: #2e8b57; } .gate-bad { color: #c0392b; }
+.scanreport { font-size: 12px; } .scanreport li { margin: 2px 0; } .gate-ok { color: var(--ok-fg); } .gate-bad { color: var(--bad-fg); }
 .disclosures { margin: 6px 0; }
 /* Disclosures are short label/chip pairs. On a desktop-width column two pairs fit
    side by side, so the block stops running down the page as a one-item-per-line ladder.
@@ -198,7 +203,7 @@ details.reportform { display: inline; } details.reportform summary { display: in
 
 /* comments */
 .comments { margin-top: 12px; } .comment { padding: 6px 0 6px 10px; border-left: 2px solid var(--line); margin: 6px 0; }
-.comment .meta { color: var(--muted); font-size: 11px; } .comment .maker { color: var(--accent); font-weight: bold; } .comment.pinned { border-left-color: var(--accent); background: var(--panel); }
+.comment .meta { color: var(--muted); font-size: 11px; } .comment .maker { color: var(--accent-text); font-weight: bold; } .comment.pinned { border-left-color: var(--accent); background: var(--panel); }
 .comment .cbody p { margin: 4px 0; } .commentform textarea { width: 100%; min-height: 70px; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
 .replies { margin-left: 16px; }
 
@@ -222,9 +227,9 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
    a coding agent on a phone, and a line of monospace would eat the top of the first screen there. */
 .agentbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 5px 12px;
   background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.agentbar .tag { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; color: var(--accent-2); }
+.agentbar .tag { text-transform: uppercase; letter-spacing: .08em; font-size: 10px; color: var(--accent-text); }
 .agentbar code { font-family: var(--mono); font-size: 12px; color: var(--fg); }
-.agentbar a { color: inherit; } .agentbar a:hover code { color: var(--accent-2); }
+.agentbar a { color: inherit; } .agentbar a:hover code { color: var(--accent-text); }
 .agentbar .more { margin-left: auto; white-space: nowrap; }
 @media (max-width: 700px) { .agentbar { display: none; } }
 .notice { background: var(--warn); border: 1px solid var(--line); padding: 6px 10px; border-radius: 4px; margin: 6px 0; }
@@ -382,7 +387,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .heckle.up { border-left-color: var(--up); } .heckle.pass { border-left-color: var(--goo); }
 .heckleline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 12px; }
 .heckleline .heckler { font-family: var(--serif); font-size: 14px; }
-.heckleline .verdict { color: var(--muted); } .heckle.up .heckleline .verdict { color: var(--up); }
+.heckleline .verdict { color: var(--muted); } .heckle.up .heckleline .verdict { color: var(--accent-text); }
 .heckleline .when { margin-left: auto; white-space: nowrap; }
 .quip { margin: 4px 0 0; font-family: var(--serif); font-size: 14px; font-style: italic; }
 /* the same verdicts, on a repo's own page: its own block, never the comment thread (src/views/balcony.tsx) */
@@ -462,7 +467,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .sloptest fieldset.q[hidden] { display: none; }
 .sloptest fieldset.q legend { font-family: var(--serif); font-size: 17px; padding: 0 6px; }
 .sloptest fieldset.q legend .n { display: inline-block; min-width: 19px; height: 19px; line-height: 19px; text-align: center; border-radius: 50%;
-  background: var(--accent); color: var(--btn-fg); font-family: var(--sans); font-size: 11px; font-weight: bold; margin-right: 5px; vertical-align: 1px; }
+  background: var(--btn-bg); color: var(--btn-fg); font-family: var(--sans); font-size: 11px; font-weight: bold; margin-right: 5px; vertical-align: 1px; }
 .sloptest .opt { display: flex; gap: 8px; align-items: baseline; padding: 5px 6px; border-radius: 3px; cursor: pointer; font-size: 14px; }
 .sloptest .opt:hover { background: var(--panel-2); }
 .sloptest .opt input { margin: 0; accent-color: var(--accent); flex: none; }

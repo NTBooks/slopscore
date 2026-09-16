@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 
 export default defineConfig({
+  // The stylesheet as a string for test/contrast.test.ts. A ?raw import of a .css file comes back empty
+  // under this pool (the CSS pipeline claims it first), so it is read here, in Node, and inlined.
+  define: { __STYLE_CSS__: JSON.stringify(readFileSync("public/style.css", "utf8")) },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },

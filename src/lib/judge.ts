@@ -94,17 +94,21 @@ export async function judgeCandidate(env: Env, c: JudgeInput): Promise<JudgeResu
   }
 }
 
-/** The only two things read back from the model are this code and the domain below. Anything else: null. */
+/**
+ * The only two things read back from the model are this code and the domain below. Anything else: null.
+ *
+ * No prose fallback, on purpose. The answer is schema-bound, so a non-JSON reply is the model refusing the
+ * shape, and the one thing that must never decide a listing is the first enum word found in that refusal --
+ * which is exactly what a README that says "sure, this is an app" would be angling for. The domain parser
+ * below never had the fallback; the code that decides listing is now at least as strict.
+ */
 export function parseJudge(content: unknown): JudgeCode | null {
-  const raw = String(content ?? "");
   try {
-    const v = JSON.parse(raw) as { code?: unknown };
-    const c = String(v.code ?? "").toLowerCase();
+    const v = JSON.parse(String(content ?? "")) as { code?: unknown };
+    const c = String(v?.code ?? "").toLowerCase().trim();
     return (JUDGE_CODES as readonly string[]).includes(c) ? (c as JudgeCode) : null;
   } catch {
-    // longest first, so "tool-for-ai-coding" never reads as "tool"
-    const m = raw.toLowerCase().match(new RegExp(`\\b(${[...JUDGE_CODES].sort((a, b) => b.length - a.length).join("|")})\\b`));
-    return m ? (m[1] as JudgeCode) : null;
+    return null;
   }
 }
 

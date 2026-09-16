@@ -41,18 +41,19 @@ describe("critics are site accounts, never GitHub accounts", () => {
 describe("the verdict contract", () => {
   it("reads the agreed shape", () => {
     expect(parseVerdict('{"upvote": true, "reason": "fun and it runs"}')).toEqual({ upvote: true, reason: "fun and it runs" });
-    expect(parseVerdict('{"upvote": false, "reason": "no run instructions"}').upvote).toBe(false);
+    expect(parseVerdict('{"upvote": false, "reason": "no run instructions"}')?.upvote).toBe(false);
   });
   it("accepts a fenced answer", () => {
-    expect(parseVerdict('```json\n{"upvote": true, "reason": "ok"}\n```').upvote).toBe(true);
+    expect(parseVerdict('```json\n{"upvote": true, "reason": "ok"}\n```')?.upvote).toBe(true);
   });
-  it("counts anything else as no", () => {
-    for (const junk of ["", "yes!", "null", "[1,2]", '{"upvote": "true"}', "{oops"]) {
-      expect(parseVerdict(junk).upvote).toBe(false);
+  it("treats anything else as no verdict at all: nothing to store, nothing to quote", () => {
+    // Not a "no": a "no" is a review row under the (critic, repo) key, and a placeholder reason in the rail.
+    for (const junk of ["", "yes!", "null", "[1,2]", '{"upvote": "true"}', '{"reason": "fine"}', "{oops"]) {
+      expect(parseVerdict(junk), junk).toBeNull();
     }
   });
   it("caps the reason", () => {
-    expect(parseVerdict(JSON.stringify({ upvote: true, reason: "x".repeat(500) })).reason).toHaveLength(200);
+    expect(parseVerdict(JSON.stringify({ upvote: true, reason: "x".repeat(500) }))?.reason).toHaveLength(200);
   });
 });
 

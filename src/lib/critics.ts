@@ -148,13 +148,16 @@ export function nextSlot(at: number, every: number = CRITIC_SLOT): number {
  * spent today is worth nothing tomorrow. Both halves are bounded by what is actually left, so no
  * arrangement of turns can take a critic past the daily cap.
  *
- * With the frenzy switched off this is still the rule that enforces the cap: a single nightly batch
- * runs at the very end of a day's pacing, which is the frenzy branch, which hands back the whole
- * remainder — exactly the one-batch-a-day behaviour it replaced.
+ * With the frenzy switched off (`paced` false) there is no pacing at all: the single nightly batch
+ * reads PER_TURN_MAX per critic and stops, which is the one-batch-a-day behaviour it replaced.
  */
-export function criticBudget(done: number, at: number, cap: number = CRITIC_DAILY_CAP): number {
+export function criticBudget(done: number, at: number, cap: number = CRITIC_DAILY_CAP, paced = true): number {
   const left = cap - Math.max(0, done);
   if (left <= 0) return 0;
+  // Not paced: the frenzy flag is off and this is the one nightly batch. Pacing it would be wrong twice
+  // over -- the batch runs at 00:05, where the pacing curve hands out one repo per critic, and there is
+  // no later tick to hand out the rest. It reads a turn's worth and stops.
+  if (!paced) return Math.min(left, PER_TURN_MAX);
   // In the frenzy every critic reads on every tick (inFrenzy), so PER_TURN_MAX here is a bound on one
   // cron invocation, not on the catch-up: four ticks of the last hour can win back forty apiece.
   if (inFrenzy(at)) return Math.min(left, PER_TURN_MAX);
@@ -207,16 +210,27 @@ export const criticUserPrompt = (r: RepoRow): string => `<repo>\n${JSON.stringif
 
 export interface Verdict { upvote: boolean; reason: string }
 
-/** Anything we can't read as the agreed shape is a "no". A model that rambles never casts a vote. */
-export function parseVerdict(raw: string): Verdict {
+/**
+ * Anything we can't read as the agreed shape is not a verdict: null, and the caller leaves the repo for
+ * a later turn. It used to come back as a "no" with a placeholder reason, and that placeholder was then
+ * stored under the (critic, repo) key -- so the critic never read the repo again -- and quoted in the rail
+ * as the critic's own words. A model that rambles casts no vote and says nothing.
+ */
+export function parseVerdict(raw: string): Verdict | null {
   const text = String(raw ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
     const v = JSON.parse(text) as { upvote?: unknown; reason?: unknown };
-    if (!v || typeof v !== "object") return { upvote: false, reason: "unparseable answer (counted as no)" };
-    return { upvote: v.upvote === true, reason: String(v.reason ?? "").slice(0, 200) };
+    if (!v || typeof v !== "object" || Array.isArray(v) || typeof v.upvote !== "boolean") return null;
+    return { upvote: v.upvote, reason: String(v.reason ?? "").slice(0, 200) };
   } catch {
-    return { upvote: false, reason: "unparseable answer (counted as no)" };
+    return null;
   }
+}
+
+/** Reviews one critic may write in a day on this deploy: CRITICS_PER_DAY, else the built-in cap. */
+export function criticCap(env: { CRITICS_PER_DAY?: string }): number {
+  const n = Math.floor(Number(env.CRITICS_PER_DAY));
+  return Number.isFinite(n) && n >= 0 ? n : CRITIC_DAILY_CAP;
 }
 
 /**

@@ -13,6 +13,8 @@
 //              traversal shapes only; a prompt-shaped search never blocks). Needs tripwire. Verified search
 //              crawlers and logged-in admins are never blocked, and /contact always answers a blocked
 //              address; off = counted and emailed, nobody locked out
+//   critics the disclosed critics read and vote at all. Off = no model calls from the cast, nothing
+//           spent; every verdict already written stays on /balcony and in the rail. The kill switch.
 //   frenzy  the critics take the stand a few at a time all day and spend what the day's allowance still
 //           owes them in its last hour (off = the one nightly batch at 00:05, which is all this ever was)
 //   chatter the critics' verdicts as a chat in the rail, a window at a time, newest the reader hasn't read
@@ -20,7 +22,7 @@
 // The last four name a feed sort each: rising, controversial, updated, upcoming. Off = that sort is gone —
 // no tab, no chip, no /upcoming page, and ?sort=/the API fall back to hot. The rows and the ranking maths
 // stay put; only the view is withdrawn.
-export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "tripwire", "tripblock", "frenzy", "chatter", "chart", "rising", "controversial", "updated", "upcoming"] as const;
+export const ALL_FLAGS = ["weight", "ring", "burst", "crowd", "fuzz", "guard", "risk", "tripwire", "tripblock", "critics", "frenzy", "chatter", "chart", "rising", "controversial", "updated", "upcoming"] as const;
 export type Flag = (typeof ALL_FLAGS)[number];
 
 let current: Set<Flag> = new Set(ALL_FLAGS);

@@ -19,10 +19,12 @@ import { markDirty } from "../lib/cache";
 import { criticVoteRefusal } from "../lib/trust";
 import { now } from "../lib/time";
 import {
-  CRITICS, CRITICS_MODEL_DEFAULT, CRITIC_DAILY_CAP, VERDICT_SCHEMA,
-  criticBudget, criticSystemPrompt, criticUserPrompt, dayStart, parseVerdict, type Critic, type Verdict,
+  CRITICS, CRITICS_MODEL_DEFAULT, VERDICT_SCHEMA,
+  criticBudget, criticCap, criticSystemPrompt, criticUserPrompt, dayStart, parseVerdict, type Critic, type Verdict,
 } from "../lib/critics";
-import { setState } from "./stats";
+import { flagOn } from "../lib/flags";
+import { isoDate } from "../lib/time";
+import { bumpState, getState, setState } from "./stats";
 
 export interface CriticsResult {
   reviewed: number;
@@ -50,7 +52,7 @@ export async function ensureCritics(db: D1Database): Promise<void> {
 }
 
 /** One short, schema-bound call. Errors are not verdicts: the repo is left for the next run. */
-async function judge(env: Env, c: Critic, repo: RepoRow): Promise<Verdict | { error: string }> {
+async function judge(env: Env, c: Critic, repo: RepoRow): Promise<Verdict | { error: string; skip?: boolean }> {
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -75,11 +77,16 @@ async function judge(env: Env, c: Critic, repo: RepoRow): Promise<Verdict | { er
     });
     if (!res.ok) return { error: `openrouter ${res.status}: ${(await res.text()).slice(0, 200)}` };
     const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    return parseVerdict(j.choices?.[0]?.message?.content ?? "");
+    // An answer that is not the agreed shape is nothing: not stored, not quoted, and the repo is offered
+    // to this critic again on a later turn. Only this critic's next candidate is affected, so `skip`.
+    return parseVerdict(j.choices?.[0]?.message?.content ?? "") ?? { error: "unparseable answer; not stored", skip: true };
   } catch (e) {
     return { error: (e as Error).message };
   }
 }
+
+/** ensureCritics is a zero-row write once the cast exists, but it is still four statements a tick. Once per isolate is plenty. */
+let castEnsured = false;
 
 /** Repos this critic has never reviewed, opted-in first, newest first. Admin-owned repos are never offered. */
 async function candidates(db: D1Database, criticId: number, admins: Set<string>, limit: number): Promise<RepoRow[]> {
@@ -106,11 +113,17 @@ export async function runCritics(env: Env, opts: { n?: number; dry?: boolean; on
   const out: CriticsResult = { reviewed: 0, upvoted: 0, by: {} };
   const db = env.DB;
   // Identities first, so /about and /u/<critic> are honest pages even before a model key is set.
-  await ensureCritics(db);
+  if (!castEnsured) { await ensureCritics(db); castEnsured = true; }
+  // The kill switch. Before it, the only way to stop the cast spending was to unset the OpenRouter key,
+  // which also stops the trawl's judge. -critics in MOD_FLAGS stops the reading and nothing else: the
+  // balcony, the rail and every verdict already written stay exactly as they are.
+  if (!flagOn("critics")) return { ...out, note: "critics are off (-critics in MOD_FLAGS); nothing read, nothing spent" };
   if (!env.OPENROUTER_API_KEY) return { ...out, note: "no OPENROUTER_API_KEY; critics need a model to read with" };
   const admins = adminLogins(env);
-  const perRun = opts.n ? Math.min(Math.max(1, Math.floor(Number(opts.n))), CRITIC_DAILY_CAP) : CRITIC_DAILY_CAP;
+  const cap = criticCap(env);
+  const perRun = opts.n ? Math.min(Math.max(1, Math.floor(Number(opts.n))), cap) : cap;
   const since = dayStart(now());
+  const day = isoDate(now());
   const roster = opts.only?.length ? CRITICS.filter((c) => opts.only!.includes(c.login)) : CRITICS;
   let wrote = false;
 
@@ -125,20 +138,31 @@ export async function runCritics(env: Env, opts: { n?: number; dry?: boolean; on
     out.by[c.login] = mine;
     const row = await getUser(db, c.id);
     if (!row) { mine.note = "no critic row"; continue; }
-    const done = (await db.prepare("SELECT count(*) AS n FROM critic_reviews WHERE critic_id = ? AND created_at >= ?").bind(c.id, since).first<{ n: number }>())?.n ?? 0;
-    const allowed = criticBudget(done, now());
+    // Dry runs write no review row, so they are counted on the side: a mod's &dry=1 is still a model
+    // call, and a cap that dry runs can walk past is not a cap.
+    const dryKey = `critics:dry:${c.id}:${day}`;
+    const [stored, dry] = await Promise.all([
+      db.prepare("SELECT count(*) AS n FROM critic_reviews WHERE critic_id = ? AND created_at >= ?").bind(c.id, since).first<{ n: number }>().then((r) => r?.n ?? 0),
+      getState(db, dryKey).then((v) => Number(v) || 0),
+    ]);
+    const done = stored + dry;
+    const allowed = criticBudget(done, now(), cap, flagOn("frenzy"));
     const budget = Math.min(perRun, allowed);
     if (budget <= 0) {
-      mine.note = done >= CRITIC_DAILY_CAP ? `today's ${CRITIC_DAILY_CAP} are done` : `paced: ${done} read so far today`;
+      mine.note = done >= cap ? `today's ${cap} are done` : `paced: ${done} read so far today`;
       continue;
     }
 
     for (const repo of await candidates(db, c.id, admins, budget)) {
       const v = await judge(env, c, repo);
-      if ("error" in v) { mine.note = v.error; break; }  // a broken key or a rate limit stops this critic, not the run
+      if ("error" in v) {
+        mine.note = v.error;
+        if (v.skip) continue;  // one unreadable answer: on to the next repo, this one waits for another turn
+        break;                 // a broken key or a rate limit stops this critic, not the run
+      }
       mine.reviewed++;
       out.reviewed++;
-      if (opts.dry) continue;
+      if (opts.dry) { await bumpState(db, dryKey, 1); continue; }
       await db.prepare("INSERT OR IGNORE INTO critic_reviews (critic_id, repo_id, upvote, reason) VALUES (?,?,?,?)")
         .bind(c.id, repo.id, v.upvote ? 1 : 0, v.reason).run();
       // Any verdict is news, not just the ones that voted: most of them are passes, and the rail's chat

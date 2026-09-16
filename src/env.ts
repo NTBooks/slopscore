@@ -53,6 +53,10 @@ export interface Env {
   TRIPWIRE_ALERT_AT?: string;
   /** The model the disclosed critics read with, through OpenRouter. Critics are site accounts, never GitHub accounts (src/lib/critics.ts). */
   CRITICS_MODEL?: string;
+  /** Reviews one critic may write per UTC day. Unset = CRITIC_DAILY_CAP. 0 pauses the cast without a code change; -critics in MOD_FLAGS is the other way. */
+  CRITICS_PER_DAY?: string;
+  /** Trawl-judge calls per UTC day, across every run. Unset = JUDGE_PER_DAY in src/jobs/trawl.ts. The one number that bounds the trawl's model spend. */
+  JUDGE_PER_DAY?: string;
   /** Truffle trawl: repos listed per day, and the opted-in listing count at which the trawl stops for good. */
   TRAWL_PER_DAY?: string;
   TRAWL_STOP_AT?: string;

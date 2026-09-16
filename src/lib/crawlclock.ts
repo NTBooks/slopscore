@@ -60,6 +60,8 @@ export const CRON_JOBS: Record<string, AnyJob[]> = {
 export function cronJobs(cron: string): AnyJob[] {
   const base = CRON_JOBS[cron];
   if (!base) return [];
+  // Switched off, the critics belong to no cron at all: claiming one would have the clock call them late.
+  if (!flagOn("critics")) return base.filter((j) => j !== "critics");
   if (!flagOn("frenzy")) return base;
   if (cron === "*/15 * * * *" || cron === "*/30 * * * *") return [...base, "critics"];
   return base.filter((j) => j !== "critics");

@@ -58,21 +58,26 @@
         "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",
         "PRIMARY_HOST": "test.slopscore.org",
-        "TRAWL_INDEX": "on",
+        // Off here, on in production: this is a copy of the site with its own database, and it must never put
+        // strangers' repos into search beside the real listings. robots.txt refuses crawlers on test hosts too.
+        "TRAWL_INDEX": "off",
         // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
         // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.
         "TRAWL_OWNER_INDEX": "off",
-    "PLAN_MODE": "paid",
+        "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",
         "ADMIN_LOGINS": "NTBooks",
         "MIN_ACCOUNT_AGE_DAYS": "30",
         "AUTO_HIDE_REPORTS": "3",
+        // Lower than production's 9000 on purpose: test shares the account's Workers AI allowance and should
+        // never be the reason production's free scans defer.
         "AI_NEURON_BUDGET": "2000",
         "RISK_QUARANTINE": "40",
         "MOD_FLAGS": "all,-rising,-controversial,-updated,-upcoming",
         "CRITICS_MODEL": "anthropic/claude-haiku-4.5",
-        "TRAWL_PER_DAY": "50",
+        // Enough to exercise the lane, not enough to run a second trawl on the OpenRouter bill.
+        "TRAWL_PER_DAY": "5",
         "TRAWL_STOP_AT": "300",
         "TAKEDOWN_AUTO_PER_DAY": "20",
         // Where the weekly bulletin is mailed from — a newsletter somebody else operates, so the site keeps
@@ -115,7 +120,7 @@
         // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
         // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.
         "TRAWL_OWNER_INDEX": "off",
-    "PLAN_MODE": "paid",
+        "PLAN_MODE": "paid",
         "CONTACT_EMAIL": "hello@slopscore.org",
         "ABUSE_EMAIL": "abuse@slopscore.org",
         "ADMIN_LOGINS": "NTBooks",

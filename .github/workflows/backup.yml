@@ -1,6 +1,7 @@
 # Daily logical backup of the production D1 database.
 #
-# Why here and not a Worker cron: the free plan allows 5 cron triggers per account and they are all in use.
+# Why here and not a Worker cron: a backup should run from outside the thing it backs up, on a clock and
+# credentials the site does not hold, so a bad deploy cannot take the backup down with it.
 # Why not `wrangler d1 export`: it refuses FTS5 databases and takes the database offline while it runs.
 #
 # Secrets to set on the repo (Settings → Secrets and variables → Actions):
@@ -71,4 +72,7 @@ jobs:
         if: vars.R2_BACKUP_BUCKET != ''
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler r2 object put "${{ vars.R2_BACKUP_BUCKET }}/slopscore-$STAMP.tar.gz.enc" --file "slopscore-$STAMP.tar.gz.enc" --remote
+          # Through env, never interpolated into the shell line: a repository variable is owner-controlled, but
+          # the habit is the thing worth keeping.
+          BUCKET: ${{ vars.R2_BACKUP_BUCKET }}
+        run: npx wrangler r2 object put "$BUCKET/slopscore-$STAMP.tar.gz.enc" --file "slopscore-$STAMP.tar.gz.enc" --remote

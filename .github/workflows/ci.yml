@@ -57,3 +57,15 @@ jobs:
             exit 1
           fi
           echo "skills/ is in step with src/lib/skill.ts"
+
+      # server.json is what the MCP registries publish from, and it carries its own copy of the version.
+      - name: Registry manifest version matches package.json
+        run: |
+          set -euo pipefail
+          pkg=$(node -p "require('./package.json').version")
+          srv=$(node -p "require('./server.json').version")
+          if [ "$pkg" != "$srv" ]; then
+            echo "::error::server.json says $srv but package.json says $pkg. Bump both together."
+            exit 1
+          fi
+          echo "server.json and package.json agree on $pkg"

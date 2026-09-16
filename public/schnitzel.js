@@ -8,7 +8,9 @@
  * At rest every layer sits at identity, so it renders exactly like the static image.
  * Without a fine pointer (phones, narrow layouts) there is nothing to follow, so a director plays a
  * randomized idle show instead: glancing about, spotting food, hopping, sniffing, the odd sulk.
- * Nothing runs under prefers-reduced-motion, and nothing runs while the pig is scrolled out of view. */
+ * Nothing runs under prefers-reduced-motion, and nothing runs while the pig is scrolled out of view, the
+ * tab is at the back, the window is behind another, or the reader has not touched anything for a while
+ * (awake.js decides that last one; the pig settles to rest and the frame loop stops). */
 (function () {
   'use strict';
   var mq = window.matchMedia;
@@ -201,19 +203,33 @@
         sniffT = happyT || sadT || curiousT ? 0 : over(TABS); hungryT = happyT || sadT || curiousT || sniffT ? 0 : over(FOOD);
       });
     }
-    if (window.IntersectionObserver) {
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) { pigs.forEach(function (pg) { if (pg.svg === en.target) pg.visible = en.isIntersecting; }); });
-      });
-      pigs.forEach(function (pg) { io.observe(pg.svg); });
-    }
-    var last = performance.now();
+    // The loop runs only while there is something to show and someone to show it to. When either goes
+    // away the pig is given a moment to settle to rest (springs, drool, hop all wind down), then no
+    // more frames are asked for; whichever of the two comes back starts it again.
+    var aw = window.ssAwake;
+    var last = performance.now(), running = false, restUntil = 0;
+    function anyVisible() { for (var i = 0; i < pigs.length; i++) if (pigs[i].visible) return true; return false; }
+    function wanted() { return (!aw || aw.is()) && anyVisible(); }
     function frame(t) {
       var dt = clamp((t - last) / 1000, 0, 0.05); last = t;
       for (var i = 0; i < pigs.length; i++) if (pigs[i].visible) pigs[i].step(dt, t / 1000);
-      requestAnimationFrame(frame);
+      if (wanted() || t < restUntil) requestAnimationFrame(frame); else running = false;
     }
-    requestAnimationFrame(frame);
+    function run() { if (running) return; running = true; last = performance.now(); requestAnimationFrame(frame); }
+    if (window.IntersectionObserver) {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) { pigs.forEach(function (pg) { if (pg.svg === en.target) pg.visible = en.isIntersecting; }); });
+        if (anyVisible()) run();
+      });
+      pigs.forEach(function (pg) { io.observe(pg.svg); });
+    }
+    if (aw) aw.on(function (up) {
+      if (up) { run(); return; }
+      mouse = null; hungryT = happyT = sadT = curiousT = sniffT = 0;   // nothing to look at: come to rest
+      restUntil = performance.now() + aw.settle;
+      run();                                                            // in case the pig was mid-pose with the loop stopped
+    });
+    run();
   }
 
   fetch('/mascot.svg').then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) { if (t) setup(t); }).catch(function () {});

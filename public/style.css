@@ -653,3 +653,6 @@ details.note[open] summary { margin-bottom: 4px; }
   .seachart .bob, .balconychat .typing i { animation: none; }
   .balconychat .msg { transition: none; }
 }
+/* Nobody here (awake.js: tab at the back, window behind another, or no input for a while): the two loops
+   hold still rather than repaint for an empty chair. They pick up mid-cycle when the reader is back. */
+html.ss-idle .seachart .bob, html.ss-idle .balconychat .typing i { animation-play-state: paused; }

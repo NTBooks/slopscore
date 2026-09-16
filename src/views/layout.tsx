@@ -144,6 +144,8 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         {inlineScript(INFINITE_JS)}
         {inlineScript(CLIP_JS)}
         {inlineScript(CONFIRM_JS)}
+        {/* Whether anyone is looking. First, because the three below subscribe to it; defer keeps the order. */}
+        <script src="/awake.js" defer></script>
         <script src="/schnitzel.js" defer></script>
         {/* The cast lockets on /balcony. It finds nothing to do on every other page and stops. */}
         <script src="/lockets.js" defer></script>

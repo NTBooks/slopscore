@@ -16,7 +16,8 @@
  *
  * Unlike schnitzel.js this does not bail wholesale under prefers-reduced-motion, and does not want a
  * fine pointer: a countdown is information rather than decoration, and neither box follows a cursor.
- * Both timers stop when their box leaves the screen or the tab goes to the back. */
+ * Both timers stop when their box leaves the screen, the tab goes to the back, or awake.js decides nobody
+ * is here (window behind another, no input for a while); they pick up where the clock says on return. */
 (function () {
   'use strict';
 
@@ -49,13 +50,14 @@
     return m < 120 ? 'in ' + m + ' min' : 'in ' + Math.round(m / 60) + ' h';
   }
 
-  /* Runs fn on an interval, but only while el is on screen and the tab is in front. A box that sits on
-   * every page of the site has no business holding a timer in a tab nobody is looking at. */
+  /* Runs fn on an interval, but only while el is on screen, the tab is in front and someone is about. A box
+   * that sits on every page of the site has no business holding a timer in a tab nobody is looking at. */
+  var aw = window.ssAwake;
   function whileVisible(el, ms, fn) {
     var timer = null;
     var onScreen = true;
     function sync() {
-      var want = onScreen && !document.hidden;
+      var want = onScreen && !document.hidden && (!aw || aw.is());
       if (want && !timer) { fn(); timer = setInterval(fn, ms); }
       else if (!want && timer) { clearInterval(timer); timer = null; }
     }
@@ -63,6 +65,7 @@
       new IntersectionObserver(function (es) { onScreen = es[0].isIntersecting; sync(); }).observe(el);
     }
     document.addEventListener('visibilitychange', sync);
+    if (aw) aw.on(sync);
     fn();
     sync();
   }

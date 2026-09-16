@@ -80,6 +80,7 @@ export const COUNTDOWN_JS = `(function(){
   var box=document.getElementById('crawler'); if(!box) return;
   var off=Number(box.dataset.now)-Date.now()/1000;
   function tick(){
+    if(document.hidden) return;
     var now=Date.now()/1000+off;
     box.querySelectorAll('time.countdown').forEach(function(t){
       var at=Number(t.dataset.at), every=Number(t.dataset.every)||0, s=Math.round(at-now);

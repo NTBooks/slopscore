@@ -52,7 +52,10 @@ describe("the Slop Triangle is the water the Cap'm actually works", () => {
   });
 });
 
-describe("the voyage is a day long and the ship is always somewhere real", () => {
+describe("the voyage is an hour long and the ship is always somewhere real", () => {
+  it("sails once an hour, in step with the trawl's cron", () => {
+    expect(VOYAGE_PERIOD).toBe(3600);
+  });
   it("puts her at the mooring the moment the trawl fires, and home again before the next one", () => {
     expect(voyage(SAILED, SAILED).leg).toBe("out");
     expect(voyage(SAILED, SAILED).t).toBe(0);
@@ -123,6 +126,16 @@ describe("the chart's caption says only what is true", () => {
     const text = voyageText(voyage(into(0.3) + 5 * VOYAGE_PERIOD, SAILED), GROUNDS[1]);
     expect(text).toMatch(/laid up/);
     expect(text).not.toContain(GROUNDS[1].name);
+  });
+  it("says the day is landed rather than that something is wrong, once the budget is spent", () => {
+    const g = GROUNDS[1];
+    const text = voyageText(voyage(into(0.3), SAILED), g, true);
+    expect(text).toMatch(/tied up/);
+    expect(text).toMatch(/landed/);
+    expect(text).not.toMatch(/laid up/);
+    expect(text).not.toContain(g.name);
+    // Never sailed still wins: a fresh database is not a spent day.
+    expect(voyageText(voyage(SAILED, null), g, true)).toMatch(/has not sailed yet/);
   });
   it("says she has never sailed rather than that she is overdue", () => {
     // A fresh database and an expedition that has ended both leave her at the Trough. They are not the

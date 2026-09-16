@@ -77,7 +77,7 @@ export const CrawlClockBox = ({ clock, user, back }: { clock: CrawlClock; user: 
             <input type="hidden" name="csrf" value={user.csrf} />
             <input type="hidden" name="back" value={back} />
             <button class="btn secondary" name="action" value={job} title={job === "scan" || job === "all" ? "Scans call the AI checks; this can take half a minute." : undefined}>
-              {job === "all" ? "sweep + scan + recrawl" : `${job} now`}
+              {job === "all" ? "the lot" : `${job} now`}
             </button>
           </form>
         ))}

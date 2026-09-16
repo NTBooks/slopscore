@@ -24,6 +24,24 @@ export async function setState(db: D1Database, key: string, value: string): Prom
  * every race; two invocations of the same job in the same minute (the hourly trawl and a chase, say)
  * both count here and neither is lost. A value that is not a number counts as zero.
  */
+/**
+ * A lease on a job, in one statement. The row holds the time the lease expires; the insert wins when there
+ * is no row, and the update wins only when the row's lease has run out. One write, no read before it, so
+ * two invocations in the same second cannot both come away holding it. A run that dies leaves a lease that
+ * expires on its own, which is what makes a TTL better than a flag.
+ */
+export async function claimLock(db: D1Database, key: string, ttlSeconds: number): Promise<boolean> {
+  const t = Math.floor(Date.now() / 1000);
+  const r = await db.prepare(
+    "INSERT INTO crawl_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE CAST(crawl_state.value AS INTEGER) < ?",
+  ).bind(key, String(t + ttlSeconds), t).run();
+  return (r.meta.changes ?? 0) > 0;
+}
+
+export async function releaseLock(db: D1Database, key: string): Promise<void> {
+  await db.prepare("DELETE FROM crawl_state WHERE key = ?").bind(key).run();
+}
+
 export async function bumpState(db: D1Database, key: string, n: number): Promise<void> {
   await db.prepare(
     "INSERT INTO crawl_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = CAST(COALESCE(CAST(crawl_state.value AS INTEGER), 0) + excluded.value AS TEXT)",

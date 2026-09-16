@@ -12,10 +12,12 @@
 
 import { flagOn } from "./flags";
 
-/** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons. */
-export const JOBS = ["sweep", "scan", "recrawl"] as const;
+/** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons.
+ *  The trawl is one of them since it got a cron of its own: a slice is small, leased, and budgeted, so a button
+ *  can do no more harm than the hour would. */
+export const JOBS = ["sweep", "scan", "recrawl", "trawl"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
-export const DAILY_JOBS = ["awards", "trawl", "critics", "trends", "tripwire", "report"] as const;
+export const DAILY_JOBS = ["awards", "critics", "trends", "tripwire", "report"] as const;
 
 export type Job = (typeof JOBS)[number];
 export type DailyJob = (typeof DAILY_JOBS)[number];
@@ -28,7 +30,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   scan: { label: "next scan tick", does: "inspects the front of the line" },
   recrawl: { label: "next recrawl", does: "re-checks listed repos for pushes" },
   awards: { label: "next awards", does: "picks the day's truffles" },
-  trawl: { label: "next trawl release", does: "moves backlog picks into the queue" },
+  trawl: { label: "next trawl", does: "lands a few of the Cap'm's finds" },
   critics: { label: "next critics turn", does: "one of the cast reads a listing or two and votes" },
   trends: { label: "next trends count", does: "counts the corpus for /trends" },
   tripwire: { label: "next tripwire sweep", does: "expires blocks and prunes the probe counters" },
@@ -42,10 +44,8 @@ export const CRON_JOBS: Record<string, AnyJob[]> = {
   "*/15 * * * *": ["sweep"],
   "*/5 * * * *": ["scan"],
   "*/10 * * * *": ["recrawl"],
+  "7 * * * *": ["trawl"],
   "5 0 * * *": [...DAILY_JOBS],
-  // The test environment's combined tick. It only runs the daily jobs in the 00:00 half-hour, so claiming
-  // a 30-minute schedule for them here would draw a countdown that is wrong 47 times a day.
-  "*/30 * * * *": ["sweep", "scan", "recrawl"],
 };
 
 /**
@@ -63,7 +63,7 @@ export function cronJobs(cron: string): AnyJob[] {
   // Switched off, the critics belong to no cron at all: claiming one would have the clock call them late.
   if (!flagOn("critics")) return base.filter((j) => j !== "critics");
   if (!flagOn("frenzy")) return base;
-  if (cron === "*/15 * * * *" || cron === "*/30 * * * *") return [...base, "critics"];
+  if (cron === "*/15 * * * *") return [...base, "critics"];
   return base.filter((j) => j !== "critics");
 }
 
@@ -121,10 +121,13 @@ export function nextFire(cron: string, from: number): number | null {
   return null;
 }
 
-/** Seconds between fires for a plain `*\/N * * * *` cron, else null (the countdown can't roll over on its own). */
+/** Seconds between fires for a plain `*\/N * * * *` cron, or an hourly `N * * * *` one; else null (the
+ *  countdown can't roll over on its own). */
 export function everySeconds(cron: string): number | null {
-  const m = /^\*\/(\d+) \* \* \* \*$/.exec(cron.trim());
-  return m && Number(m[1]) > 0 ? Number(m[1]) * 60 : null;
+  const c = cron.trim();
+  const m = /^\*\/(\d+) \* \* \* \*$/.exec(c);
+  if (m) return Number(m[1]) > 0 ? Number(m[1]) * 60 : null;
+  return /^\d+ \* \* \* \*$/.test(c) ? 3600 : null;
 }
 
 /**
@@ -257,6 +260,7 @@ export function untilText(secs: number): string {
 
 export function everyText(cron: string): string {
   const every = everySeconds(cron);
+  if (every === 3600) return "every hour";
   if (every) return `every ${every / 60} min`;
   return intervalOf(cron) === 86400 ? "once a day" : `cron ${cron}`;
 }

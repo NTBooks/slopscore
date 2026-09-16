@@ -6,7 +6,11 @@ import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, M
 import { parseJudge, judgeKeeps } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
-import { MAX_PAGE, PAGES_PER_QUERY, SEARCH_CALLS, EMPTY_RETRY, searchWindows, nextBefore, worthWorking, isoStamp, readTrawlRequest, REQUEST_WINDOW } from "../src/jobs/trawl";
+import {
+  PAGES_PER_QUERY, SEARCH_CALLS, EMPTY_RETRY, worthWorking, isoStamp, readTrawlRequest, REQUEST_WINDOW,
+  parseWindow, formatWindow, openWindow, narrowWindow, afterPage, deepQuery, freshQuery,
+  WINDOW_SPAN, WINDOW_MIN, WINDOW_MAX, RESULT_CAP, SPARSE, JUDGE_PER_DAY, judgeCap, HOURLY_TRAWL,
+} from "../src/jobs/trawl";
 import { cheapReject } from "../src/lib/virtual";
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
@@ -85,47 +89,106 @@ describe("virtual paperwork", () => {
     // What costs calls is pages, not searches, so the ceiling that matters is the run's own cap.
     // Repository search allows 30 a minute and a run is the best part of a minute.
     expect(SEARCH_CALLS).toBeLessThan(30);
-    // GitHub returns at most 1,000 results for one search, and the trawl reads 50 to a page.
-    expect(MAX_PAGE * 50).toBeLessThanOrEqual(1000);
+    // GitHub returns at most 1,000 results for one search; a window is never asked to hold more.
+    expect(RESULT_CAP).toBe(1000);
   });
 });
 
-describe("the date window", () => {
+describe("the deep walk: fixed windows of push date, every page of each", () => {
   const DAY = 86400;
   const AT = 1789300000;
   const SINCE = AT - 90 * DAY;
-  const win = (o = {}) => searchWindows("topic:vibe-coded", { since: SINCE, fresh: 0, before: 0, at: AT, ...o });
+  const PER_PAGE = 50;
 
-  it("asks for the whole 90 days when nothing has been worked yet, and skips the freshness pass", () => {
-    const w = win();
-    expect(w.fresh).toBeNull();
-    expect(w.deep).toBe(`topic:vibe-coded pushed:>=${isoStamp(SINCE)}`);
+  it("opens the first window a week below the top, never past the floor", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    expect(w).toEqual({ start: AT - WINDOW_SPAN, end: AT, page: 1, span: WINDOW_SPAN });
+    const low = openWindow(SINCE + 3600, WINDOW_SPAN, SINCE)!;
+    expect(low.start).toBe(SINCE);
+    expect(openWindow(SINCE, WINDOW_SPAN, SINCE)).toBeNull();
+    expect(openWindow(SINCE - 5, WINDOW_SPAN, SINCE)).toBeNull();
   });
-  it("walks strictly older water once the deep cursor has moved", () => {
-    const before = AT - 10 * DAY;
-    expect(win({ before }).deep).toBe(`topic:vibe-coded pushed:${isoStamp(SINCE)}..${isoStamp(before)}`);
+
+  it("asks for exactly the window, with full timestamps at both ends", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    expect(deepQuery("topic:vibe-coded", w)).toBe(`topic:vibe-coded pushed:${isoStamp(w.start)}..${isoStamp(w.end)}`);
+    expect(freshQuery("topic:vibe-coded", AT - 3600)).toBe(`topic:vibe-coded pushed:>=${isoStamp(AT - 3600)}`);
+    expect(isoStamp(AT)).toBe(new Date(AT * 1000).toISOString().slice(0, 19) + "Z");
   });
-  it("asks the freshness pass only for repos pushed since the last look", () => {
-    const fresh = AT - 3600;
-    expect(win({ fresh }).fresh).toBe(`topic:vibe-coded pushed:>=${isoStamp(fresh)}`);
+
+  it("turns the page until the window is read out, whatever order GitHub sorted it in", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    const p1 = afterPage(w, 120, PER_PAGE, SINCE);
+    expect(p1.finished).toBe(false);
+    expect(p1.next).toEqual({ ...w, page: 2 });
+    const p2 = afterPage(p1.next!, 120, PER_PAGE, SINCE);
+    expect(p2.finished).toBe(false);
+    expect(p2.next!.page).toBe(3);
+    const p3 = afterPage(p2.next!, 120, 20, SINCE);
+    expect(p3.finished).toBe(true);
   });
-  it("never re-reads: the two windows cannot overlap", () => {
-    const w = win({ fresh: AT - 3600, before: AT - 10 * DAY });
-    // fresh starts above the deep window's upper bound, so no repo can satisfy both.
-    expect(isoStamp(AT - 3600) > isoStamp(AT - 10 * DAY)).toBe(true);
-    expect(w.fresh).toContain("pushed:>=");
-    expect(w.deep).toContain("..");
+
+  it("opens the next window directly below a finished one, so no water is skipped and none re-read", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    const { next } = afterPage(w, 300, 40, SINCE);
+    expect(next!.end).toBe(w.start);
+    expect(next!.page).toBe(1);
+    expect(next!.span).toBe(WINDOW_SPAN);   // 300 matches is not sparse: same width
   });
-  it("uses a full timestamp, so two windows do not share a day", () => {
-    const stamp = isoStamp(AT);
-    expect(stamp).toBe(new Date(AT * 1000).toISOString().slice(0, 19) + "Z");
-    expect(stamp.length).toBe(20);
-    expect(stamp).toContain("T");
+
+  it("widens after thin water, up to a month, and stops at the floor", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    const wider = afterPage(w, SPARSE - 1, 10, SINCE).next!;
+    expect(wider.span).toBe(2 * WINDOW_SPAN);
+    let cur = wider;
+    for (let i = 0; i < 6; i++) cur = afterPage(cur, 0, 0, SINCE).next ?? cur;
+    expect(cur.span).toBeLessThanOrEqual(WINDOW_MAX);
+    // Walk it to the floor: the walk ends with null, and the next run opens from the top again.
+    let win = openWindow(SINCE + 2 * WINDOW_MAX, WINDOW_MAX, SINCE);
+    let steps = 0;
+    while (win && steps++ < 10) win = afterPage(win, 0, 0, SINCE).next;
+    expect(win).toBeNull();
+    expect(steps).toBeLessThan(10);
   });
-  it("wraps to the top when the walk reaches the 90-day floor", () => {
-    expect(nextBefore(SINCE - 1, SINCE)).toBe(0);
-    expect(nextBefore(0, SINCE)).toBe(0);
-    expect(nextBefore(AT - 5 * DAY, SINCE)).toBe(AT - 5 * DAY);
+
+  it("halves a window GitHub will not hand back whole, down to a floor, keeping the top edge", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    const half = narrowWindow(w)!;
+    expect(half.end).toBe(w.end);
+    expect(half.span).toBe(WINDOW_SPAN / 2);
+    expect(half.start).toBe(w.end - WINDOW_SPAN / 2);
+    expect(half.page).toBe(1);
+    let cur = half;
+    while (narrowWindow(cur)) cur = narrowWindow(cur)!;
+    expect(cur.span).toBe(WINDOW_MIN);
+    expect(narrowWindow(cur)).toBeNull();
+  });
+
+  it("reads at most the thousand GitHub will give, then moves on rather than paging into a wall", () => {
+    const w = { ...openWindow(AT, WINDOW_SPAN, SINCE)!, page: RESULT_CAP / PER_PAGE };
+    const r = afterPage(w, 5000, PER_PAGE, SINCE);
+    expect(r.finished).toBe(true);
+    expect(r.next!.end).toBe(w.start);
+  });
+
+  it("round-trips its state through one crawl_state row, and treats junk as no window", () => {
+    const w = openWindow(AT, WINDOW_SPAN, SINCE)!;
+    expect(parseWindow(formatWindow(w))).toEqual(w);
+    expect(parseWindow(formatWindow({ ...w, page: 7 }))!.page).toBe(7);
+    for (const junk of [null, "", "1|2", "0|5|1|3600", "5|5|1|3600", "5|9|0|3600", "a|b|c|d"]) expect(parseWindow(junk), String(junk)).toBeNull();
+  });
+});
+
+describe("what one day may spend", () => {
+  it("caps the judge per day, from the environment or the built-in number", () => {
+    expect(judgeCap({})).toBe(JUDGE_PER_DAY);
+    expect(judgeCap({ JUDGE_PER_DAY: "40" })).toBe(40);
+    expect(judgeCap({ JUDGE_PER_DAY: "0" })).toBe(0);
+    expect(judgeCap({ JUDGE_PER_DAY: "lots" })).toBe(JUDGE_PER_DAY);
+  });
+  it("keeps the hourly slice small, and enough of them to land a day", () => {
+    expect(HOURLY_TRAWL).toBeLessThanOrEqual(5);
+    expect(24 * HOURLY_TRAWL).toBeGreaterThanOrEqual(50);
   });
 });
 

@@ -44,7 +44,7 @@ import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
 import { vocabJson, CONTROLLED, DECLARED_FACETS, DETECTED_FACETS, SPEC_VERSION } from "../lib/vocab";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
-import { ago, isoDate, isoDateTime } from "../lib/time";
+import { ago, isoDate, isoDateTime, now } from "../lib/time";
 import { crawlClock, untilText } from "../lib/crawlclock";
 import { CrawlClockBox } from "../views/crawlclock";
 import { BoxSeats, Heckles, Lore, LORE, type Heckle, type Seat } from "../views/balcony";
@@ -118,7 +118,7 @@ function chatFor(c: Context<AppEnv>, rail: RailData) {
  *  own clock, because this whole object is cached and "in 7 minutes" would not survive the caching. */
 async function seaData(db: D1Database): Promise<RailData["sea"]> {
   const [state, counts] = await Promise.all([
-    db.prepare("SELECT key, value FROM crawl_state WHERE key IN ('trawl:last_run', 'trawl:cursor')").all<{ key: string; value: string }>(),
+    db.prepare("SELECT key, value FROM crawl_state WHERE key IN ('trawl:last_run', 'trawl:cursor', 'trawl:done_day')").all<{ key: string; value: string }>(),
     db.prepare(
       `SELECT (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'discovered') AS lane,
               (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'listed')     AS hauled`,
@@ -131,6 +131,8 @@ async function seaData(db: D1Database): Promise<RailData["sea"]> {
     cursor: Number(st.get("trawl:cursor")) || 0,
     lane: counts?.lane ?? 0,
     hauled: counts?.hauled ?? 0,
+    // trawlDaily writes the day it landed the last of the budget; today means she is tied up on purpose.
+    spent: st.get("trawl:done_day") === isoDate(now()),
   };
 }
 

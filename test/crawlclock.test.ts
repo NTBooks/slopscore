@@ -38,9 +38,13 @@ describe("clock helpers", () => {
     expect(parseManual("")).toBeNull();
     expect(parseManual("nope")).toBeNull();
   });
-  it("maps every crawler cron wired in runCron", () => {
-    expect(CRON_JOBS["*/30 * * * *"]).toEqual(["sweep", "scan", "recrawl"]);
+  it("maps every crawler cron wired in runCron, and the trawl has one of its own", () => {
     expect(CRON_JOBS["*/15 * * * *"]).toEqual(["sweep"]);
+    expect(CRON_JOBS["7 * * * *"]).toEqual(["trawl"]);
+    expect(CRON_JOBS["*/30 * * * *"]).toBeUndefined();   // the combined tick is gone: test runs the real schedule
+    expect(everySeconds("7 * * * *")).toBe(3600);
+    expect(intervalOf("7 * * * *")).toBe(3600);
+    expect(DAILY_JOBS).not.toContain("trawl");
   });
   it("gives the daily round its own schedule", () => {
     expect(CRON_JOBS["5 0 * * *"]).toEqual([...DAILY_JOBS]);
@@ -122,7 +126,7 @@ describe("which cron owns the critics follows the flag that moves them", () => {
     setFlags("all");
     expect(cronJobs("*/15 * * * *")).toContain("critics");
     expect(cronJobs("5 0 * * *")).not.toContain("critics");
-    expect(cronJobs("*/30 * * * *")).toContain("critics");   // the test environment's combined tick
+    expect(cronJobs("7 * * * *")).toEqual(["trawl"]);          // the trawl's own cron never carries a critic
   });
   it("never claims a cron drives a job twice, or one that does not exist", () => {
     for (const spec of ["all", "all,-frenzy"]) {

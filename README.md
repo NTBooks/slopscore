@@ -88,7 +88,8 @@ Cheapest first: GitHub's own enforcement (takedowns delist automatically), a den
 
 ## Asking for a trawl
 
-The trawl runs on the clock: an hourly slice on the sweep, and a full round at 00:05 UTC. To ask for one out
+The trawl runs on the clock: a small slice on its own hourly cron (`7 * * * *`), up to `TRAWL_PER_DAY` a day, with
+a chase a few minutes later when a slice came back thin. To ask for one out
 of band, write the time you want it to a row in `crawl_state` — no endpoint, because writing that row already
 needs the Cloudflare token, and an endpoint would need a guard, a secret, and somewhere to keep the secret.
 

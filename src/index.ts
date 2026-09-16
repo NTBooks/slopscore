@@ -25,7 +25,7 @@ import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
 import { recrawl } from "./jobs/recrawl";
 import { awards } from "./jobs/awards";
-import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlRequest } from "./jobs/trawl";
+import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlRequest, HOURLY_TRAWL } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
 import { CRITIC_SLOT, criticForSlot, inFrenzy } from "./lib/critics";
 import { snapshotTrends } from "./jobs/trends";
@@ -217,11 +217,6 @@ async function step<T>(env: AppEnv["Bindings"], job: AnyJob, fn: () => Promise<T
   }
 }
 
-/** Repos the hourly slice may land in one go. Small on purpose: the front page should gain a few an hour,
- *  not a day's worth at 01:00 and nothing after. The day's total is still TRAWL_PER_DAY. */
-const HOURLY_TRAWL = 3;
-
-/** The 00:05 UTC round, shared with the test environment's combined tick so the two cannot drift apart. */
 /**
  * The critics' turn on a sweep tick.
  *
@@ -239,10 +234,11 @@ async function criticTurn(env: AppEnv["Bindings"], cron: string): Promise<unknow
   return step(env, "critics", () => runCritics(env, { only }));
 }
 
+/** The 00:05 UTC round. The trawl is not in it any more: it has its own hourly cron, and a nightly run that
+ *  took whatever was left of the day left the hourly slices with nothing to land. */
 async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unknown>> {
   return {
     awards: await step(env, "awards", () => awards(env)),
-    trawl: await step(env, "trawl", () => trawlDaily(env)),
     // With `frenzy` on the cast has been reading all day and this would only find its caps spent.
     // Off, this is the whole of it, exactly as it was before the rota existed.
     critics: flagOn("frenzy") ? "per-tick" : await step(env, "critics", () => runCritics(env)),
@@ -265,14 +261,15 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       // Sweep first, and the critics after: a model call that hangs must never hold up the sweep's writes.
       case "*/15 * * * *": result = {
         sweep: await step(env, "sweep", () => sweep(env)),
-        // The hourly slice. A find had to wait for 00:05 to appear, so by mid-afternoon the newest thing on the
-        // front page was eighteen hours old and the site looked abandoned between midnights. The free plan's five
-        // cron triggers are all spent, so this rides the sweep and works one tick in four. It spends the same
-        // TRAWL_PER_DAY the nightly round does, in hourly helpings, and 00:05 still takes whatever is left.
-        trawl: new Date().getUTCMinutes() < 15 ? await step(env, "trawl", () => trawlDaily(env, HOURLY_TRAWL)) : "not this tick",
         critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
         lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
       }; break;
+      // The hourly slice, on a cron of its own. A find used to wait for 00:05 to appear, so by mid-afternoon the
+      // newest thing on the front page was eighteen hours old. It then rode the sweep tick behind a minute check,
+      // because the free plan allowed five cron triggers an account; the account is on Workers Paid (250), so it
+      // gets its own. Seven past the hour, not on it: the other three ticks all fire at :00, and the sweep's code
+      // search shares GitHub's search-rate bucket with this one.
+      case "7 * * * *": result = { trawl: await step(env, "trawl", () => trawlDaily(env, HOURLY_TRAWL)) }; break;
       // The five-minute tick also answers a standing request (crawl_state trawl:run_at), so a trawl can be
       // asked for without an endpoint and lands within five minutes. Scan first: the request usually wants
       // the queue moving, and a trawl that lands repos has them scanned on the next tick anyway.
@@ -295,22 +292,9 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       // manual: write the week's bulletin now. &force=1 overwrites the week rather than declining it, which is
       // how the first one gets published on a day that is not a Monday.
       case "report": result = await writeReport(env, undefined, { force: Boolean(opts.force) }); break;
-      case "*/30 * * * *": { // combined tick for the test environment (one cron trigger)
-        const d = new Date();
-        const daily = d.getUTCHours() === 0 && d.getUTCMinutes() < 30;
-        // A standing request works here too, so the two environments answer the same row rather than drifting.
-        const asked = daily ? null : await claimTrawlRequest(env, HOURLY_TRAWL);
-        result = {
-          sweep: await step(env, "sweep", () => sweep(env)),
-          scan: await step(env, "scan", () => scanQueue(env)),
-          recrawl: await step(env, "recrawl", () => recrawl(env)),
-          critics: flagOn("frenzy") ? await criticTurn(env, cron) : "nightly",
-          ...(asked == null ? {} : { trawl: await step(env, "trawl", () => trawlDaily(env, asked)) }),
-          ...(daily ? await dailyRound(env) : { daily: "skipped" }),
-          lookout: await lookout(env).catch((e) => ({ error: (e as Error).message })),
-        };
-        break;
-      }
+      // The test environment runs the same five crons as production now. Its former combined half-hour tick was
+      // a second dispatch path -- a daily round at 00:00 instead of 00:05, a recrawl every 30 minutes -- so the
+      // one environment meant to catch scheduling mistakes never ran production's schedule.
       default: result = { note: `unknown cron ${cron}` };
     }
   } catch (e) {

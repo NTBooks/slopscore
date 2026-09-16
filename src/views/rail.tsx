@@ -16,7 +16,7 @@ export interface RailData {
   /** The newest bulletin, for the box that advertises it. Null until the first one is written. */
   report?: { slug: string; line: string } | null;
   /** The Sloptrawler's log, or null with -chart. */
-  sea?: { last_run: number | null; cursor: number; lane: number; hauled: number } | null;
+  sea?: { last_run: number | null; cursor: number; lane: number; hauled: number; spent: boolean } | null;
 }
 
 /** `chat` is the reader's own window into data.chat, sliced per request by the route (chatFor). */

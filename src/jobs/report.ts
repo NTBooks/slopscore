@@ -15,8 +15,8 @@
 //      competitor would rather we phrased loosely: tool share especially, which is query-shaped (see
 //      lib/method.ts) and is never printed without saying so in the same paragraph.
 //   3. **Idempotent.** The slug is the ISO week, so a second run in the same week writes nothing. A manual run
-//      is always safe, which is what lets the job ride the existing nightly cron instead of asking for a fifth
-//      trigger the free plan does not have.
+//      is always safe, which is what lets the job ride the existing nightly cron instead of needing a weekly
+//      trigger of its own.
 //
 // It rides the 00:05 UTC daily round. On the report weekday it writes last week's bulletin and on every other
 // day it returns "not the day" and costs one indexed read. The first report writes itself the first night there

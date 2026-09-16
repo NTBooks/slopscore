@@ -21,6 +21,8 @@ export interface SeaData {
   cursor: number;
   lane: number;
   hauled: number;
+  /** The day's budget is landed: she is tied up on purpose until the next UTC day. */
+  spent: boolean;
 }
 
 /** A course bowed away from the straight line, so six tracks read as courses rather than a starburst. */
@@ -64,18 +66,20 @@ export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
   const at = now();
   const v = voyage(at, sea.last_run);
   const g = groundFor(sea.cursor + v.rolled);
-  const said = voyageText(v, g);
+  const said = voyageText(v, g, sea.spent);
   // Standing out she has only just left, and tied up she is home; either way the Trough is the honest
   // static answer. On the grounds and running home, the ground is. Laid up beats all of it: the leg is
   // still computed from the phase of a voyage she never made, so it must not put her net in the water.
-  const moored = v.laidUp || v.leg === "out" || v.leg === "moored";
-  const working = !v.laidUp && v.leg === "grounds";
+  // Spent is the same: the day is landed and the last voyage's phase says nothing about now.
+  const idle = v.laidUp || sea.spent;
+  const moored = idle || v.leg === "out" || v.leg === "moored";
+  const working = !idle && v.leg === "grounds";
   return (
     <div
       class="box seachart"
       id="seachart"
       data-now={at}
-      data-last={sea.last_run ?? ""}
+      data-last={idle ? "" : sea.last_run ?? ""}
       data-cursor={sea.cursor}
       data-groundof={GROUND_OF_QUERY}
     >
@@ -106,11 +110,11 @@ export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
       </svg>
       <p class="say" id="ss-say">{said}</p>
       <p class="muted small">
-        {/* Only the trawl advances the counter, so once she is laid up the next ground is a guess and
-            the page should not state it as tonight's plan. */}
-        {v.laidUp
+        {/* Only the trawl advances the counter, so once she is tied up the next ground is a guess and
+            the page should not state it as this hour's plan. */}
+        {idle
           ? <>Her next ground when she sails: <strong>{g.name}</strong> — {g.blurb}.{" "}</>
-          : <>Tonight's ground: <strong>{g.name}</strong> — {g.blurb}.{" "}</>}
+          : <>This hour's ground: <strong>{g.name}</strong> — {g.blurb}.{" "}</>}
         {sea.last_run
           ? <>Last sailing <time datetime={isoDateTime(sea.last_run)} data-at={sea.last_run} class="ss-ago">{isoDateTime(sea.last_run)}</time>.{" "}</>
           : null}

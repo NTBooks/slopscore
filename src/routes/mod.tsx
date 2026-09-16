@@ -15,7 +15,7 @@ import { scanQueue } from "../jobs/scan";
 import { recrawl } from "../jobs/recrawl";
 import { getState, setState } from "../jobs/stats";
 import { retireTrawled } from "../lib/virtual";
-import { addToBacklog, releaseBacklog, type CuratedInput } from "../jobs/trawl";
+import { addToBacklog, releaseBacklog, trawlDaily, HOURLY_TRAWL, type CuratedInput } from "../jobs/trawl";
 import { counts as tripCounts, BLOCK_SECONDS } from "../lib/tripwire";
 
 export const mod = new Hono<AppEnv>();
@@ -217,7 +217,7 @@ mod.get("/", async (c) => {
         ))}
 
         <h3 id="backlog">Truffle backlog <span class="muted">· hand-vetted picks · {backlog?.waiting ?? 0} waiting, {backlog?.released ?? 0} released, {backlog?.refused ?? 0} refused</span></h3>
-        <p class="muted small">The 00:05 UTC tick releases TRAWL_PER_DAY of these into the scan queue. Agents POST the same JSON to <code>/mod/trawl/import</code> with an admin bearer token.</p>
+        <p class="muted small">The hourly trawl releases these into the scan queue first, a few at a time, up to TRAWL_PER_DAY a day. Agents POST the same JSON to <code>/mod/trawl/import</code> with an admin bearer token.</p>
         <form method="post" action="/mod/trawl/import" class="commentform">{csrf}
           <textarea name="picks" placeholder='[{"repo": "owner/name", "reason": "its README says it was vibe coded with Claude Code"}]'></textarea>
           <div><label>release now <input type="number" name="release_now" value="0" min="0" max="50" style="width:5em" /></label> <button class="btn secondary">add to backlog</button></div>
@@ -516,6 +516,12 @@ const RUN: Record<Job, (env: AppEnv["Bindings"]) => Promise<string>> = {
     const r = await recrawl(env);
     return `Recrawl checked ${r.checked}: ${r.rescanned} rescanned, ${r.unchanged} unchanged, ${r.delisted} delisted${r.renamed ? `, ${r.renamed} renamed` : ""}${r.revived ? `, ${r.revived} revived` : ""}.`;
   },
+  trawl: async (env) => {
+    // One hourly slice, exactly what the cron would do: leased, budgeted against the day, and no more.
+    const r = await trawlDaily(env, HOURLY_TRAWL);
+    if (r.note) return `Trawl: ${r.note}.`;
+    return `Trawl landed ${r.queued.length}${r.skipped.length ? `, skipped ${r.skipped.length}` : ""}${r.chase ? `; ${r.chase}` : ""}.`;
+  },
 };
 
 mod.post("/crawl", requireUser, async (c) => {
@@ -524,7 +530,7 @@ mod.post("/crawl", requireUser, async (c) => {
   const db = c.env.DB;
   const back = b.back === "/queue" ? "/queue" : "/mod";
   const jobs: Job[] = b.action === "all" ? [...JOBS] : JOBS.filter((j) => j === b.action);
-  if (!jobs.length) return c.json({ error: "unknown job; use sweep, scan, recrawl or all" }, 400);
+  if (!jobs.length) return c.json({ error: `unknown job; use ${JOBS.join(", ")} or all` }, 400);
   const msgs: string[] = [];
   for (const job of jobs) {
     const t = now();

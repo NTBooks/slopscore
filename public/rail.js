@@ -10,7 +10,7 @@
  * archive and is being shown the newest again (data-caught) gets no reveal at all, because there the
  * motion would be claiming a novelty that is not there.
  *
- * The chart: works out where she is from when she last sailed, and walks her along the course the
+ * The chart: works out where she is from when she last sailed (one voyage an hour), and walks her along the course the
  * reader can actually see, sampling the drawn path rather than recomputing its curve. The maths lives
  * in src/lib/sea.ts where it is tested; the only thing duplicated here is the four leg boundaries.
  *
@@ -145,8 +145,8 @@
     // a ground now that the net covers a dozen tools, so the two cannot be the same number any more.
     var groundOf = (chart.dataset.groundof || '').split(',').map(Number).filter(function (n) { return n >= 0; });
     if (!groundOf.length) return;
-    var DAY = 86400;
-    // Mirrors LEGS in src/lib/sea.ts, which is the copy under test.
+    // Mirrors VOYAGE_PERIOD and LEGS in src/lib/sea.ts, which is the copy under test. One voyage an hour.
+    var PERIOD = 3600;
     var OUT = 0.15, GROUNDS_END = 0.6, HOME = 0.8;
 
     function at(path, u) {
@@ -158,8 +158,8 @@
       var t = Date.now() / 1000 + off;
       var since = t - last;
       if (since < 0) since = 0;
-      var rolled = Math.floor(since / DAY);
-      var phase = (since % DAY) / DAY;
+      var rolled = Math.floor(since / PERIOD);
+      var phase = (since % PERIOD) / PERIOD;
 
       var n = groundOf.length;
       var q = groundOf[((Math.floor(cursor + rolled) % n) + n) % n];

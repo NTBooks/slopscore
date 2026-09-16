@@ -65,24 +65,28 @@ describe("virtual paperwork", () => {
   it("casts over every tool the claim gate will actually accept", () => {
     // CLAIM_RE has accepted these all along; searching for only some of them is how the net stayed narrow.
     const net = TRAWL_QUERIES.join(" ").toLowerCase();
-    for (const tool of ["claude", "cursor", "copilot", "chatgpt", "gemini", "lovable", "v0"]) {
+    for (const tool of ["claude", "cursor", "copilot", "chatgpt", "gemini", "lovable", "v0", "roo", "muse"]) {
       expect(net).toContain(tool);
     }
     expect(net).toContain("ai-generated");
   });
   it("still lets a repo through on its own words, whichever tool it names", () => {
-    for (const tool of ["Cursor", "GitHub Copilot", "ChatGPT", "Gemini CLI", "Windsurf", "v0", "Claude Code"]) {
-      expect(claimSnippet(`A little tool. Built with ${tool} over a weekend.`)).toBeTruthy();
+    for (const tool of ["Cursor", "GitHub Copilot", "ChatGPT", "Gemini CLI", "Windsurf", "v0", "Claude Code", "Muse Code", "Muse Spark", "Meta AI", "Roo Code", "Roo"]) {
+      expect(claimSnippet(`A little tool. Built with ${tool} over a weekend.`), tool).toBeTruthy();
     }
+    // Meta the company is not a tool: "created by Meta" is what a library's README says about its author.
+    expect(claimSnippet("A JavaScript library for building user interfaces, created by Meta.")).toBeNull();
   });
   it("names the tool in the signal rather than just saying a machine did it", () => {
     const sig = trawlSignals({ topics: [], description: "A tiny CLI, built with Cursor in an afternoon." } as never);
     expect(sig.join(" ")).toContain("Cursor");
   });
   it("recognises a tool topic from any vendor, not only Claude's", () => {
-    for (const t of ["built-with-cursor", "built-with-copilot", "built-with-gemini", "ai-generated"]) {
+    for (const t of ["built-with-cursor", "built-with-copilot", "built-with-gemini", "ai-generated", "built-with-muse", "roo-code"]) {
       expect(trawlSignals({ topics: [t], description: "" } as never).length).toBeGreaterThan(0);
     }
+    expect(trawlSignals({ topics: [], description: "A tiny CLI, built with Muse Code in an afternoon." } as never).join(" ")).toContain("Muse Code");
+    expect(trawlSignals({ topics: [], description: "A tiny CLI, built with Roo Code in an afternoon." } as never).join(" ")).toContain("Roo Code");
   });
   it("works a bounded number of searches a night, however long the list grows", () => {
     expect(QUERIES_PER_RUN).toBeLessThanOrEqual(TRAWL_QUERIES.length);

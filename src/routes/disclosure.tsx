@@ -26,7 +26,7 @@ const REQUIRED: [string, string][] = [
 ];
 
 const OPTIONAL: [string, string][] = [
-  ["built_with", "the tool that wrote it: claude-code, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, chatgpt, lovable, bolt, v0, replit."],
+  ["built_with", "the tool that wrote it: claude-code, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, roo, chatgpt, lovable, bolt, v0, replit, muse-code."],
   ["models", "the model, if you know it. Free text, because the list changes monthly."],
   ["data", "none, local-only, sends-telemetry, needs-api-key, stores-pii, scrapes. What it does with data that is not yours."],
   ["needs", "the external accounts and keys somebody has to bring."],

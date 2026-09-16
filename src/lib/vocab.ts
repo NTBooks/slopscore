@@ -34,8 +34,8 @@ export const CATEGORY = [
 ] as const;
 
 export const BUILT_WITH = [
-  "claude-code", "claude", "cursor", "copilot", "codex", "gemini-cli", "windsurf", "aider", "cline",
-  "chatgpt", "lovable", "bolt", "v0", "replit", "other",
+  "claude-code", "claude", "cursor", "copilot", "codex", "gemini-cli", "windsurf", "aider", "cline", "roo",
+  "chatgpt", "lovable", "bolt", "v0", "replit", "muse-code", "other",
 ] as const;
 export const INTERFACE = [
   "cli", "tui", "web", "desktop", "mobile", "api", "library", "bot", "mcp", "plugin", "headless",
@@ -84,6 +84,20 @@ export const ALIASES: Record<string, string> = {
   "openai-codex": "codex",
   "gemini cli": "gemini-cli",
   gemini: "gemini-cli",
+  // Meta's coding agent is Muse Code; the model under it is Muse Spark, and owners also write "Meta AI"
+  // (the app) or "Meta Muse". One key for the lot, the way claude-code and claude are already two.
+  "muse code": "muse-code",
+  musecode: "muse-code",
+  "muse spark": "muse-code",
+  "muse-spark": "muse-code",
+  muse: "muse-code",
+  "meta ai": "muse-code",
+  "meta-ai": "muse-code",
+  "meta muse": "muse-code",
+  "meta-muse": "muse-code",
+  "roo code": "roo",
+  "roo-code": "roo",
+  roocode: "roo",
   gpt: "chatgpt",
   "gpt-4": "chatgpt",
   "gpt4": "chatgpt",

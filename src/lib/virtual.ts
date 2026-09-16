@@ -55,14 +55,16 @@ export const VIBE_TOPICS = [
   "built-with-claude", "built-with-claude-code", "built-with-cursor", "cursor-ai",
   "built-with-chatgpt", "built-with-gpt", "built-with-copilot", "github-copilot",
   "built-with-gemini", "gemini-cli", "built-with-v0", "built-with-bolt", "built-with-lovable",
-  "windsurf", "aider", "cline",
+  "windsurf", "aider", "cline", "roo-code", "built-with-roo",
+  "muse-code", "muse-spark", "meta-muse", "built-with-muse", "built-with-muse-code",
 ];
 
 /** Named so the signal on the listing says which tool, not just "an AI". The tools match CLAIM_RE's list. */
 const TOOLS: [RegExp, string][] = [
   [/\bclaude(\s+code)?\b/i, "Claude"], [/\bcursor\b/i, "Cursor"], [/\b(github\s+)?copilot\b/i, "Copilot"],
   [/\bchatgpt\b|\bgpt-?\d\b/i, "ChatGPT"], [/\bcodex\b/i, "Codex"], [/\bgemini(\s+cli)?\b/i, "Gemini"],
-  [/\bwindsurf\b/i, "Windsurf"], [/\baider\b/i, "Aider"], [/\bcline\b/i, "Cline"],
+  [/\bwindsurf\b/i, "Windsurf"], [/\baider\b/i, "Aider"], [/\bcline\b/i, "Cline"], [/\broo(\s+code)?\b/i, "Roo Code"],
+  [/\bmuse(\s+(code|spark))?\b|\bmeta\s+(ai|muse)\b/i, "Muse Code"],
   [/\blovable\b/i, "Lovable"], [/\bbolt(\.new)?\b/i, "Bolt"], [/\bv0\b/i, "v0"], [/\breplit\b/i, "Replit"],
 ];
 
@@ -77,7 +79,7 @@ const DESCRIPTION_SIGNALS: [RegExp, string][] = [
  * The grounds the Cap'm works, and the searches that make up each one.
  *
  * Grouped rather than listed flat because the net used to be four-sixths Claude, which said more about who
- * wrote the crawler than about who is writing the slop. Claude is one ground of six now. Everything
+ * wrote the crawler than about who is writing the slop. Claude is one ground of seven now. Everything
  * downstream was already model-agnostic -- CLAIM_RE accepts a dozen tools and TOPIC_TOOL maps them onto
  * built_with -- so this was the only narrow part.
  *
@@ -108,8 +110,17 @@ export const TRAWL_GROUNDS: { name: string; blurb: string; queries: string[] }[]
   },
   {
     name: "Copilot Reach",
-    blurb: "repos that name GitHub Copilot or Gemini",
-    queries: ["topic:built-with-copilot", "topic:built-with-gemini", '"built with copilot" in:description'],
+    blurb: "repos that name GitHub Copilot, Gemini, or Roo Code",
+    queries: ["topic:built-with-copilot", "topic:built-with-gemini", '"built with copilot" in:description', '"built with roo" in:description'],
+  },
+  {
+    // Meta's ground. Muse Code is the agent, Muse Spark the model under it, and "Meta AI" is what owners
+    // call the app that also writes code; all three land on built_with: muse-code. The Muse topics are
+    // mostly tools *for* Muse (proxies, plugins, harnesses), which the judge throws back as tool-for-ai-coding;
+    // the phrase searches are where the vibe-coded apps are.
+    name: "Muse Bank",
+    blurb: "repos that name Meta's Muse Code, Muse Spark, or Meta AI",
+    queries: ["topic:built-with-muse", "topic:meta-muse", '"muse code" in:description', '"built with meta ai" in:description'],
   },
   {
     name: "The Generated Deeps",
@@ -189,7 +200,7 @@ export function trawlSignals(g: GhRepo): string[] {
 }
 
 /** The owner's own past-tense claim that an AI tool wrote this project. Matched against the description and the README. */
-export const CLAIM_RE = /\bvibe[- ]?coded\b|\b(built|made|written|coded|created|generated|developed)\s+(entirely\s+|mostly\s+|completely\s+|fully\s+|100%\s+|almost entirely\s+)?(with|using|by)\s+(claude(\s+code)?|cursor|copilot|github copilot|codex|gemini( cli)?|windsurf|aider|cline|lovable|bolt(\.new)?|v0|replit|chatgpt|gpt-?\d|an? (llm|ai)|ai( agents?)?|llms)\b|\b100%\s+ai[- ]generated\b|\bentirely ai[- ]generated\b/i;
+export const CLAIM_RE = /\bvibe[- ]?coded\b|\b(built|made|written|coded|created|generated|developed)\s+(entirely\s+|mostly\s+|completely\s+|fully\s+|100%\s+|almost entirely\s+)?(with|using|by)\s+(claude(\s+code)?|cursor|copilot|github copilot|codex|gemini( cli)?|windsurf|aider|cline|roo( code)?|muse( code| spark)?|meta ai|meta muse|lovable|bolt(\.new)?|v0|replit|chatgpt|gpt-?\d|an? (llm|ai)|ai( agents?)?|llms)\b|\b100%\s+ai[- ]generated\b|\bentirely ai[- ]generated\b/i;
 
 /** The sentence around the claim, trimmed and stripped of markup: the listing quotes this, so it is the owner's words, not ours. */
 export function claimSnippet(text: string): string | null {
@@ -269,6 +280,8 @@ const TOPIC_TOOL: Record<string, string> = {
   cursor: "cursor", "cursor-ai": "cursor", copilot: "copilot", "github-copilot": "copilot", codex: "codex",
   "gemini-cli": "gemini-cli", windsurf: "windsurf", aider: "aider", cline: "cline", chatgpt: "chatgpt",
   lovable: "lovable", bolt: "bolt", "bolt-new": "bolt", v0: "v0", replit: "replit",
+  "roo-code": "roo", "built-with-roo": "roo",
+  "muse-code": "muse-code", "muse-spark": "muse-code", "meta-muse": "muse-code", "built-with-muse": "muse-code", "built-with-muse-code": "muse-code",
 };
 
 /**

@@ -34,6 +34,7 @@ import { pingIndexNow } from "../lib/indexnow";
 import { escapeHtml, renderMarkdown } from "../lib/markdown";
 import { isoDate, now } from "../lib/time";
 import { METHOD_VERSION, LISTABLE_CODES } from "../lib/method";
+import { TRAWL_GROUNDS } from "../lib/virtual";
 import { COHORT_LABEL, type Cohort, type TrendRow } from "./trends";
 
 /** UTC weekday the bulletin goes out. 1 = Monday, so it covers the week that ended the night before. */
@@ -267,7 +268,7 @@ export function reportMd(r: ReportView): string {
       "",
       ...r.tools.rows.slice(0, 8).map((m) => `- ${line(m, r.first)}`),
       "",
-      `**Read this as: how loudly each tool's users say its name in public.** The trawl searches six grounds named after tools ([method](/method), bias 2), so a tool whose users never tag or describe their repos is undercounted here by construction. It is not market share and it is not usage.${counted(r.tools)}${noise(r.tools.total, TOOL_NOISE_FLOOR)}`,
+      `**Read this as: how loudly each tool's users say its name in public.** The trawl searches ${TRAWL_GROUNDS.length} grounds, most named after tools ([method](/method), bias 2), so a tool whose users never tag or describe their repos is undercounted here by construction. It is not market share and it is not usage.${counted(r.tools)}${noise(r.tools.total, TOOL_NOISE_FLOOR)}`,
       "",
     );
     const moved = bigMoves(r.tools.rows);

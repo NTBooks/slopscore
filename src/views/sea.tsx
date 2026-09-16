@@ -25,7 +25,7 @@ export interface SeaData {
   spent: boolean;
 }
 
-/** A course bowed away from the straight line, so six tracks read as courses rather than a starburst. */
+/** A course bowed away from the straight line, so seven tracks read as courses rather than a starburst. */
 function track(g: Ground): string {
   const mx = (TROUGH.x + g.x) / 2;
   const my = (TROUGH.y + g.y) / 2;

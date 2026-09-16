@@ -36,6 +36,7 @@ export const DEEPS = { x: 248, y: 142, name: "Description Deeps" };
 const BERTHS: { x: number; y: number }[] = [
   { x: 84, y: 96 }, { x: 116, y: 54 }, { x: 178, y: 46 },
   { x: 216, y: 74 }, { x: 238, y: 116 }, { x: 166, y: 132 },
+  { x: 132, y: 100 },
 ];
 
 export const GROUNDS: Ground[] = TRAWL_GROUNDS.map((g, i) => ({

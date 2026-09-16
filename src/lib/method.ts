@@ -22,10 +22,15 @@ import { JUDGE_CODES, JUDGE_DOMAINS } from "./judge";
 import { CHART_FACETS, TRENDS_KEEP_DAYS } from "../jobs/trends";
 
 /** Bump when a rule below changes, and add a CHANGES line in the same commit. Reports stamp this. */
-export const METHOD_VERSION = 1;
+export const METHOD_VERSION = 2;
 
 /** Every version, newest first. The history is the point: a method nobody can diff is a method nobody can check. */
 export const CHANGES: { version: number; date: string; what: string }[] = [
+  {
+    version: 2,
+    date: "2026-09-16",
+    what: "Two tools join the claim gate, the topic map and the built_with vocabulary: Meta's Muse Code (also written Muse Spark or Meta AI, one key: muse-code) and Roo Code (roo). A seventh search ground, Muse Bank, works the Muse phrases and topics; Roo joins Copilot Reach. Repos naming either tool were previously thrown back as having no claim, so the population widens and nothing already counted changes. Cline and Roo are both discontinued products; repos that credit them still count, because the claim is about who wrote the code, not whether the shop is still open.",
+  },
   {
     version: 1,
     date: "2026-09-14",
@@ -101,7 +106,7 @@ export function methodMd(): string {
     "The two are counted separately and drawn in separate columns everywhere. A number that merges them is not a number from this site.", "",
 
     "## How the trawl picks", "",
-    "Six search grounds, worked in rotation. Each is a handful of GitHub searches:", "",
+    `${TRAWL_GROUNDS.length} search grounds, worked in rotation. Each is a handful of GitHub searches:`, "",
     ...grounds, "",
     "Every result is then filtered on facts from the search response alone, before anything is read and before any model is paid:", "",
     `- ${MIN_STARS.toLocaleString("en-US")} to ${MAX_STARS.toLocaleString("en-US")} stars`,

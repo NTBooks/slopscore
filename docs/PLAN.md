@@ -60,7 +60,7 @@ demo_url:                    # default: GitHub homepage
 # ---- Optional facets GitHub can't detect. Lowercased, [a-z0-9.+-], aliases normalized
 # (cc→claude-code, k8s→kubernetes). Unknown values never reject; kept as free tags, flagged
 # "unrecognized" in the scan report so the vocabulary can grow. ----
-built_with: [claude-code]    # AI tools: claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, chatgpt, lovable, bolt, v0, replit, other
+built_with: [claude-code]    # AI tools: claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, roo, chatgpt, lovable, bolt, v0, replit, muse-code, other
 models: [claude-fable-5-1]   # free
 interface: [cli, web]        # cli | tui | web | desktop | mobile | api | library | bot | mcp | plugin | headless
 frameworks: [fastapi]        # free vocab + alias table (GitHub doesn't detect frameworks)

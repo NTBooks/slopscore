@@ -54,7 +54,7 @@ Required, and this is the part that matters:
 - `status:` idea | prototype | works-on-my-machine | alpha | beta | stable | maintained | abandoned
 - `tagline:` 140 characters or fewer, unless the repo already has a GitHub description.
 
-Worth adding: `built_with:` (claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, chatgpt, lovable, bolt, v0, replit, other), `models:`, and `slopbucket:` for up to three
+Worth adding: `built_with:` (claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, roo, chatgpt, lovable, bolt, v0, replit, muse-code, other), `models:`, and `slopbucket:` for up to three
 subreddit-style feeds at https://slopscore.org/b. Unknown values in the optional fields never reject a repo; they are kept
 as free tags.
 

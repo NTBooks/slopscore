@@ -36,7 +36,7 @@ slopbucket: [cli]            # optional: pick a bucket or invent one
 ## Optional facets (unknown values never reject; they're kept as free tags marked unrecognized)
 
 - title, tagline, demo_url — override GitHub
-- built_with: claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, chatgpt, lovable, bolt, v0, replit, other
+- built_with: claude-code, claude, cursor, copilot, codex, gemini-cli, windsurf, aider, cline, roo, chatgpt, lovable, bolt, v0, replit, muse-code, other
 - models: free
 - interface: cli, tui, web, desktop, mobile, api, library, bot, mcp, plugin, headless
 - frameworks: free (aliases normalized: next.js→nextjs)

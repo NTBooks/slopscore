@@ -166,7 +166,8 @@ export function criticBudget(done: number, at: number, cap: number = CRITIC_DAIL
 }
 
 /** Strip the delimiter and cap the length: nothing from a stranger's repo may end the data block early. */
-const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\/?repo>/gi, "").slice(0, n);
+/** Strip the delimiter in every spelling that would still close the block: `</repo >`, `<repo\n>`, `< /repo>`. */
+const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\s*\/?\s*repo\s*>/gi, "").slice(0, n);
 
 /**
  * One repo as data for the model. Trawled repos send no pitch: their body is the Cap'm's own paperwork,

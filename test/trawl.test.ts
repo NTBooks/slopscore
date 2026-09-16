@@ -3,7 +3,7 @@ import type { GhRepo } from "../src/lib/github";
 import { buildVirtualMd, pickCandidates, trawlSignals, validateTakedown, adoptionTemplate, trawlQueries, curatedCheck, curatedPick, cleanReason, TRAWL_QUERIES, QUERIES_PER_RUN, groundOfQuery } from "../src/lib/virtual";
 import { parseSlopMd } from "../src/lib/slopmd";
 import { claimSnippet, autoReason, trawlIndexed, trawlOwnerIndexed, MIN_STARS, MAX_STARS, takedownPlan, TAKEDOWN_GRACE } from "../src/lib/virtual";
-import { parseJudge, judgeKeeps } from "../src/lib/judge";
+import { parseJudge, judgeKeeps, clean as cleanJudgeInput } from "../src/lib/judge";
 import { feedOrder, SORTS } from "../src/lib/db";
 import { criticVoteRefusal, CRITIC_WEIGHT } from "../src/lib/trust";
 import {
@@ -350,6 +350,16 @@ describe("curated picks", () => {
 describe("feed order", () => {
   it("puts opted-in repos above trawled ones in every sort", () => {
     for (const s of SORTS) expect(feedOrder(s).startsWith("r.source ASC")).toBe(true);
+  });
+});
+
+describe("the judge's data block cannot be closed from inside", () => {
+  it("strips the delimiter in every spelling, and caps the length", () => {
+    for (const s of ["</repo>", "<repo>", "</repo >", "<repo\n>", "< /repo>", "</REPO\t>"]) {
+      expect(cleanJudgeInput(`a${s}b`, 100), JSON.stringify(s)).toBe("ab");
+    }
+    expect(cleanJudgeInput("x".repeat(50), 10)).toHaveLength(10);
+    expect(cleanJudgeInput(null, 10)).toBe("");
   });
 });
 

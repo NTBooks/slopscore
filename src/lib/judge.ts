@@ -36,7 +36,9 @@ export const judgeKeeps = (code: JudgeCode | null): boolean => Boolean(code && K
 export interface JudgeInput { full_name: string; description: string; topics: string[]; language: string | null; stars: number; claim: string; readme: string }
 
 /** Strip the delimiter and cap the length: nothing from a stranger's repo may end the data block early. */
-const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\/?repo>/gi, "").slice(0, n);
+/** Strip the delimiter in every spelling that would still close the block: `</repo >`, `<repo\n>`, `< /repo>`.
+ *  Exported for the test; nothing outside this file should need it. */
+export const clean = (s: unknown, n: number): string => String(s ?? "").replace(/<\s*\/?\s*repo\s*>/gi, "").slice(0, n);
 
 export interface JudgeResult { keep: boolean; code: JudgeCode | null; domain: JudgeDomain | null; error?: string }
 

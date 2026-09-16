@@ -376,6 +376,12 @@ export async function rateLimit(db: D1Database, key: string, max: number, window
   return true;
 }
 
+/** Give a window back. For a limit that guards a side effect which then did not happen: a scan window taken
+ *  before GitHub answered with an error should not cost the requester the next ten minutes. */
+export async function forgiveLimit(db: D1Database, key: string): Promise<void> {
+  await db.prepare("DELETE FROM rate_limits WHERE key = ?").bind(key).run();
+}
+
 // ---- mod log ----
 export async function logAction(db: D1Database, a: { actor: string; role: "admin" | "owner" | "system"; action: string; targetType: string; targetId: number; label?: string; note?: string }): Promise<void> {
   await db.prepare("INSERT INTO mod_log (actor_login, actor_role, action, target_type, target_id, target_label, note) VALUES (?,?,?,?,?,?,?)")

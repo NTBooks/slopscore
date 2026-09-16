@@ -3,7 +3,7 @@
 // site keeps working when code search stops finding marker files.
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
-import { getRepo, rateLimit, logAction, parseJson, type RepoRow } from "../lib/db";
+import { getRepo, rateLimit, forgiveLimit, logAction, parseJson, type RepoRow } from "../lib/db";
 import { GitHub, parseRepoInput } from "../lib/github";
 import { scanRepo, POLICY_LABELS, type ScanReport } from "../lib/scan";
 import { isOwnerOf } from "../lib/owner";
@@ -145,6 +145,9 @@ scan.post("/", requireUser, async (c) => {
 
   const gh = new GitHub(c.env.GITHUB_CRAWL_TOKEN);
   const res = await scanRepo(c.env.DB, c.env, gh, owner, name);
+  // The per-repo window was taken before the scan ran. A scan that came back with an error did not do the
+  // thing the window guards, so it is given back: the per-account limit above still bounds a retry loop.
+  if ("error" in res.outcome) await forgiveLimit(c.env.DB, `ping:${owner}/${name}`.toLowerCase());
   const v = res.repo ? explainRepo(res.repo, !("error" in res.outcome) && Boolean(res.outcome.deferred)) : explainMissing(owner, name, (res.outcome as { error: string }).error);
   if (res.repo && isOwnerOf(res.repo, user.login, user.id)) {
     await logAction(c.env.DB, { actor: user.login, role: "owner", action: "scan-request", targetType: "repo", targetId: res.repo.id, label: res.repo.full_name, note: v.status ?? "missing" });

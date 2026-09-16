@@ -75,6 +75,28 @@
     var msgs = [].slice.call(chat.querySelectorAll('.msg'));
     var typing = chat.querySelector('#ss-typing');
 
+    // The reader's place in the archive. The server rendered this window from the cookie it found and put
+    // the cursor it would advance to on the box; it is stored only once the box has actually been on
+    // screen, so a reader who never scrolls down keeps their place and the server never has to Set-Cookie
+    // on a page. Without an observer there is no way to know, so it is stored on load.
+    var seen = false;
+    function markSeen() {
+      if (seen || !chat.dataset.cookie || !chat.dataset.cursor) return;
+      seen = true;
+      try {
+        document.cookie = chat.dataset.cookie + '=' + chat.dataset.cursor + '; path=/; max-age=31536000; samesite=lax' +
+          (location.protocol === 'https:' ? '; secure' : '');
+      } catch (e) { /* cookies off: the box shows the newest window every time, which is fine */ }
+    }
+    if (window.IntersectionObserver) {
+      var seenIo = new IntersectionObserver(function (es) {
+        if (!es[0].isIntersecting) return;
+        seenIo.disconnect();
+        markSeen();
+      }, { rootMargin: '0px 0px -40px 0px' });
+      seenIo.observe(chat);
+    } else markSeen();
+
     // The reveal. Hidden from script, never from the stylesheet: a rule that hid these would hide the
     // whole thread on any browser where this file failed to load.
     if (!still && msgs.length && !chat.dataset.caught) {

@@ -313,6 +313,13 @@ export function chatLines(rows: CriticReviewRow[], limit = rows.length): ChatLin
   return out;
 }
 
+/**
+ * The cookie the reader's chat cursor lives in. Written by the browser (public/rail.js) when the box has
+ * actually been on screen, not by the server on every page: a Set-Cookie on every HTML response made every
+ * page uncacheable at the edge, and walked the window forward for readers who never scrolled to it.
+ */
+export const CHAT_COOKIE = "ss_balcony";
+
 export interface ChatCursor {
   /** The newest `at` this reader has ever been shown. Anything above it is news. */
   seen: number;

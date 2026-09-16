@@ -13,7 +13,7 @@
 // The one part that is live is the countdown, and it is live because it is knowable: the rota is
 // deterministic and the cron is fixed, so the page can say who reads next and when without asking.
 import type { FC } from "hono/jsx";
-import { CRITIC_SLOT, CRITICS, criticForSlot, criticShortName, inFrenzy, nextSlot, type ChatWindow } from "../lib/critics";
+import { CHAT_COOKIE, CRITIC_SLOT, CRITICS, criticForSlot, criticShortName, formatChatCursor, inFrenzy, nextSlot, type ChatWindow } from "../lib/critics";
 import { ago, isoDateTime, now } from "../lib/time";
 
 /** Who is up next, in words, from facts the page already has. */
@@ -33,6 +33,8 @@ export const BalconyChat: FC<{ chat: ChatWindow }> = ({ chat }) => {
       data-every={CRITIC_SLOT}
       data-caught={chat.caughtUp ? "1" : ""}
       data-roster={CRITICS.map((c) => c.login).join(",")}
+      data-cookie={CHAT_COOKIE}
+      data-cursor={formatChatCursor(chat.cursor)}
     >
       <h3>The balcony <span class="muted">· <a href="/balcony">all of it</a></span></h3>
       {chat.lines.length ? (

@@ -4,9 +4,9 @@ import { Hono, type Context } from "hono";
 import type { FC } from "hono/jsx";
 import type { AppEnv } from "../env";
 import { adminLogins } from "../env";
-import {
+import { CHAT_COOKIE,
   CRITICS, CRITIC_DAILY_CAP, criticById, criticQuip, criticShortName,
-  chatLines, unseenWindow, parseChatCursor, formatChatCursor, type ChatLine, type CriticReviewRow,
+  chatLines, unseenWindow, parseChatCursor, type ChatLine, type CriticReviewRow,
 } from "../lib/critics";
 import {
   feed, getRepo, repoTags, comments as loadComments, awardsFor, userVote, userVotesFor, siteStats, facetCounts,
@@ -16,7 +16,7 @@ import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { recordView } from "../lib/views";
 import { anonId, castAnonVote } from "../lib/anon";
 import { ledger } from "../lib/rush";
-import { getCookie, setCookie } from "hono/cookie";
+import { getCookie } from "hono/cookie";
 import { flagOn, flagsSnapshot } from "../lib/flags";
 import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond, wantedFormat } from "../lib/negotiate";
@@ -88,7 +88,6 @@ async function railData(db: D1Database): Promise<RailData> {
   });
 }
 
-const CHAT_COOKIE = "ss_balcony";
 const CHAT_WINDOW = 6;
 
 /**
@@ -105,13 +104,10 @@ const CHAT_WINDOW = 6;
 function chatFor(c: Context<AppEnv>, rail: RailData) {
   if (!flagOn("chatter") || !rail.chat?.length) return null;
   const html = wantedFormat(c) === "html";
-  const w = unseenWindow(rail.chat, parseChatCursor(html ? getCookie(c, CHAT_COOKIE) : undefined), CHAT_WINDOW);
-  if (html) {
-    setCookie(c, CHAT_COOKIE, formatChatCursor(w.cursor), {
-      path: "/", sameSite: "Lax", maxAge: 365 * 86400, secure: new URL(c.req.url).protocol === "https:",
-    });
-  }
-  return w;
+  // Read here, written by the browser: the box carries the cursor it was rendered with (data-cursor), and
+  // rail.js stores it only once the box has been on screen. Nothing is spent on a reader who never saw it,
+  // and no HTML response carries a Set-Cookie for it.
+  return unseenWindow(rail.chat, parseChatCursor(html ? getCookie(c, CHAT_COOKIE) : undefined), CHAT_WINDOW);
 }
 
 /** The Sloptrawler's log: stable facts only. Where she is now is worked out from these by the reader's

@@ -24,7 +24,8 @@ import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
 import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
 import { loadTrends } from "../jobs/trends";
-import { listReports, loadReport, newsletter, reportTeaser, teaserLine, type ReportRow } from "../jobs/report";
+import { listReports, loadReport, newsletter, reportTeaser, teaserLine } from "../jobs/report";
+import { ReportPage, Subscribe } from "../views/report";
 import { METHOD_VERSION, methodJson, methodMd } from "../lib/method";
 import { Trends, trendsMd } from "../views/trends";
 import { Layout, SITE } from "../views/layout";
@@ -717,43 +718,6 @@ pages.get("/method", (c) => {
     ),
   });
 });
-
-/** The archive line every report page prints, newest first. */
-const ReportArchive: FC<{ rows: { slug: string; at: number; method: number }[]; current?: string }> = ({ rows, current }) => (
-  rows.length > 1 ? (
-    <p class="muted small">Every bulletin: {rows.map((r, i) => (
-      <>{i ? " · " : ""}{r.slug === current ? <strong>{r.slug}</strong> : <a href={`/report/${r.slug}`}>{r.slug}</a>}</>
-    ))}</p>
-  ) : null
-);
-
-/**
- * Where to subscribe, when there is somewhere.
- *
- * A link, not a form. The site keeps no mailing list and never asks for an address: somebody else operates the
- * newsletter, handles the unsubscribe, and carries the compliance, and this page's whole job is to hand the
- * reader over to them. Unset NEWSLETTER_URL and the line disappears; the bulletin is still published and still
- * on RSS, which is the channel that needs nobody's permission.
- */
-const Subscribe: FC<{ list: { url: string; name: string } | null }> = ({ list }) => (
-  <p class="muted small">
-    Get it weekly: {list ? <><a href={list.url} rel="noopener">{list.name}</a> by email, or </> : null}
-    <a href="/report.xml">RSS</a>. Free, and it stays free — it is how the numbers get cited, not how they get sold.
-    {list ? <> We never see your address: the list lives with them, not here.</> : null}
-  </p>
-);
-
-/** One bulletin, rendered from the markdown frozen into its row. Never re-derived: an old week reads as it read. */
-const ReportPage: FC<{ row: ReportRow; archive: { slug: string; at: number; method: number }[]; list: { url: string; name: string } | null }> = ({ row, archive, list }) => (
-  <section class="wrap narrow" style="padding:0">
-    <div dangerouslySetInnerHTML={{ __html: renderMarkdown(row.body) }} />
-    <Subscribe list={list} />
-    <p class="muted small">
-      Written {isoDateTime(row.at)} · method v{row.method} · <a href={`/report/${row.slug}.md`}>markdown</a> · <a href={`/report/${row.slug}.json`}>the numbers</a> · <a href="/report.xml">RSS</a> · <a href="/trends">the live dashboard</a>
-    </p>
-    <ReportArchive rows={archive} current={row.slug} />
-  </section>
-);
 
 const NO_REPORT = "No bulletin yet. One is written from the nightly snapshot as soon as there is a week to count.";
 

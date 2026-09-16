@@ -32,7 +32,7 @@ import { markDirty } from "../lib/cache";
 import { encodeHeader } from "../lib/mail";
 import { pingIndexNow } from "../lib/indexnow";
 import { escapeHtml, renderMarkdown } from "../lib/markdown";
-import { isoDate, now } from "../lib/time";
+import { isoDate, isoWeek, now } from "../lib/time";
 import { METHOD_VERSION, LISTABLE_CODES } from "../lib/method";
 import { TRAWL_GROUNDS } from "../lib/virtual";
 import { COHORT_LABEL, type Cohort, type TrendRow } from "./trends";
@@ -57,17 +57,8 @@ const TOOL_NOISE_FLOOR = 50;
 /** Movers printed per section. Enough to see a shape, few enough that the tail is not dressed as news. */
 const MOVERS = 5;
 
-/** ISO-8601 week, `YYYY-Www`. The week owns the report, not the day the job happened to run. */
-export function isoWeek(at: number): string {
-  const d = new Date(at * 1000);
-  const day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  const dow = (new Date(day).getUTCDay() + 6) % 7;            // Monday = 0
-  const thursday = day + (3 - dow) * 86400000;                // the week's Thursday names its year
-  const year = new Date(thursday).getUTCFullYear();
-  const jan4 = Date.UTC(year, 0, 4);
-  const week1 = jan4 - ((new Date(jan4).getUTCDay() + 6) % 7) * 86400000;
-  return `${year}-W${String(Math.round((thursday - week1) / (7 * 86400000)) + 1).padStart(2, "0")}`;
-}
+/** ISO-8601 week, `YYYY-Www`. Lives in lib/time (the weekly trends series needs it too); re-exported so nothing that imported it here moves. */
+export { isoWeek };
 
 /** The week a run at `at` reports on: the one that ended yesterday. */
 export const weekOf = (at: number): string => isoWeek(at - 86400);
@@ -362,10 +353,31 @@ export async function loadReport(db: D1Database, slug?: string): Promise<ReportR
     : db.prepare("SELECT * FROM bulletins ORDER BY at DESC LIMIT 1").first<ReportRow>();
 }
 
-/** The archive, newest first, without dragging every body along with it. */
-export async function listReports(db: D1Database, limit = 52): Promise<{ slug: string; at: number; title: string; method: number }[]> {
-  const r = await db.prepare("SELECT slug, at, title, method FROM bulletins ORDER BY at DESC LIMIT ?").bind(limit).all<{ slug: string; at: number; title: string; method: number }>();
-  return r.results ?? [];
+/** One line of the archive: the week, and the numbers it led with, read off the frozen JSON without parsing it. */
+export interface ArchiveRow { slug: string; at: number; title: string; method: number; listed: number | null; added: number | null; seen: number | null; software_share: number | null }
+
+/** Pure: an archive row with every number null-safe, so a bulletin whose JSON will not read still lists. */
+export function archiveRow(r: { slug: string; at: number; title: string; method: number; listed?: unknown; added?: unknown; seen?: unknown; software_share?: unknown }): ArchiveRow {
+  const num = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  const seen = num(r.seen);
+  return { slug: r.slug, at: r.at, title: r.title, method: r.method, listed: num(r.listed), added: num(r.added), seen, software_share: seen ? num(r.software_share) : null };
+}
+
+/**
+ * The archive, newest first, without dragging every body along with it. The headline numbers come straight out
+ * of the frozen JSON in SQL, so the list agrees with each bulletin by construction; json_valid guards the one
+ * row that could otherwise take the whole archive down with it.
+ */
+export async function listReports(db: D1Database, limit = 52): Promise<ArchiveRow[]> {
+  const r = await db.prepare(
+    `SELECT slug, at, title, method,
+            CASE WHEN json_valid(data) THEN json_extract(data, '$.totals.listed') END AS listed,
+            CASE WHEN json_valid(data) THEN json_extract(data, '$.totals.added') END AS added,
+            CASE WHEN json_valid(data) THEN json_extract(data, '$.judged.seen') END AS seen,
+            CASE WHEN json_valid(data) THEN json_extract(data, '$.judged.software_share') END AS software_share
+       FROM bulletins ORDER BY at DESC LIMIT ?`,
+  ).bind(limit).all<{ slug: string; at: number; title: string; method: number; listed: unknown; added: unknown; seen: unknown; software_share: unknown }>();
+  return (r.results ?? []).map(archiveRow);
 }
 
 // ---- handing it to the newsletter ----

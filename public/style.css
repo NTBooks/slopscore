@@ -398,8 +398,8 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 
 /* ---- /trends: charts drawn with divs, because a chart library is 90kB of JavaScript to say "python is popular" ---- */
 /* One palette for every stacked chart. Seven is enough: a series with more bands than that is a table, not a chart. */
-:root { --c1: #e8669a; --c2: #7a6cd6; --c3: #c98a3a; --c4: #3f9e8a; --c5: #b5533c; --c6: #5f86c9; --c7: #9a8f7a; }
-@media (prefers-color-scheme: dark) { :root { --c1: #ff8fb5; --c2: #9d93ff; --c3: #e0ab63; --c4: #63c3ac; --c5: #e0846a; --c6: #86a8e6; --c7: #b8ac95; } }
+:root { --c1: #e8669a; --c2: #7a6cd6; --c3: #c98a3a; --c4: #2a9d84; --c5: #b5533c; --c6: #5f86c9; --c7: #9a8f7a; --trawl: var(--accent); --opted: var(--c2); }
+@media (prefers-color-scheme: dark) { :root { --c1: #ff8fb5; --c2: #9d93ff; --c3: #e0ab63; --c4: #4fc9a6; --c5: #e0846a; --c6: #7ea7ec; --c7: #b8ac95; } }
 .c1 { background: var(--c1); } .c2 { background: var(--c2); } .c3 { background: var(--c3); } .c4 { background: var(--c4); }
 .c5 { background: var(--c5); } .c6 { background: var(--c6); } .c7 { background: var(--c7); }
 
@@ -459,6 +459,106 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
   .bars.wide.withn .barrow { grid-template-columns: minmax(0, 8em) 1fr 5.6em; }
   /* Dropping the year makes every label three characters, which fits upright: no rotated axis on a phone. */
   .collabel { font-size: 9px; } .collabel .yr { display: none; }
+}
+
+/* ---- charts.tsx: the figures /trends and /report share. Marks in SVG, every word and number in HTML. ---- */
+/* The two cohorts wear the same two colours on every chart that compares them: pink is the net's sample, purple filed the paperwork. */
+.swatch.trawl, .seg.trawl { background: var(--trawl); } .swatch.opted, .seg.opted { background: var(--opted); }
+.fig { margin: 8px 0 18px; }
+.fig figcaption { margin-top: 6px; }
+.fig.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 22px; align-items: start; }
+/* Twelve weekly columns in half a page: shorter labels, no year, and the ring's legend never wraps a name letter by letter. */
+.fig.pair .cols { gap: 2px; } .fig.pair .collabel { font-size: 9px; } .fig.pair .collabel .yr { display: none; }
+.fig.pair figcaption { grid-column: 1 / -1; }
+.fig h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+
+/* The headline row. Proportional figures on purpose: tabular digits make a big lone number look gappy. */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; align-items: flex-start; }
+.kpi .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+.kpi .value { font-size: 26px; line-height: 1.1; letter-spacing: -.5px; }
+.kpi .sub { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.delta { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 3px; padding: 0 5px; line-height: 17px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.delta.up { background: var(--ok); color: var(--ok-fg); } .delta.down { background: var(--bad); color: var(--bad-fg); }
+.delta.flat, .delta.new { background: var(--chip); color: var(--chip-fg); }
+
+/* Jump row: the dashboard is long, and a reader who wants the languages should not scroll past the judge to get there. */
+.jump { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; margin: 6px 0 12px; }
+.jump a { padding: 2px 9px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); text-decoration: none; color: var(--fg); }
+.jump a:hover { border-color: var(--accent); }
+
+/* The caveat block folds, so a reader who has read it once can put it away; it opens by default because it matters. */
+details.note summary { cursor: pointer; font-weight: bold; font-size: 14px; margin: 8px 0 2px; }
+details.note[open] summary { margin-bottom: 4px; }
+
+/* The ring. Slices are stroked arcs, so a 2px angular gap is the surface showing through. */
+.donut { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; }
+.donut .ring { position: relative; }
+.donut svg { display: block; }
+.donut .slice { fill: none; stroke-width: 16; }
+.slice.c1 { stroke: var(--c1); } .slice.c2 { stroke: var(--c2); } .slice.c3 { stroke: var(--c3); } .slice.c4 { stroke: var(--c4); }
+.slice.c5 { stroke: var(--c5); } .slice.c6 { stroke: var(--c6); } .slice.c7 { stroke: var(--c7); }
+.slice.trawl { stroke: var(--trawl); } .slice.opted { stroke: var(--opted); }
+.donut .centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; padding: 0 30px; }
+.donut .centre strong { font-size: 24px; line-height: 1; letter-spacing: -.5px; }
+.donut .centre span { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 4px; line-height: 1.2; }
+.dlegend { list-style: none; margin: 0; padding: 0; font-size: 12px; display: grid; gap: 3px; }
+.dlegend li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; gap: 7px; align-items: center; }
+.dlegend .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+.dlegend .n { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+/* Movers: the bar is now, the hollow marker is last week, the chip is the distance in points. */
+.movers { display: grid; gap: 5px; margin: 8px 0 8px; }
+.mrow { display: grid; grid-template-columns: minmax(0, 11em) 1fr 6.5em 5.5em; gap: 8px; align-items: center; font-size: 12px; }
+.mkey { overflow-wrap: anywhere; line-height: 1.25; }
+.mtrack { position: relative; height: 12px; background: var(--panel-2); border-radius: 4px; }
+.mbar { position: absolute; left: 0; top: 2px; height: 8px; border-radius: 4px; background: var(--accent); }
+.movers.opted .mbar { background: var(--opted); }
+.mgap { position: absolute; top: 5px; height: 2px; background: var(--muted); opacity: .55; }
+.mwas { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; border: 2px solid var(--fg); border-radius: 50%; background: var(--bg); box-sizing: border-box; }
+.mn { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mdelta { text-align: right; }
+
+/* Bars: thinner, rounded, and coloured by cohort where two cohorts are compared. */
+.bartrack { height: 9px; border-radius: 4px; } .bartrack i { border-radius: 4px; }
+.bars.trawl .bartrack i { background: var(--trawl); } .bars.opted .bartrack i { background: var(--opted); }
+/* Columns: the surface shows through a 2px gap between segments, and the top of the stack is rounded. */
+.colstack { gap: 2px; background: transparent; border-radius: 0; overflow: visible; }
+.colstack .seg { border-radius: 1px; }
+.colstack .seg:last-child { border-radius: 3px 3px 1px 1px; }
+.colstack:not(.ghost) { min-height: 0; }
+
+/* The bulletin's masthead. */
+.masthead { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 10px; }
+.masthead .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.masthead h1 { margin: 2px 0 4px; font-family: var(--serif); font-size: 26px; letter-spacing: -.3px; line-height: 1.15; }
+.masthead .meta { color: var(--muted); font-size: 12px; }
+.report h2 { font-size: 17px; margin: 24px 0 6px; }
+.report .fig { margin-top: 6px; }
+
+/* Every bulletin so far, and the line they draw once there are enough of them. */
+.sparks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 10px; }
+.sparks .spark { width: 100%; height: 36px; display: block; } .spark path { stroke: var(--accent); stroke-width: 2; }
+.sparks .label { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); display: block; margin-bottom: 2px; }
+.archive { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 8px 0 14px; }
+.archive a, .archive .now { display: block; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); text-decoration: none; color: var(--fg); font-size: 12px; line-height: 1.4; }
+.archive a:hover { border-color: var(--accent); }
+.archive .now { border-color: var(--accent); }
+.archive .slug { font-weight: bold; display: block; }
+.archive .muted { display: block; font-size: 11px; }
+
+/* The content column is 640px on a laptop (the page grid keeps a rail's width), so a ring beside twelve columns only fits on a wide screen. */
+@media (max-width: 1099px) { .fig.pair { grid-template-columns: minmax(0, 1fr); } }
+.fig.pair > div { min-width: 0; }
+@media (max-width: 600px) {
+  .donut, .sparks { grid-template-columns: 1fr; }
+  /* Twelve weekly columns on a phone: every other label, or none of them can be read. */
+  .cols.dense .col:nth-child(even) .collabel { visibility: hidden; }
+  .donut .ring { margin: 0 auto; }
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpi .value { font-size: 22px; }
+  .mrow { grid-template-columns: minmax(0, 7em) 1fr auto auto; gap: 5px; }
+  .mrow .delta { font-size: 10px; padding: 0 4px; }
 }
 
 /* "but is it slop though?" — the questionnaire at /but-is-it-slop. Rides on .orphanage for the prose. */

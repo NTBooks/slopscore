@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  ageBucket, cohortOf, facetIsReal, monthsBack, netBucket, shapeTrends, starBucket, topN,
+  ageBucket, cohortOf, facetIsReal, monthsBack, netBucket, pickGrain, shapeTrends, starBucket, topN, weeksBack,
   CHART_FACETS, CLOUD_FACET, TEMPLATED_ON_TRAWL, type TrendRow,
 } from "../src/jobs/trends";
 import { JUDGE_CODES, JUDGE_DOMAINS, parseDomain, parseJudge } from "../src/lib/judge";
@@ -73,6 +73,27 @@ describe("the month axis", () => {
   });
 });
 
+describe("the week axis", () => {
+  it("ends on the current ISO week, oldest first, and crosses a year boundary", () => {
+    const w = weeksBack(AT, 12);
+    expect(w).toHaveLength(12);
+    expect(w[11]).toBe("2026-W37");
+    expect(w[0]).toBe("2026-W26");
+    expect([...w].sort()).toEqual(w);
+    // 2027-01-01 is a Friday, still week 53 of 2026; the week after it is W01 of 2027.
+    const turn = weeksBack(Date.parse("2027-01-06T00:00:00Z") / 1000, 2);
+    expect(turn).toEqual(["2026-W53", "2027-W01"]);
+  });
+
+  it("draws weeks until three months have anything in them, and months when there is no weekly series", () => {
+    const months = (n: number) => Array.from({ length: 12 }, (_, i) => ({ total: i >= 12 - n ? 1 : 0 }));
+    expect(pickGrain(months(2), [{ total: 3 }])).toBe("week");
+    expect(pickGrain(months(3), [{ total: 3 }])).toBe("month");
+    expect(pickGrain(months(1), [])).toBe("month");
+    expect(pickGrain(months(1), undefined)).toBe("month");
+  });
+});
+
 describe("topN", () => {
   it("breaks ties by name so two identical nights produce identical snapshots", () => {
     const a = topN([{ key: "b", n: 3 }, { key: "a", n: 3 }, { key: "c", n: 9 }], 2);
@@ -97,6 +118,12 @@ describe("shapeTrends", () => {
     row({ cohort: "opted", metric: "tool", period: "2026-08", key: "claude-code", n: 1 }),
     row({ cohort: "trawl", metric: "tool", period: "2026-08", key: "other", n: 30 }),
     row({ cohort: "trawl", metric: "tool", period: "2026-09", key: "cursor", n: 2 }),
+    row({ cohort: "trawl", metric: "listings_w", period: "2026-W36", key: "listed", n: 5 }),
+    row({ cohort: "opted", metric: "listings_w", period: "2026-W36", key: "listed", n: 1 }),
+    row({ cohort: "trawl", metric: "listings_w", period: "2026-W37", key: "listed", n: 2 }),
+    row({ cohort: "trawl", metric: "tool_w", period: "2026-W36", key: "claude-code", n: 4 }),
+    row({ cohort: "trawl", metric: "tool_w", period: "2026-W36", key: "other", n: 4 }),
+    row({ cohort: "trawl", metric: "tool_w", period: "2026-W37", key: "windsurf", n: 1 }),
     row({ cohort: "trawl", metric: "net", key: "a list, guide or template", n: 40 }),
     row({ cohort: "trawl", metric: "net", key: "tripped the denylist", n: 4 }),
     row({ cohort: "opted", metric: "turned-away", key: "contract", n: 6 }),
@@ -134,8 +161,24 @@ describe("shapeTrends", () => {
     ]);
   });
 
+  it("keeps the weekly series on its own axis and never lets a week into the month chart", () => {
+    expect(d.months).toEqual(["2026-08", "2026-09"]);
+    expect(d.weeks).toEqual(["2026-W36", "2026-W37"]);
+    expect(d.listings_w).toEqual([
+      { period: "2026-W36", trawl: 5, opted: 1, total: 6 },
+      { period: "2026-W37", trawl: 2, opted: 0, total: 2 },
+    ]);
+    expect(d.tools_w.months.map((m) => m.period)).toEqual(["2026-W36", "2026-W37"]);
+    expect(d.tools_w.months[0].parts.map((p) => [p.key, p.n])).toEqual([["claude-code", 4], ["other", 4]]);
+    // One key order for both grains, so a tool keeps its colour when the chart switches; a tool seen only in
+    // the weekly rows is still a key, and "other" is still last.
+    expect(d.tools_w.keys).toBe(d.tools.keys);
+    expect(d.tools.keys).toEqual(["claude-code", "cursor", "windsurf", "other"]);
+    // Two months with anything in them: still weeks.
+    expect(d.granularity).toBe("week");
+  });
+
   it("adds the tool series across cohorts and sorts 'other' last however big it is", () => {
-    expect(d.tools.keys).toEqual(["claude-code", "cursor", "other"]);
     const aug = d.tools.months.find((m) => m.period === "2026-08")!;
     expect(aug.total).toBe(40);
     expect(aug.parts.map((p) => p.key)).toEqual(["claude-code", "other"]);
@@ -163,6 +206,13 @@ describe("shapeTrends", () => {
     expect(md).toMatch(/## Questions only the paperwork can answer/);
     expect(md).toMatch(/### How much of it a model wrote \(ai_generated\)/);
     expect(md.split("## Questions only the paperwork can answer")[0]).not.toMatch(/ai_generated/);
+  });
+
+  it("prints the weekly series in the markdown only when there is one", () => {
+    const md = trendsMd(d);
+    expect(md).toContain("## Listings by week");
+    expect(md).toContain("- 2026-W36: 6 (5 trawled, 1 opted in)");
+    expect(md).toContain("## Which tool gets the credit, by week");
   });
 
   it("draws topics as a cloud instead of a bar pair, tail and all", () => {
@@ -214,7 +264,11 @@ describe("an empty site", () => {
     expect(d.use.all).toEqual([]);
     expect(d.use.n_listed).toBe(0);
     expect(d.totals.trawl).toEqual({});
+    expect(d.weeks).toEqual([]);
+    expect(d.listings_w).toEqual([]);
+    expect(d.granularity).toBe("month");
     expect(trendsMd(d)).toMatch(/# Trends/);
+    expect(trendsMd(d)).not.toContain("by week");
   });
 });
 

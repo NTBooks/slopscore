@@ -9,6 +9,8 @@
 //   - It runs once a day inside the 00:05 UTC tick, not per request. A full pass scans the corpus a handful of
 //     times (tens of thousands of row reads against a 5M/day free-tier allowance) and writes ~500 rows.
 //   - The page reads one day's rows behind lib/cache, so a visitor normally costs zero D1 reads.
+//   - `period` is '' for "as it stands", 'YYYY-MM' for the monthly series and 'YYYY-Www' for the weekly one
+//     (metrics `listings_w` and `tool_w`). The weekly series exists so a young site has a chart at all.
 //
 // Cohorts are the whole point of the dashboard. `trawl` repos were picked by the Cap'm out of GitHub search and
 // never asked to be here, so as a sample of "software whose author says in public that a model wrote it" they
@@ -17,12 +19,18 @@
 // the world, and the page says so.
 import type { Env } from "../env";
 import { cached, markDirty } from "../lib/cache";
-import { isoDate, now } from "../lib/time";
+import { isoDate, isoWeek, now, weekStart } from "../lib/time";
 
 /** How long snapshots are kept. Long enough to watch a season turn, short enough that the table stays small. */
 export const TRENDS_KEEP_DAYS = 180;
 /** Months of history in the derived series. Older than that is a different era of the tooling. */
 export const TRENDS_MONTHS = 12;
+/**
+ * Weeks of history in the same series at a finer grain. A site a month old has one monthly column and eleven
+ * blanks; the page draws weeks (metrics `listings_w` and `tool_w`, period `YYYY-Www`) until three months have
+ * anything in them, then switches. Twelve, not fifty-two: it exists to bridge the first quarter.
+ */
+export const TRENDS_WEEKS = 12;
 /** Values kept per facet per cohort. The tail is long, uninformative, and costs rows. */
 const TOP_N = 12;
 /** Tools tracked as their own band in the monthly series. More than this and the chart is a plate of spaghetti. */
@@ -159,6 +167,23 @@ export function monthsBack(at: number, n = TRENDS_MONTHS): string[] {
   return out;
 }
 
+/** The last `n` ISO weeks, oldest first, as YYYY-Www. Sibling of monthsBack for the weekly series. */
+export function weeksBack(at: number, n = TRENDS_WEEKS): string[] {
+  const monday = weekStart(isoWeek(at))!;
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) out.push(isoWeek(monday - i * 7 * 86400));
+  return out;
+}
+
+/**
+ * Which grain the page draws a time series at. Months once three of them have anything in, weeks until then;
+ * no weekly series at all (a snapshot from before it existed) means months, whatever they look like.
+ */
+export function pickGrain(months: { total: number }[], weeks: { total: number }[] | undefined): "month" | "week" {
+  if (!weeks?.length) return "month";
+  return months.filter((m) => m.total > 0).length >= 3 ? "month" : "week";
+}
+
 /** Top `n`, biggest first, ties broken by name so the snapshot is stable from one night to the next. */
 export function topN<T extends { key: string; n: number }>(rows: T[], n = TOP_N): T[] {
   return [...rows].sort((a, b) => b.n - a.n || a.key.localeCompare(b.key)).slice(0, n);
@@ -177,6 +202,7 @@ export async function snapshotTrends(env: Env, at = now()): Promise<{ date: stri
   const day = isoDate(at);
   const months = monthsBack(at);
   const since = months[0];
+  const weeks = weeksBack(at);
   const out: Out[] = [];
 
   // 1. The corpus as it stands: every charted facet for both cohorts, one grouped pass.
@@ -214,6 +240,7 @@ export async function snapshotTrends(env: Env, at = now()): Promise<{ date: stri
   // Every month on the axis, including the empty ones: a quiet month is a fact about the year, and without
   // a zero here the chart would silently close the gap and make the run look steadier than it was.
   for (const m of months) for (const c of COHORTS) counts.set(`${c}|listings|${m}|listed`, 0);
+  for (const w of weeks) for (const c of COHORTS) counts.set(`${c}|listings_w|${w}|listed`, 0);
   const add = (cohort: string, metric: string, period: string, key: string) => {
     const k = `${cohort}|${metric}|${period}|${key}`;
     counts.set(k, (counts.get(k) ?? 0) + 1);
@@ -233,6 +260,10 @@ export async function snapshotTrends(env: Env, at = now()): Promise<{ date: stri
     if (age) add(cohort, "age", "", age);
     const month = isoDate(r.listed_at).slice(0, 7);
     if (month && month >= since) add(cohort, "listings", month, "listed");
+    if (r.listed_at) {
+      const week = isoWeek(r.listed_at);
+      if (week >= weeks[0]) add(cohort, "listings_w", week, "listed");
+    }
   }
   for (const cohort of COHORTS) {
     const t = totals[cohort];
@@ -243,27 +274,35 @@ export async function snapshotTrends(env: Env, at = now()): Promise<{ date: stri
     ] as [string, number][]) out.push({ cohort, metric: "totals", period: "", key, n });
   }
 
-  // 3. Which tool gets the credit, month by month. Derived from listed_at, so the series is complete on day
-  //    one rather than starting the night this job first ran.
+  // 3. Which tool gets the credit, month by month and week by week. Derived from listed_at, so both series are
+  //    complete on day one rather than starting the night this job first ran. Grouped by day in SQL -- SQLite's
+  //    week formats are not ISO weeks, and D1's version is not pinned -- then folded into months and weeks here.
+  const monthSince = Date.UTC(Number(since.slice(0, 4)), Number(since.slice(5, 7)) - 1, 1) / 1000;
+  const weekSince = weekStart(weeks[0]) ?? monthSince;
   const series = await db.prepare(
     // repo_tags has a `source` column too, so every reference here stays qualified or aliased apart.
-    `SELECT r.source AS repo_source, strftime('%Y-%m', r.listed_at, 'unixepoch') AS period, rt.value AS value, count(*) AS n
+    `SELECT r.source AS repo_source, (r.listed_at / 86400) AS day, rt.value AS value, count(*) AS n
        FROM repo_tags rt JOIN repos r ON r.id = rt.repo_id
-      WHERE r.status = 'listed' AND rt.facet = 'built_with' AND r.listed_at IS NOT NULL
-      GROUP BY r.source, period, rt.value HAVING period >= ?`,
-  ).bind(since).all<{ repo_source: string; period: string; value: string; n: number }>();
+      WHERE r.status = 'listed' AND rt.facet = 'built_with' AND r.listed_at >= ?
+      GROUP BY r.source, day, rt.value`,
+  ).bind(Math.min(monthSince, weekSince)).all<{ repo_source: string; day: number; value: string; n: number }>();
   const seriesRows = series.results ?? [];
   const toolTotals = new Map<string, number>();
   for (const r of seriesRows) toolTotals.set(r.value, (toolTotals.get(r.value) ?? 0) + r.n);
   const tracked = new Set(topN([...toolTotals].map(([key, n]) => ({ key, n })), SERIES_TOOLS).map((t) => t.key));
   const folded = new Map<string, number>();
   for (const r of seriesRows) {
-    const k = `${cohortOf(r.repo_source)}|${r.period}|${tracked.has(r.value) ? r.value : "other"}`;
-    folded.set(k, (folded.get(k) ?? 0) + r.n);
+    const ts = r.day * 86400;
+    const cohort = cohortOf(r.repo_source);
+    const key = tracked.has(r.value) ? r.value : "other";
+    const month = isoDate(ts).slice(0, 7);
+    const week = isoWeek(ts);
+    if (month >= since) folded.set(`${cohort}|tool|${month}|${key}`, (folded.get(`${cohort}|tool|${month}|${key}`) ?? 0) + r.n);
+    if (week >= weeks[0]) folded.set(`${cohort}|tool_w|${week}|${key}`, (folded.get(`${cohort}|tool_w|${week}|${key}`) ?? 0) + r.n);
   }
   for (const [k, n] of folded) {
-    const [cohort, period, key] = k.split("|");
-    out.push({ cohort, metric: "tool", period, key, n });
+    const [cohort, metric, period, key] = k.split("|");
+    out.push({ cohort, metric, period, key, n });
   }
 
   // 4. The net: what the auto-trawl looked at over 30 days and threw back. Free, because the reasons are
@@ -326,10 +365,17 @@ export interface JudgedChart { all: Bar[]; listed: Bar[]; thrown_back: Bar[]; n_
 export interface TrendsView {
   date: string;
   months: string[];
+  /** The weekly axis. Empty on a snapshot written before the weekly series existed, and the page then draws months. */
+  weeks: string[];
+  /** Which axis the page draws the time series on (jobs/trends pickGrain). Both series are always in the JSON. */
+  granularity: "month" | "week";
   totals: Record<Cohort, Record<string, number>>;
   facets: FacetChart[];
   listings: { period: string; trawl: number; opted: number; total: number }[];
   tools: { keys: string[]; months: ToolMonth[] };
+  /** The same two series by ISO week. `tools_w.months` is a list of weeks; the shape is shared so one component draws both. */
+  listings_w: { period: string; trawl: number; opted: number; total: number }[];
+  tools_w: { keys: string[]; months: ToolMonth[] };
   /** GitHub topics, long tail included: the tag cloud. Drawn instead of a bar pair, never as well as one. */
   cloud: Record<Cohort, Bar[]>;
   /** What the judge said the software is for, over every candidate it saw. */
@@ -356,7 +402,7 @@ export const AGE_ORDER = ["under a week old", "under a month", "one to three mon
 
 /** The whole dashboard in one query against the newest snapshot, served from cache between data versions. */
 export async function loadTrends(db: D1Database): Promise<TrendsView | null> {
-  return cached(db, "trends", async () => {
+  return cached(db, "trends:v2", async () => {
     const latest = await db.prepare("SELECT max(date) AS d FROM trends_daily").first<{ d: string | null }>();
     if (!latest?.d) return null;
     const rows = (await db.prepare("SELECT cohort, metric, period, key, n, mean_score FROM trends_daily WHERE date = ?").bind(latest.d).all<TrendRow>()).results ?? [];
@@ -389,22 +435,28 @@ export function shapeTrends(date: string, rows: TrendRow[]): TrendsView {
     };
   };
 
-  const months = [...new Set(rows.filter((r) => r.period).map((r) => r.period))].sort();
+  // Two grains of the same two series. The axis for each is its own metrics' periods: a weekly period must never
+  // leak into the month axis, or the month chart grows a column called 2026-W37.
+  const periodsOf = (...metrics: string[]) => [...new Set(rows.filter((r) => r.period && metrics.includes(r.metric)).map((r) => r.period))].sort();
+  const months = periodsOf("listings", "tool");
+  const weeks = periodsOf("listings_w", "tool_w");
   const at = (cohort: string, metric: string, period: string, key?: string) =>
     rows.filter((r) => r.cohort === cohort && r.metric === metric && r.period === period && (key === undefined || r.key === key)).reduce((s, r) => s + r.n, 0);
-  const listings = months.map((period) => {
-    const trawl = at("trawl", "listings", period);
-    const opted = at("opted", "listings", period);
+  const listingsOn = (metric: string, axis: string[]) => axis.map((period) => {
+    const trawl = at("trawl", metric, period);
+    const opted = at("opted", metric, period);
     return { period, trawl, opted, total: trawl + opted };
   });
 
-  const toolRows = rows.filter((r) => r.metric === "tool");
+  // One key order for both grains, so a tool keeps its colour when the page switches from weeks to months.
+  const toolRows = rows.filter((r) => r.metric === "tool" || r.metric === "tool_w");
   const byTool = new Map<string, number>();
-  for (const r of toolRows) byTool.set(r.key, (byTool.get(r.key) ?? 0) + r.n);
+  for (const r of toolRows.filter((r) => r.metric === "tool")) byTool.set(r.key, (byTool.get(r.key) ?? 0) + r.n);
+  for (const r of toolRows.filter((r) => r.metric === "tool_w")) if (!byTool.has(r.key)) byTool.set(r.key, 0);
   // "other" is a bucket, not a tool: it sorts last however big it gets.
   const keys = [...byTool].sort((a, b) => (a[0] === "other" ? 1 : b[0] === "other" ? -1 : b[1] - a[1] || a[0].localeCompare(b[0]))).map(([k]) => k);
-  const toolMonths: ToolMonth[] = months.map((period) => {
-    const here = toolRows.filter((r) => r.period === period);
+  const toolsOn = (metric: string, axis: string[]): ToolMonth[] => axis.map((period) => {
+    const here = toolRows.filter((r) => r.metric === metric && r.period === period);
     const total = here.reduce((s, r) => s + r.n, 0);
     const parts = keys
       .map((key) => ({ key, n: here.filter((r) => r.key === key).reduce((s, r) => s + r.n, 0) }))
@@ -412,11 +464,14 @@ export function shapeTrends(date: string, rows: TrendRow[]): TrendsView {
       .map((p) => ({ ...p, share: total ? p.n / total : 0 }));
     return { period, total, parts };
   });
+  const listings = listingsOn("listings", months);
+  const listings_w = listingsOn("listings_w", weeks);
 
   return {
-    date, months, totals, facets, listings, cloud,
+    date, months, weeks, granularity: pickGrain(listings, listings_w), totals, facets, listings, listings_w, cloud,
     use: judged("use"), verdict: judged("verdict"),
-    tools: { keys, months: toolMonths },
+    tools: { keys, months: toolsOn("tool", months) },
+    tools_w: { keys, months: toolsOn("tool_w", weeks) },
     net: bars(pick("trawl", "net")),
     turned_away: bars(pick("opted", "turned-away")),
     stars: { trawl: inOrder(bars(pick("trawl", "stars")), STAR_ORDER), opted: inOrder(bars(pick("opted", "stars")), STAR_ORDER) },

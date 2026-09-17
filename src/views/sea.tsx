@@ -23,6 +23,8 @@ export interface SeaData {
   hauled: number;
   /** The day's budget is landed: she is tied up on purpose until the next UTC day. */
   spent: boolean;
+  /** How many searches the cursor runs over tonight: the static list plus the registry's (crawl_state trawl:nq). */
+  nq: number;
 }
 
 /** A course bowed away from the straight line, so seven tracks read as courses rather than a starburst. */
@@ -59,13 +61,14 @@ const Ship: FC<{ working: boolean }> = ({ working }) => (
 
 /** One ground index per search, in cursor order. The cursor counts searches and the chart draws grounds,
  *  and since the net covers a dozen tools those are no longer the same number -- so the client is handed
- *  the mapping rather than left to assume it. Constant: it changes only when the net does. */
-const GROUND_OF_QUERY = TRAWL_QUERIES.map((_, i) => groundOfQuery(i)).join(",");
+ *  the mapping rather than left to assume it. Per render, because the registry can lengthen the list
+ *  without a deploy; every index past the static searches is The New Waters. */
+const groundMap = (nq: number) => Array.from({ length: Math.max(nq, TRAWL_QUERIES.length) }, (_, i) => groundOfQuery(i, Math.max(nq, TRAWL_QUERIES.length))).join(",");
 
 export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
   const at = now();
   const v = voyage(at, sea.last_run);
-  const g = groundFor(sea.cursor + v.rolled);
+  const g = groundFor(sea.cursor + v.rolled, sea.nq);
   const said = voyageText(v, g, sea.spent);
   // Standing out she has only just left, and tied up she is home; either way the Trough is the honest
   // static answer. On the grounds and running home, the ground is. Laid up beats all of it: the leg is
@@ -81,7 +84,7 @@ export const SeaChart: FC<{ sea: SeaData }> = ({ sea }) => {
       data-now={at}
       data-last={idle ? "" : sea.last_run ?? ""}
       data-cursor={sea.cursor}
-      data-groundof={GROUND_OF_QUERY}
+      data-groundof={groundMap(sea.nq)}
     >
       <h3>The Slop Triangle <span class="muted">· <a href="/orphanage">the Cap'm</a></span></h3>
       <svg viewBox="0 0 280 180" class="chart-svg" role="img" aria-labelledby="seatitle seadesc">

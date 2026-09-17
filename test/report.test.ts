@@ -4,6 +4,7 @@ import {
   reportMd, shapeReport, teaserLine, weekOf, REPORT_WEEKDAY, type Move,
 } from "../src/jobs/report";
 import { METHOD_VERSION } from "../src/lib/method";
+import { STATIC_TOOLS } from "../src/lib/tools";
 import type { TrendRow } from "../src/jobs/trends";
 
 const at = (iso: string) => Date.parse(iso) / 1000;
@@ -180,6 +181,14 @@ describe("the bulletin", () => {
     expect(md).toContain("no pass rate to report");
     expect(md).not.toContain("NaN");
     expect(md).not.toContain("undefined");
+  });
+
+  it("freezes the tools the credit was counted over, defaulting to the frozen sixteen", () => {
+    expect(view.registry).toEqual(STATIC_TOOLS.map((t) => t.key));
+    expect(reportMd(view)).toContain("counted over the 16 tools the dictionary held that night");
+    const wider = shapeReport("2026-W37", "2026-09-14", "2026-09-07", snapshot(1), snapshot(0.5), [...STATIC_TOOLS.map((t) => t.key), "kiro"]);
+    expect(reportMd(wider)).toContain("17 tools");
+    expect(reportMd(wider)).toContain("kiro");
   });
 
   it("points every reader at the method before they quote anything", () => {

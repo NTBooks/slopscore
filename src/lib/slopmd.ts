@@ -92,14 +92,14 @@ export const slopSchema = z.object({
   contains: z
     .union([z.null(), z.string(), z.array(z.string())], { errorMap: () => ({ message: "contains must be a list (may be empty)" }) })
     .transform((v) => (v == null ? [] : Array.isArray(v) ? v : v.split(/[,\s]+/)))
-    .transform((arr) => arr.map(normalizeValue).filter(Boolean))
+    .transform((arr) => arr.map((x) => normalizeValue(x)).filter(Boolean))
     .refine((arr) => arr.every((x) => CONTAINS_ALL.includes(x as never)), {
       message: `contains has an unknown value; allowed: ${CONTAINS_ALL.join(", ")}`,
     }),
   category: z
     .union([z.string(), z.array(z.string())], { errorMap: () => ({ message: "category is required (list of at least one)" }) })
     .transform((v) => (Array.isArray(v) ? v : v.split(/[,\s]+/)))
-    .transform((arr) => arr.map(normalizeValue).filter(Boolean))
+    .transform((arr) => arr.map((x) => normalizeValue(x)).filter(Boolean))
     .refine((arr) => arr.length >= 1, { message: "category needs at least one value" })
     .refine((arr) => arr.every((x) => CATEGORY_ENUM.includes(x)), {
       message: `category has an unknown value; allowed: ${CATEGORY.join(", ")}`,
@@ -131,7 +131,10 @@ export const slopSchema = z.object({
 
 const KNOWN_KEYS = new Set(Object.keys(slopSchema.shape));
 
-export function parseSlopMd(text: string): ParseResult {
+/** Everything the parser needs from the tool registry: an alias map and the keys, both from lib/tools.ts. Absent = the frozen list only. */
+export interface ParseOpts { aliases?: Record<string, string>; builtWith?: readonly string[] }
+
+export function parseSlopMd(text: string, opts: ParseOpts = {}): ParseResult {
   const { yaml, body } = splitFrontmatter(text);
   const warnings: string[] = [];
   if (yaml == null) {
@@ -183,20 +186,22 @@ export function parseSlopMd(text: string): ParseResult {
   if (body.length > MAX_BODY) warnings.push(`body truncated to ${MAX_BODY} chars`);
 
   const meta: SlopMeta = { ...d, spec: d.spec ?? "", x } as SlopMeta;
-  const tags = tagsFromMeta(meta, warnings);
+  // A registry alias folds onto its key here, after the static normalisation the schema already did.
+  if (opts.aliases && Array.isArray(meta.built_with)) meta.built_with = [...new Set(meta.built_with.map((v) => opts.aliases![v] ?? v))];
+  const tags = tagsFromMeta(meta, warnings, opts);
   return { ok: errors.length === 0, legacy, errors, warnings, meta, body: body.slice(0, MAX_BODY), tags, raw: obj };
 }
 
-export function tagsFromMeta(meta: SlopMeta, warnings: string[] = []): TagRow[] {
+export function tagsFromMeta(meta: SlopMeta, warnings: string[] = [], opts: ParseOpts = {}): TagRow[] {
   const rows: TagRow[] = [];
   const seen = new Set<string>();
   const push = (facet: string, value: string) => {
-    const v = normalizeValue(value);
+    const v = normalizeValue(value, facet === "built_with" ? opts.aliases : undefined);
     if (!v) return;
     const key = `${facet}:${v}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const recognized = isRecognized(facet, v);
+    const recognized = isRecognized(facet, v, opts.builtWith);
     if (!recognized && CONTROLLED[facet]) warnings.push(`unrecognized ${facet} value "${v}" kept as a free tag`);
     rows.push({ facet, value: v, source: "declared", recognized });
   };

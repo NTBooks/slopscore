@@ -12,6 +12,7 @@ import { renderMarkdown, sanitizeReadmeHtml, stripHtml } from "./markdown";
 import { normalizeValue } from "./vocab";
 import { now } from "./time";
 import { denylistGate, loadDenyRows } from "./denylist";
+import { aliasMap, allTools, builtWithValues, loadToolRows } from "./tools";
 import { riskScore } from "./risk";
 import { findSecrets, safeBrowsing, llamaGuard, llamaGuardOpenRouter, judgeGuard, visionCheck, visionCheckOpenRouter, budgetAllows, spendNeurons, estimateGuardNeurons, VISION_NEURONS, VISION_HARD } from "./content";
 import { bump } from "../jobs/stats";
@@ -100,7 +101,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const mdChanged = !existing || existing.md_sha !== md_sha;
 
   // ---- 3. everything else GitHub knows (parallel, ETag where we have one) ----
-  const [langs, readme, contents, release, community, contributors, ownerUser, commitsRes, denyRows] = await Promise.all([
+  const [langs, readme, contents, release, community, contributors, ownerUser, commitsRes, denyRows, toolRows] = await Promise.all([
     gh.languages(g.owner.login, g.name),
     gh.readmeHtml(g.owner.login, g.name, existing?.etag_readme),
     gh.contents(g.owner.login, g.name, existing?.etag_contents),
@@ -110,7 +111,11 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
     gh.get<GhUser>(`/users/${g.owner.login}`),
     gh.get<unknown[]>(`/repos/${g.owner.login}/${g.name}/commits?per_page=1`),
     loadDenyRows(db),
+    loadToolRows(db),
   ]);
+  // The registry: a tool a moderator approved folds onto its key and counts as recognised, like a frozen one.
+  const registryTools = allTools(toolRows);
+  const parseOpts = { aliases: aliasMap(registryTools), builtWith: builtWithValues(registryTools) };
   const languages = langs.status === 200 ? langs.data : null;
   const readmeRaw = readme.status === 200 ? readme.data : readme.status === 304 ? existing?.readme_html ?? null : null;
   const readmeHtml = readmeRaw ? sanitizeReadmeHtml(readmeRaw, { owner: g.owner.login, repo: g.name, branch: g.default_branch }).slice(0, 50_000) : null;
@@ -122,7 +127,7 @@ export async function scanRepo(db: D1Database, env: Env, gh: GitHub, owner: stri
   const commitCount = commitsRes.status === 200 && "headers" in commitsRes && commitsRes.data ? linkLast(commitsRes.headers.get("link")) ?? commitsRes.data.length : null;
 
   // ---- gate 2: contract (parse first; gate 0 needs the tags) ----
-  const parsed = parseSlopMd(mdText);
+  const parsed = parseSlopMd(mdText, parseOpts);
   const meta = parsed.meta;
   const contractGate: GateResult = { gate: "contract", ok: parsed.ok, reasons: [...parsed.errors], notes: parsed.warnings };
   // A v1 file is grandfathered when the repo has ever been listed: it stays listed and the page shows the nudge. A brand-new v1 listing is asked for v2.

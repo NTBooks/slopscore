@@ -1,5 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { CHANGES, LISTABLE_CODES, METHOD_FROZEN, METHOD_VERSION, methodJson, methodMd } from "../src/lib/method";
+import { CHANGES, LISTABLE_CODES, METHOD_FROZEN, METHOD_VERSION, methodJson, methodMd, toolAdditions } from "../src/lib/method";
+import { STATIC_TOOLS, type ToolRow } from "../src/lib/tools";
+
+const KIRO: ToolRow = { key: "kiro", name: "Kiro", aliases: ["kiro"], claim_topics: ["built-with-kiro"], topics: ["kiro"], phrases: [], note: "Amazon's agentic IDE.", approved_by: "NTBooks", approved_at: Date.parse("2026-09-20T10:00:00Z") / 1000, retired_at: null };
+const META: ToolRow = { key: "muse-code", name: "Muse Code", aliases: ["meta ai studio"], claim_topics: [], topics: ["meta-ai"], phrases: [], note: null, approved_by: "NTBooks", approved_at: Date.parse("2026-09-21T10:00:00Z") / 1000, retired_at: Date.parse("2026-09-22T10:00:00Z") / 1000 };
+
+describe("the tool dictionary on the method page", () => {
+  it("is frozen at v2's sixteen and says so, with the rule that it grows by approval", () => {
+    expect(methodJson().tools.frozen).toEqual(STATIC_TOOLS.map((t) => t.key));
+    expect(methodJson().tools.added).toEqual([]);
+    expect(methodMd()).toContain("## The tools");
+    expect(methodMd()).toContain("None yet. The scout proposes");
+    expect(CHANGES[0].version).toBe(3);
+    expect(CHANGES[0].what).toMatch(/does not bump the version/);
+  });
+  it("lists every addition with its date, who approved it, whether it widened a frozen tool, and a retirement", () => {
+    const md = methodMd([META, KIRO]);
+    expect(md).toContain("- **kiro** (Kiro) · 2026-09-20 · approved by NTBooks — Amazon's agentic IDE.");
+    expect(md).toContain("- **muse-code** (Muse Code) · 2026-09-21 · approved by NTBooks · widens a frozen tool · retired 2026-09-22");
+    expect(md.indexOf("**kiro**")).toBeLessThan(md.indexOf("**muse-code** (Muse Code) · 2026-09-21"));
+    expect(md).toContain("**The New Waters** — repos that name a tool the scout found and a moderator approved. Searches: `kiro`");
+    const j = methodJson([META, KIRO]);
+    expect(j.tools.added.map((a) => a.key)).toEqual(["kiro"]);
+    expect(j.tools.retired.map((a) => a.key)).toEqual(["muse-code"]);
+    expect(toolAdditions([KIRO])[0]).toMatchObject({ extends: false, approved_at: "2026-09-20" });
+  });
+});
+
 import { MAX_STARS, MIN_STARS, PERMISSIVE, PUSHED_WITHIN_DAYS, TRAWL_GROUNDS } from "../src/lib/virtual";
 import { JUDGE_CODES, judgeKeeps, type JudgeCode } from "../src/lib/judge";
 

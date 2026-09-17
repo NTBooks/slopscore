@@ -104,6 +104,13 @@ describe("the page", () => {
     }
   });
 
+  it("renders a bulletin written before the registry existed, which has no tool list", () => {
+    const { registry, ...older } = view;
+    const out = html(ReportPage({ row: rowOf(older as typeof view), archive: [], list: null }));
+    expect(out).toContain('class="masthead"');
+    expect(readView(rowOf(older as typeof view))).not.toBeNull();
+  });
+
   it("names the week for people", () => {
     expect(weekText("2026-W37")).toBe("Week 37 of 2026 · 7 to 13 September");
     expect(weekText("2026-W40")).toBe("Week 40 of 2026 · 28 September to 4 October");

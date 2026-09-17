@@ -36,6 +36,7 @@ import { isoDate, isoWeek, now } from "../lib/time";
 import { METHOD_VERSION, LISTABLE_CODES } from "../lib/method";
 import { TRAWL_GROUNDS } from "../lib/virtual";
 import { COHORT_LABEL, type Cohort, type TrendRow } from "./trends";
+import { STATIC_TOOLS, allTools, loadToolRows } from "../lib/tools";
 
 /** UTC weekday the bulletin goes out. 1 = Monday, so it covers the week that ended the night before. */
 export const REPORT_WEEKDAY = 1;
@@ -131,10 +132,12 @@ export interface ReportView {
   tools: Section;
   languages: Section;
   net: Section;
+  /** Every tool key the credit was counted over that night, frozen with the numbers. Absent on bulletins written before v3. */
+  registry?: string[];
 }
 
 /** Pure: two days of snapshot rows in, a report out. The SQL around it is deliberately dumb. */
-export function shapeReport(slug: string, date: string, since: string | null, nowRows: TrendRow[], prevRows: TrendRow[]): ReportView {
+export function shapeReport(slug: string, date: string, since: string | null, nowRows: TrendRow[], prevRows: TrendRow[], registry: string[] = STATIC_TOOLS.map((t) => t.key)): ReportView {
   const first = since == null || prevRows.length === 0;
   const prev = first ? [] : prevRows;
   const pick = (rows: TrendRow[], cohort: string, metric: string, period = "") =>
@@ -183,6 +186,7 @@ export function shapeReport(slug: string, date: string, since: string | null, no
     languages: section("language"),
     // No opted-in equivalent exists: only the trawl evaluates and rejects, so this one never falls back.
     net: over("trawl", "net"),
+    registry,
   };
 }
 
@@ -306,6 +310,7 @@ export function reportMd(r: ReportView): string {
   push(
     `- Counted under method v${r.method}, frozen and versioned at [/method](/method). When a rule changes the version goes up and the change is dated; nothing is edited in place.`,
     "- This site measures software whose author **says in public** that an AI tool wrote it. It does not measure AI-written software, and no number here can.",
+    ...(r.registry ? [`- Tool credit was counted over the ${r.registry.length} tools the dictionary held that night: ${r.registry.join(", ")}. A tool not on that list was not looked for. [Which tools were added, and when](/method).`] : []),
     `- The numbers behind every sentence above: [\`/report/${r.slug}.json\`](/report/${r.slug}.json), frozen with the bulletin and still there after the nightly snapshot they came from has been pruned.`,
     "- Spotted an error? [Say so](/contact). Corrections run in the next bulletin; nothing is edited in quietly.",
   );
@@ -343,7 +348,7 @@ export async function writeReport(env: Env, at = now(), opts: { force?: boolean 
     .first<{ d: string | null }>();
   const since = before?.d && before.d !== latest.d ? before.d : null;
 
-  const view = shapeReport(slug, latest.d, since, await snapshotRows(db, latest.d), since ? await snapshotRows(db, since) : []);
+  const view = shapeReport(slug, latest.d, since, await snapshotRows(db, latest.d), since ? await snapshotRows(db, since) : [], allTools(await loadToolRows(db)).map((t) => t.key));
   const body = reportMd(view);
   await db.prepare(
     "INSERT INTO bulletins (slug, at, covers_from, covers_to, method, title, body, data) VALUES (?,?,?,?,?,?,?,?)" +

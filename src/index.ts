@@ -29,6 +29,7 @@ import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlReque
 import { runCritics } from "./jobs/critics";
 import { CRITIC_SLOT, criticForSlot, inFrenzy } from "./lib/critics";
 import { snapshotTrends } from "./jobs/trends";
+import { scout } from "./jobs/scout";
 import { newsletter, writeReport } from "./jobs/report";
 import { recordCron, noteRun, everySeconds, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
@@ -244,6 +245,8 @@ async function dailyRound(env: AppEnv["Bindings"]): Promise<Record<string, unkno
     // Off, this is the whole of it, exactly as it was before the rota existed.
     critics: flagOn("frenzy") ? "per-tick" : await step(env, "critics", () => runCritics(env)),
     trends: await step(env, "trends", () => snapshotTrends(env)),
+    // The tool names the trawl met and did not know, counted into candidates for /mod. No model, one mail a day at most.
+    scout: await step(env, "scout", () => scout(env)),
     // After the count, never before it: the bulletin is written from the snapshot this round just took.
     report: await step(env, "report", () => writeReport(env)),
     tripwire: await step(env, "tripwire", () => sweepTripwire(env.DB).then(() => "swept")),
@@ -292,6 +295,8 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "critics": result = await runCritics(env, { n: opts.n, dry: opts.dry }); break;
       // manual: recount the dashboard now rather than waiting for 00:05. Idempotent: it replaces today's rows.
       case "trends": result = await snapshotTrends(env); break;
+      // manual: count the sightings into candidates now. Idempotent: it refreshes counts and never touches a status.
+      case "scout": result = await scout(env); break;
       // manual: write the week's bulletin now. &force=1 overwrites the week rather than declining it, which is
       // how the first one gets published on a day that is not a Monday.
       case "report": result = await writeReport(env, undefined, { force: Boolean(opts.force) }); break;

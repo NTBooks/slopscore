@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { GROUNDS, LEGS, TROUGH, VOYAGE_PERIOD, groundFor, rolledCursor, voyage, voyageText, type Leg } from "../src/lib/sea";
-import { TRAWL_GROUNDS, TRAWL_QUERIES, groundOfQuery } from "../src/lib/virtual";
+import { NEW_WATERS, TRAWL_GROUNDS, TRAWL_QUERIES, groundOfQuery, trawlQueryList } from "../src/lib/virtual";
+import type { ToolRow } from "../src/lib/tools";
+
+/** A registry tool, the way the scout's approval writes one. Its searches sit after every static one. */
+const KIRO: ToolRow = { key: "kiro", name: "Kiro", aliases: ["kiro"], claim_topics: ["built-with-kiro"], topics: ["kiro"], phrases: ['"built with kiro" in:description'], note: null, approved_by: "NTBooks", approved_at: 1, retired_at: null };
 
 const SAILED = Date.parse("2026-09-12T00:05:00Z") / 1000;
 const into = (frac: number) => SAILED + Math.round(frac * VOYAGE_PERIOD);
@@ -23,8 +27,15 @@ describe("the Slop Triangle is the water the Cap'm actually works", () => {
     }
     expect(new Set(TRAWL_QUERIES).size).toBe(TRAWL_QUERIES.length);
   });
-  it("leaves no ground with nothing to fish in it", () => {
-    for (const g of TRAWL_GROUNDS) expect(g.queries.length).toBeGreaterThan(0);
+  it("leaves no ground with nothing to fish in it, except the one the registry fills", () => {
+    for (const g of TRAWL_GROUNDS.filter((_, i) => i !== NEW_WATERS)) expect(g.queries.length).toBeGreaterThan(0);
+    expect(TRAWL_GROUNDS[NEW_WATERS].queries).toEqual([]);
+    // Approving a tool appends its searches after every static one, so no static index ever moves.
+    const withKiro = trawlQueryList([KIRO]);
+    expect(withKiro.slice(0, TRAWL_QUERIES.length)).toEqual(TRAWL_QUERIES);
+    expect(withKiro.slice(TRAWL_QUERIES.length)).toEqual(["topic:built-with-kiro", '"built with kiro" in:description']);
+    for (let i = TRAWL_QUERIES.length; i < withKiro.length; i++) expect(groundOfQuery(i, withKiro.length)).toBe(NEW_WATERS);
+    expect(trawlQueryList([])).toEqual(TRAWL_QUERIES);
   });
   it("gives every ground a name of its own and a blurb saying which query it is", () => {
     expect(new Set(GROUNDS.map((g) => g.name)).size).toBe(GROUNDS.length);
@@ -33,13 +44,19 @@ describe("the Slop Triangle is the water the Cap'm actually works", () => {
   it("wraps the cursor onto a ground in either direction", () => {
     const n = TRAWL_QUERIES.length;
     expect(groundFor(0)).toBe(groundFor(n));
-    expect(groundFor(-1)).toBe(GROUNDS[GROUNDS.length - 1]);
+    // -1 wraps onto the last static search, which is the Deeps; with a registry tool aboard it is The New Waters.
+    expect(groundFor(-1)).toBe(GROUNDS[NEW_WATERS - 1]);
+    expect(groundFor(-1, trawlQueryList([KIRO]).length)).toBe(GROUNDS[NEW_WATERS]);
     expect(groundFor(NaN)).toBe(GROUNDS[0]);
     for (let i = -n; i < 3 * n; i++) expect(GROUNDS).toContain(groundFor(i));
   });
-  it("walks every ground as the cursor counts up through a full cycle", () => {
+  it("walks every ground as the cursor counts up through a full cycle, the New Waters only once a tool is approved", () => {
     const visited = new Set<string>();
     for (let i = 0; i < TRAWL_QUERIES.length; i++) visited.add(groundFor(i).name);
+    expect(visited.size).toBe(GROUNDS.length - 1);
+    expect(visited.has("The New Waters")).toBe(false);
+    const total = trawlQueryList([KIRO]).length;
+    for (let i = 0; i < total; i++) visited.add(groundFor(i, total).name);
     expect(visited.size).toBe(GROUNDS.length);
   });
   it("keeps every ground on the chart", () => {

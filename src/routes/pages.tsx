@@ -22,7 +22,8 @@ import { llamaGuard, budgetAllows, spendNeurons } from "../lib/content";
 import { respond, wantedFormat } from "../lib/negotiate";
 import { parseQuery } from "../lib/searchquery";
 import { repoJsonLd } from "../lib/seo";
-import { trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
+import { TRAWL_QUERIES, trawlIndexed, trawlOwnerIndexed } from "../lib/virtual";
+import { loadToolRows } from "../lib/tools";
 import { loadTrends } from "../jobs/trends";
 import { listReports, loadReport, newsletter, reportTeaser, teaserLine } from "../jobs/report";
 import { ReportPage, Subscribe } from "../views/report";
@@ -115,7 +116,7 @@ function chatFor(c: Context<AppEnv>, rail: RailData) {
  *  own clock, because this whole object is cached and "in 7 minutes" would not survive the caching. */
 async function seaData(db: D1Database): Promise<RailData["sea"]> {
   const [state, counts] = await Promise.all([
-    db.prepare("SELECT key, value FROM crawl_state WHERE key IN ('trawl:last_run', 'trawl:cursor', 'trawl:done_day')").all<{ key: string; value: string }>(),
+    db.prepare("SELECT key, value FROM crawl_state WHERE key IN ('trawl:last_run', 'trawl:cursor', 'trawl:done_day', 'trawl:nq')").all<{ key: string; value: string }>(),
     db.prepare(
       `SELECT (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'discovered') AS lane,
               (SELECT count(*) FROM repos WHERE source = 'trawl' AND status = 'listed')     AS hauled`,
@@ -126,6 +127,7 @@ async function seaData(db: D1Database): Promise<RailData["sea"]> {
   return {
     last_run: Number.isFinite(last) && last > 0 ? last : null,
     cursor: Number(st.get("trawl:cursor")) || 0,
+    nq: Number(st.get("trawl:nq")) || TRAWL_QUERIES.length,
     lane: counts?.lane ?? 0,
     hauled: counts?.hauled ?? 0,
     // trawlDaily writes the day it landed the last of the budget; today means she is tied up on purpose.
@@ -703,11 +705,14 @@ pages.get("/trends", async (c) => {
  * Static: no database, no snapshot, no clock. Everything it states is either prose or read off the constants
  * the crawler actually filters on, so a loosened filter rewrites this page rather than leaving it lying.
  */
-pages.get("/method", (c) => {
+pages.get("/method", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
-  const md = methodMd();
+  // The one thing on this page that is not a constant: the tools a moderator approved. Cached between data
+  // versions, and an approval bumps the version (logAction marks it dirty), so the line appears at once.
+  const rows = await cached(c.env.DB, "method:tools", () => loadToolRows(c.env.DB));
+  const md = methodMd(rows);
   return respond(c, { md }, {
-    json: () => methodJson(),
+    json: () => methodJson(rows),
     md: (d) => d.md,
     html: (d) => (
       <Layout meta={{ title: `How we count — method v${METHOD_VERSION} — SlopScore`, description: "The rules behind every number on SlopScore: what the trawl samples, what it filters out, what the judge decides, what is counted and what is judged, and the biases to read before quoting any of it. Versioned and frozen." }} user={user} url={url}>

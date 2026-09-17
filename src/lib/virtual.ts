@@ -4,6 +4,7 @@
 import type { GhRepo } from "./github";
 import { denylistGate, type DenyRow } from "./denylist";
 import { SPEC_VERSION, SPEC_URL } from "./vocab";
+import { STATIC_TOOLS, BUILT_WITH_RE, claimRe, extraQueries, signalTools, topicMap, vibeTopics, type Tool, type ToolRow } from "./tools";
 import { isoDate } from "./time";
 import { markDirty } from "./cache";
 
@@ -49,26 +50,25 @@ const FOR_VIBE_CODING = /\bvibe[- ]?coding\b/i;
 const VIBE_CODED = /\bvibe[- ]?coded\b/i;
 export const PUSHED_WITHIN_DAYS = 90;
 
+/**
+ * Everything the sieve reads off the tool registry, built once so a run never rebuilds a regex per README.
+ * STATIC is the method as frozen; the trawl builds one from lib/tools.ts allTools(rows) each run, and every
+ * function below takes it as its last argument with STATIC as the default, so nothing that never heard of
+ * the registry changes behaviour.
+ */
+export interface Registry { tools: Tool[]; vibeTopics: string[]; topicTool: Record<string, string>; signals: [RegExp, string][]; claim: RegExp }
+export function registry(tools: Tool[]): Registry {
+  return { tools, vibeTopics: vibeTopics(tools), topicTool: topicMap(tools), signals: signalTools(tools), claim: claimRe(tools) };
+}
+export const STATIC: Registry = registry(STATIC_TOOLS);
+
 /** Topics that are the owner's own past-tense claim that the repo was made by AI. "vibe-coding" is not one: it mostly marks tools for vibe coders. */
-export const VIBE_TOPICS = [
-  "vibe-coded", "vibecoded", "ai-generated", "ai-written", "llm-generated",
-  "built-with-claude", "built-with-claude-code", "built-with-cursor", "cursor-ai",
-  "built-with-chatgpt", "built-with-gpt", "built-with-copilot", "github-copilot",
-  "built-with-gemini", "gemini-cli", "built-with-v0", "built-with-bolt", "built-with-lovable",
-  "windsurf", "aider", "cline", "roo-code", "built-with-roo",
-  "muse-code", "muse-spark", "meta-muse", "built-with-muse", "built-with-muse-code",
-];
+export const VIBE_TOPICS = STATIC.vibeTopics;
 
-/** Named so the signal on the listing says which tool, not just "an AI". The tools match CLAIM_RE's list. */
-const TOOLS: [RegExp, string][] = [
-  [/\bclaude(\s+code)?\b/i, "Claude"], [/\bcursor\b/i, "Cursor"], [/\b(github\s+)?copilot\b/i, "Copilot"],
-  [/\bchatgpt\b|\bgpt-?\d\b/i, "ChatGPT"], [/\bcodex\b/i, "Codex"], [/\bgemini(\s+cli)?\b/i, "Gemini"],
-  [/\bwindsurf\b/i, "Windsurf"], [/\baider\b/i, "Aider"], [/\bcline\b/i, "Cline"], [/\broo(\s+code)?\b/i, "Roo Code"],
-  [/\bmuse(\s+(code|spark))?\b|\bmeta\s+(ai|muse)\b/i, "Muse Code"],
-  [/\blovable\b/i, "Lovable"], [/\bbolt(\.new)?\b/i, "Bolt"], [/\bv0\b/i, "v0"], [/\breplit\b/i, "Replit"],
-];
+/** Named so the signal on the listing says which tool, not just "an AI". Derived from the registry's aliases. */
+const TOOLS = STATIC.signals;
 
-const BUILT_WITH_RE = /\b(?:built|made|written|coded|created|generated|developed)\s+(?:entirely\s+|mostly\s+|completely\s+|fully\s+|100%\s+|almost entirely\s+)?(?:with|using|by)\s+([a-z0-9.\- ]{2,20})/i;
+export { BUILT_WITH_RE };
 
 const DESCRIPTION_SIGNALS: [RegExp, string][] = [
   [VIBE_CODED, 'says "vibe coded" in its description'],
@@ -127,15 +127,32 @@ export const TRAWL_GROUNDS: { name: string; blurb: string; queries: string[] }[]
     blurb: "repos that say a machine wrote them, and the builder tools: v0, Bolt, Lovable, Windsurf",
     queries: ["topic:ai-generated", "topic:built-with-v0", "topic:built-with-lovable", '"ai-generated" in:description'],
   },
+  {
+    // The registry's ground. Its searches are not here: they come from tool_registry (lib/tools.ts extraQueries)
+    // and are appended after every static query by trawlQueryList(), so approving a tool never shifts the
+    // index the cursor and the per-query state are keyed on. Empty in code, and the only ground that may be.
+    name: "The New Waters",
+    blurb: "repos that name a tool the scout found and a moderator approved",
+    queries: [],
+  },
 ];
 
-/** Every search, in ground order. trawl:cursor is an index into this. */
+/** The ground whose searches live in the registry rather than in code. */
+export const NEW_WATERS = TRAWL_GROUNDS.length - 1;
+
+/** Every static search, in ground order. trawl:cursor is an index into the runtime list (trawlQueryList), whose head is exactly this. */
 export const TRAWL_QUERIES: string[] = TRAWL_GROUNDS.flatMap((g) => g.queries);
 
-/** Which ground a query belongs to. Wraps, because the cursor only ever counts up. */
-export function groundOfQuery(i: number): number {
-  const n = TRAWL_QUERIES.length;
+/** The searches a run works: every static query, then the registry's, in approval order. */
+export function trawlQueryList(rows: ToolRow[] = []): string[] {
+  return [...TRAWL_QUERIES, ...extraQueries(rows)];
+}
+
+/** Which ground a query belongs to. Wraps on the runtime total, because the cursor only ever counts up; anything past the static list is The New Waters. */
+export function groundOfQuery(i: number, total = TRAWL_QUERIES.length): number {
+  const n = Math.max(1, total);
   const idx = (((Math.floor(Number(i) || 0) % n) + n) % n);
+  if (idx >= TRAWL_QUERIES.length) return NEW_WATERS;
   let seen = 0;
   for (let g = 0; g < TRAWL_GROUNDS.length; g++) {
     seen += TRAWL_GROUNDS[g].queries.length;
@@ -153,9 +170,9 @@ export const QUERIES_PER_RUN = 9;
 
 /** The same searches without a pushed clause: the auto-trawl supplies its own date window, because asking
  *  by date is what stops it re-reading water it has already worked (src/jobs/trawl.ts). */
-export function trawlQueriesUnwindowed(): string[] {
+export function trawlQueriesUnwindowed(rows: ToolRow[] = []): string[] {
   const base = `fork:false archived:false template:false is:public stars:${MIN_STARS}..${MAX_STARS}`;
-  return TRAWL_QUERIES.map((q) => `${q} ${base}`);
+  return trawlQueryList(rows).map((q) => `${q} ${base}`);
 }
 
 /**
@@ -168,44 +185,44 @@ export function trawlQueriesUnwindowed(): string[] {
  *
  * Returns why it was thrown back, or null to look closer.
  */
-export function cheapReject(g: GhRepo): string | null {
+export function cheapReject(g: GhRepo, reg: Registry = STATIC): string | null {
   const text = `${g.name} ${g.description ?? ""}`;
   if (NOT_SOFTWARE.test(text)) return "a list, guide or prompt pack about vibe coding, not vibe-coded software";
   const topics = (g.topics ?? []).map((t) => t.toLowerCase());
-  const claimsPastTense = VIBE_CODED.test(text) || topics.some((t) => VIBE_TOPICS.includes(t));
+  const claimsPastTense = VIBE_CODED.test(text) || topics.some((t) => reg.vibeTopics.includes(t));
   if (FOR_VIBE_CODING.test(text) && !claimsPastTense) return "a tool for vibe coding, not something vibe coded";
   return null;
 }
 
 /** GitHub repository-search queries, rotated one start position per day. */
-export function trawlQueries(at: number): string[] {
+export function trawlQueries(at: number, rows: ToolRow[] = []): string[] {
   const since = isoDate(at - PUSHED_WITHIN_DAYS * 86400);
   const base = `fork:false archived:false template:false is:public pushed:>=${since} stars:${MIN_STARS}..${MAX_STARS}`;
-  return TRAWL_QUERIES.map((q) => `${q} ${base}`);
+  return trawlQueryList(rows).map((q) => `${q} ${base}`);
 }
 
 /** Why the Cap'm thinks this repo is proud vibe slop, in the owner's own words. Empty = no signal, don't pick. */
-export function trawlSignals(g: GhRepo): string[] {
+export function trawlSignals(g: GhRepo, reg: Registry = STATIC): string[] {
   const out: string[] = [];
-  for (const t of g.topics ?? []) if (VIBE_TOPICS.includes(t.toLowerCase())) out.push(`tagged ${t.toLowerCase()}`);
+  for (const t of g.topics ?? []) if (reg.vibeTopics.includes(t.toLowerCase())) out.push(`tagged ${t.toLowerCase()}`);
   for (const [re, label] of DESCRIPTION_SIGNALS) if (re.test(g.description ?? "")) out.push(label);
   // "built with <something>" where the something is a tool we know. Named rather than generic, because a
   // listing that says "built with Cursor" is telling the reader more than "made by an AI" does.
   const built = BUILT_WITH_RE.exec(g.description ?? "");
   if (built) {
-    const tool = TOOLS.find(([re]) => re.test(built[1]));
+    const tool = reg.signals.find(([re]) => re.test(built[1]));
     if (tool) out.push(`says it was built with ${tool[1]} in its description`);
   }
   return out;
 }
 
-/** The owner's own past-tense claim that an AI tool wrote this project. Matched against the description and the README. */
-export const CLAIM_RE = /\bvibe[- ]?coded\b|\b(built|made|written|coded|created|generated|developed)\s+(entirely\s+|mostly\s+|completely\s+|fully\s+|100%\s+|almost entirely\s+)?(with|using|by)\s+(claude(\s+code)?|cursor|copilot|github copilot|codex|gemini( cli)?|windsurf|aider|cline|roo( code)?|muse( code| spark)?|meta ai|meta muse|lovable|bolt(\.new)?|v0|replit|chatgpt|gpt-?\d|an? (llm|ai)|ai( agents?)?|llms)\b|\b100%\s+ai[- ]generated\b|\bentirely ai[- ]generated\b/i;
+/** The owner's own past-tense claim that an AI tool wrote this project, over the tools the method froze. The trawl uses its run's registry instead. */
+export const CLAIM_RE = STATIC.claim;
 
 /** The sentence around the claim, trimmed and stripped of markup: the listing quotes this, so it is the owner's words, not ours. */
-export function claimSnippet(text: string): string | null {
+export function claimSnippet(text: string, reg: Registry = STATIC): string | null {
   const flat = String(text ?? "").replace(/```[\s\S]*?```/g, " ").replace(/[`*_>#|\[\]]/g, " ").replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ");
-  const m = CLAIM_RE.exec(flat);
+  const m = reg.claim.exec(flat);
   if (!m) return null;
   const start = flat.lastIndexOf(".", m.index) + 1;
   const dot = flat.indexOf(".", m.index + m[0].length);
@@ -226,7 +243,8 @@ export interface Pick { repo: GhRepo; signals: string[]; reason: string; virtual
 export interface Skip { full_name: string; why: string; /** true = remember in trawl_skipped (never look again) */ record: boolean }
 
 /** Pure filter over one page of search results. `known` holds lowercased full names already in repos or trawl_skipped. */
-export function pickCandidates(items: GhRepo[], o: { known: Set<string>; deny: DenyRow[]; at: number }): { picks: Pick[]; skipped: Skip[] } {
+export function pickCandidates(items: GhRepo[], o: { known: Set<string>; deny: DenyRow[]; at: number; reg?: Registry }): { picks: Pick[]; skipped: Skip[] } {
+  const reg = o.reg ?? STATIC;
   const picks: Pick[] = [];
   const skipped: Skip[] = [];
   const skip = (g: GhRepo, why: string, record = false) => skipped.push({ full_name: g.full_name.toLowerCase(), why, record });
@@ -243,11 +261,11 @@ export function pickCandidates(items: GhRepo[], o: { known: Set<string>; deny: D
     if (FOR_VIBE_CODING.test(g.description ?? "") && !VIBE_CODED.test(g.description ?? "")) { skip(g, "a tool for vibe coding, not vibe-coded software"); continue; }
     const pushed = Date.parse(g.pushed_at) / 1000;
     if (!pushed || pushed < o.at - PUSHED_WITHIN_DAYS * 86400) { skip(g, `not pushed in ${PUSHED_WITHIN_DAYS} days`); continue; }
-    const signals = trawlSignals(g);
+    const signals = trawlSignals(g, reg);
     if (!signals.length) { skip(g, "no vibe-coded signal in topics or description"); continue; }
     const deny = denylistGate([g.name, g.description ?? "", ...(g.topics ?? [])].join(" \n "), "", o.deny);
     if (deny.reject.length) { skip(g, `denylist: ${deny.reject[0]}`, true); continue; }
-    picks.push({ repo: g, signals, reason: trawlReason(g, signals, o.at), virtualMd: buildVirtualMd(g, signals) });
+    picks.push({ repo: g, signals, reason: trawlReason(g, signals, o.at), virtualMd: buildVirtualMd(g, signals, undefined, reg) });
   }
   return { picks, skipped };
 }
@@ -275,24 +293,16 @@ const TOPIC_CATEGORY: Record<string, string> = {
   music: "media", video: "media", audio: "media", art: "art", "generative-art": "art", social: "social", toy: "toy",
 };
 
-const TOPIC_TOOL: Record<string, string> = {
-  "claude-code": "claude-code", "built-with-claude-code": "claude-code", claude: "claude", "built-with-claude": "claude",
-  cursor: "cursor", "cursor-ai": "cursor", copilot: "copilot", "github-copilot": "copilot", codex: "codex",
-  "gemini-cli": "gemini-cli", windsurf: "windsurf", aider: "aider", cline: "cline", chatgpt: "chatgpt",
-  lovable: "lovable", bolt: "bolt", "bolt-new": "bolt", v0: "v0", replit: "replit",
-  "roo-code": "roo", "built-with-roo": "roo",
-  "muse-code": "muse-code", "muse-spark": "muse-code", "meta-muse": "muse-code", "built-with-muse": "muse-code", "built-with-muse-code": "muse-code",
-};
 
 /**
  * The stand-in file. Only controlled-vocabulary values go into the YAML; title and tagline are left out so
  * scanRepo falls back to GitHub (no stranger-written text is ever templated into YAML).
  * ai_generated/human_touch come from the owner's own "vibe coded" claim and render as "inferred".
  */
-export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string): string {
+export function buildVirtualMd(g: GhRepo, signals: string[], curated?: string, reg: Registry = STATIC): string {
   const topics = (g.topics ?? []).map((t) => t.toLowerCase());
   const categories = [...new Set(topics.map((t) => TOPIC_CATEGORY[t]).filter(Boolean))].slice(0, 3);
-  const tools = new Set(topics.map((t) => TOPIC_TOOL[t]).filter(Boolean));
+  const tools = new Set(topics.map((t) => reg.topicTool[t]).filter(Boolean));
   if (/\bclaude code\b/i.test(g.description ?? "")) tools.add("claude-code");
   const why = signals.map((s) => s.replace(/^tagged /, "is tagged ")).join(" and ");
   return [
@@ -337,12 +347,12 @@ export function cleanReason(s: unknown): string | null {
 }
 
 /** A hand-vetted pick, ready to insert. The reason is published on the listing. */
-export function curatedPick(g: GhRepo, reason: string, at: number): Pick {
+export function curatedPick(g: GhRepo, reason: string, at: number, reg: Registry = STATIC): Pick {
   const r = reason.replace(/\.$/, "");
   return {
     repo: g, signals: [r],
     reason: `Picked by hand by the Cap'm on ${isoDate(at)}: ${r}. ${g.stargazers_count} stars; ${g.license?.spdx_id} license. The owner did not submit this.`,
-    virtualMd: buildVirtualMd(g, [], r),
+    virtualMd: buildVirtualMd(g, [], r, reg),
   };
 }
 

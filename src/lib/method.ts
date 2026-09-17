@@ -17,15 +17,22 @@
 // The section that matters most is "Known biases". Everything in it is a limitation we could have left out and
 // nobody would have noticed for a year. It is first-class here because the first person to notice one of them
 // on our behalf, in public, would be right — and would be believed over anything we said afterwards.
-import { MIN_STARS, MAX_STARS, PERMISSIVE, PUSHED_WITHIN_DAYS, TRAWL_GROUNDS } from "./virtual";
+import { MIN_STARS, MAX_STARS, NEW_WATERS, PERMISSIVE, PUSHED_WITHIN_DAYS, TRAWL_GROUNDS } from "./virtual";
+import { STATIC_TOOLS, type ToolRow } from "./tools";
+import { isoDate } from "./time";
 import { JUDGE_CODES, JUDGE_DOMAINS } from "./judge";
 import { CHART_FACETS, TRENDS_KEEP_DAYS } from "../jobs/trends";
 
 /** Bump when a rule below changes, and add a CHANGES line in the same commit. Reports stamp this. */
-export const METHOD_VERSION = 2;
+export const METHOD_VERSION = 3;
 
 /** Every version, newest first. The history is the point: a method nobody can diff is a method nobody can check. */
 export const CHANGES: { version: number; date: string; what: string }[] = [
+  {
+    version: 3,
+    date: "2026-09-16",
+    what: "The list of tools becomes a dictionary that grows in public. The trawl now records every tool name it meets and does not know; a nightly scout counts them; a moderator approves, merges or dismisses each one on the mod console, and an approved tool is searched for (under one extra ground, The New Waters), credited and counted from the next hour. Every addition is dated on this page and in the public mod log. Adding a tool widens the sample and changes no rule, so from this version it does not bump the version; a change to what counts as a claim, a filter or the judge still does. The sixteen tools frozen in v2 are unchanged, and the spec's built_with list stays the frozen one.",
+  },
   {
     version: 2,
     date: "2026-09-16",
@@ -41,11 +48,23 @@ export const CHANGES: { version: number; date: string; what: string }[] = [
 /** The date the current version was frozen. */
 export const METHOD_FROZEN = CHANGES[0].date;
 
+/** A registry addition, as /method and /method.json print it. `extends` marks a row that widened a frozen tool rather than adding one. */
+export interface ToolAddition { key: string; name: string; approved_at: string; approved_by: string; note: string | null; extends: boolean; retired_at: string | null }
+
+/** The registry's additions, oldest first: what a moderator approved since the freeze, and when. */
+export function toolAdditions(rows: ToolRow[] = []): ToolAddition[] {
+  const frozen = new Set(STATIC_TOOLS.map((t) => t.key));
+  return [...rows].sort((a, b) => a.approved_at - b.approved_at || a.key.localeCompare(b.key)).map((r) => ({
+    key: r.key, name: r.name, approved_at: isoDate(r.approved_at), approved_by: r.approved_by, note: r.note, extends: frozen.has(r.key), retired_at: r.retired_at ? isoDate(r.retired_at) : null,
+  }));
+}
+
 /** Codes the judge can give that mean "this is software somebody made", and so get the repo listed. */
 export const LISTABLE_CODES = ["app", "game", "tool", "library", "hardware"] as const;
 
 /** The machine-readable half. The same facts as the prose, in the shape an agent would rather have them. */
-export function methodJson() {
+export function methodJson(rows: ToolRow[] = []) {
+  const added = toolAdditions(rows);
   return {
     method_version: METHOD_VERSION,
     frozen: METHOD_FROZEN,
@@ -62,6 +81,12 @@ export function methodJson() {
       excluded: ["forks", "archived", "templates", "private", "org-owned"],
       grounds: TRAWL_GROUNDS.map((g) => ({ name: g.name, looks_for: g.blurb, queries: g.queries })),
     },
+    tools: {
+      rule: "the dictionary of tools grows in public: the scout proposes, a moderator approves, every addition is dated here and in the mod log; adding a tool widens the sample and changes no rule",
+      frozen: STATIC_TOOLS.map((t) => t.key),
+      added: added.filter((a) => !a.retired_at),
+      retired: added.filter((a) => a.retired_at),
+    },
     judge: {
       what: "one cheap model, two multiple-choice questions, temperature 0",
       decides_listing: "code",
@@ -76,7 +101,7 @@ export function methodJson() {
     snapshot: { cadence: "daily at 00:05 UTC", kept_days: TRENDS_KEEP_DAYS, model_calls: 0 },
     known_biases: [
       "the label is the sample: we measure what people say about their code, not what wrote it",
-      "tool share is query-shaped: the grounds are named after tools, so a tool whose users do not tag or describe their repos is undercounted",
+      "tool share is query-shaped: the grounds are named after tools, so a tool whose users do not tag or describe their repos is undercounted; a tool is only searched for once it is in the dictionary, which grows by approval and is listed here with dates",
       "permissive licences only",
       "the star window's two ends are our rule, not a finding",
       "the opted-in cohort is self-selected",
@@ -88,9 +113,13 @@ export function methodJson() {
 }
 
 /** The prose half. Rendered at /method, and pointed at by every report's footer. */
-export function methodMd(): string {
+export function methodMd(rows: ToolRow[] = []): string {
   const licences = [...PERMISSIVE].join(", ");
-  const grounds = TRAWL_GROUNDS.map((g) => `- **${g.name}** — ${g.blurb}. Searches: ${g.queries.map((q) => `\`${q}\``).join(", ")}`);
+  const added = toolAdditions(rows);
+  const live = added.filter((a) => !a.retired_at);
+  const grounds = TRAWL_GROUNDS.map((g, i) => i === NEW_WATERS
+    ? `- **${g.name}** — ${g.blurb}. Searches: ${live.length ? live.map((a) => `\`${a.key}\``).join(", ") + " (each by its topics and phrases, listed below)" : "none yet"}`
+    : `- **${g.name}** — ${g.blurb}. Searches: ${g.queries.map((q) => `\`${q}\``).join(", ")}`);
   const thrown = JUDGE_CODES.filter((c) => !(LISTABLE_CODES as readonly string[]).includes(c));
   return [
     "# How we count", "",
@@ -117,6 +146,9 @@ export function methodMd(): string {
     "- the description or topics carry a **past-tense** claim that a tool wrote the code. \"Built with Cursor\" counts. \"An IDE for vibe coding\" does not.", "",
     "What survives goes to the judge.", "",
 
+    "## The tools", "",
+    `${STATIC_TOOLS.length} tools were frozen with v2: ${STATIC_TOOLS.map((t) => `\`${t.key}\``).join(", ")}. A tool is a dictionary entry — the words a claim may use, the topics that credit it, the searches that look for it — and the dictionary **grows in public**. The trawl records every tool name it meets and does not know; the scout counts them nightly; a moderator approves, merges or dismisses each one on the mod console, and an approved tool is searched for, credited and counted from the next hour. Every addition is dated below and in the [public mod log](/log). Adding a tool widens the sample and changes no rule, so it does not bump the version; a change to what counts as a claim still does. The spec's \`built_with\` list stays the frozen one.`, "",
+
     "## The judge", "",
     "One cheap model, temperature 0, two multiple-choice questions, and nothing else. It cannot write a sentence that reaches this site.", "",
     `- **code** decides whether the repo is listed. ${LISTABLE_CODES.map((c) => `\`${c}\``).join(", ")} are listed; ${thrown.map((c) => `\`${c}\``).join(", ")} are thrown back.`,
@@ -129,7 +161,7 @@ export function methodMd(): string {
 
     "## Known biases — read these before quoting a number", "",
     "1. **The label is the sample.** Restating the sentence above, because it is the one people drop. We see repos whose owners announced the tool. Announcing is a behaviour, and it varies by tool, by community, by how new the tool is, and by whether announcing is currently fashionable.",
-    "2. **Tool share here is query-shaped.** The grounds above are *named after tools*. A tool with a popular `built-with-x` topic will out-count a tool whose users never tag anything, whatever people actually use. Tool share on this site measures **how loudly a tool's users say its name in public**, and nothing else. It is not market share, it is not usage, and quoting it as either is wrong.",
+    "2. **Tool share here is query-shaped.** The grounds above are *named after tools*. A tool with a popular `built-with-x` topic will out-count a tool whose users never tag anything, whatever people actually use. Tool share on this site measures **how loudly a tool's users say its name in public**, and nothing else. It is not market share, it is not usage, and quoting it as either is wrong. A tool is only looked for once it is in the dictionary, so a new tool is undercounted until the scout finds it and a moderator lets it in — and the date that happened is on this page.",
     "3. **Permissive licences only.** We read repos we could quote from. Anything GPL or unlicensed is invisible here, and that filters the *kind* of project as much as the licence.",
     "4. **The star window's ends are our rule.** The first and last bars of the star chart are where we stopped looking, not where the world stops.",
     "5. **The opted-in cohort is self-selected** and small. Read it as \"people who volunteer\", never as \"makers\".",
@@ -149,6 +181,11 @@ export function methodMd(): string {
 
     "## Corrections", "",
     "If a number here is wrong, say so on the [contact form](/contact). Corrections are published as a line in the next report and, where the method itself was wrong, as a new version below. Nothing is quietly edited.", "",
+
+    "## Tools added since the freeze", "",
+    ...(added.length
+      ? added.map((a) => `- **${a.key}** (${a.name}) · ${a.approved_at} · approved by ${a.approved_by}${a.extends ? " · widens a frozen tool" : ""}${a.retired_at ? ` · retired ${a.retired_at}` : ""}${a.note ? ` — ${a.note}` : ""}`)
+      : ["- None yet. The scout proposes; a moderator decides; the line goes here."]), "",
 
     "## Changes to this method", "",
     ...CHANGES.map((c) => `- **v${c.version}** · ${c.date} — ${c.what}`),

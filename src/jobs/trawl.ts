@@ -14,7 +14,8 @@
 import { GitHub, type GhRepo } from "../lib/github";
 import type { Env } from "../env";
 import { loadDenyRows } from "../lib/denylist";
-import { pickCandidates, trawlQueries, trawlQueriesUnwindowed, cheapReject, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, type Pick } from "../lib/virtual";
+import { pickCandidates, trawlQueries, trawlQueriesUnwindowed, trawlQueryList, cheapReject, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, registry, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, TRAWL_QUERIES, type Pick, type Registry } from "../lib/virtual";
+import { allTools, extractSightings, loadToolRows, type Sighting } from "../lib/tools";
 import { judgeCandidate } from "../lib/judge";
 import { markDirty } from "../lib/cache";
 import { now } from "../lib/time";
@@ -138,6 +139,30 @@ export function isoStamp(t: number): string {
 export interface TrawlResult { picked: number; searched: number; skipped: number; repos: string[]; note?: string }
 
 /** `verdict` is only present for auto-trawled picks: a hand-picked or backlog repo never went past a model. */
+/** The registry of the hour: the frozen tools plus every one a moderator approved (lib/tools.ts). */
+async function loadRegistry(db: D1Database): Promise<Registry> {
+  return registry(allTools(await loadToolRows(db)));
+}
+
+type SightingAt = Sighting & { full_name: string };
+
+/** Note the tool names this candidate uses that the registry does not know. Same repo twice is one row: the table's key is (term, repo). */
+function noteSightings(into: SightingAt[], g: GhRepo, readme: string | null, reg?: Registry): void {
+  for (const s of extractSightings(g, readme, reg?.tools)) into.push({ ...s, full_name: g.full_name.toLowerCase() });
+}
+
+function sightingStatements(db: D1Database, rows: SightingAt[]): D1PreparedStatement[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => { const k = `${r.term}|${r.full_name}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .map((r) => db.prepare("INSERT OR IGNORE INTO tool_sightings (term, kind, full_name) VALUES (?, ?, ?)").bind(r.term, r.kind, r.full_name));
+}
+
+/** A hundred a batch, like the skips. Never allowed to fail a run: a sighting lost is a sighting the next run makes again. */
+async function flushSightings(db: D1Database, rows: SightingAt[]): Promise<void> {
+  const stmts = sightingStatements(db, rows);
+  for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100)).catch(() => {});
+}
+
 function insertPick(db: D1Database, p: Pick, verdict?: { code: string | null; domain: string | null }): D1PreparedStatement {
   const g = p.repo;
   return db.prepare(
@@ -157,7 +182,8 @@ export async function trawlOne(env: Env, fullName: string, reason?: string): Pro
   const seen = await env.DB.prepare("SELECT (SELECT count(*) FROM repos WHERE lower(full_name) = lower(?)) + (SELECT count(*) FROM trawl_skipped WHERE full_name = lower(?)) AS n").bind(g.full_name, g.full_name).first<{ n: number }>();
   const why = curatedCheck(g, { known: new Set(seen?.n ? [g.full_name.toLowerCase()] : []), deny: await loadDenyRows(env.DB) });
   if (why) return { ...out, skipped: 1, note: `not picked: ${why}` };
-  await insertPick(env.DB, curatedPick(g, cleanReason(reason) ?? "hand-picked by a moderator", now())).run();
+  const reg = await loadRegistry(env.DB);
+  await insertPick(env.DB, curatedPick(g, cleanReason(reason) ?? "hand-picked by a moderator", now(), reg)).run();
   await bump(env.DB, "found", 1);
   await markDirty(env.DB);
   return { ...out, picked: 1, repos: [g.full_name] };
@@ -205,6 +231,8 @@ export async function releaseBacklog(env: Env, n: number): Promise<{ queued: str
   const take = Math.min(Math.max(0, Math.floor(Number(n) || 0)), 50);
   const rows = take ? ((await db.prepare("SELECT full_name, display_name, reason FROM trawl_backlog WHERE released_at IS NULL ORDER BY added_at, rowid LIMIT ?").bind(take).all<{ full_name: string; display_name: string; reason: string }>()).results ?? []) : [];
   const deny = rows.length ? await loadDenyRows(db) : [];
+  const reg = rows.length ? await loadRegistry(db) : undefined;
+  const sightings: SightingAt[] = [];
   const queued: string[] = [];
   const skipped: { repo: string; why: string }[] = [];
   let note: string | undefined;
@@ -218,11 +246,13 @@ export async function releaseBacklog(env: Env, n: number): Promise<{ queued: str
       const g = r.data;
       const s = await db.prepare("SELECT (SELECT count(*) FROM repos WHERE lower(full_name) = lower(?)) + (SELECT count(*) FROM trawl_skipped WHERE full_name = lower(?)) AS n").bind(g.full_name, g.full_name).first<{ n: number }>();
       why = curatedCheck(g, { known: new Set(s?.n ? [g.full_name.toLowerCase()] : []), deny });
-      if (!why) { await insertPick(db, curatedPick(g, b.reason, t)).run(); queued.push(g.full_name); }
+      noteSightings(sightings, g, null, reg);
+      if (!why) { await insertPick(db, curatedPick(g, b.reason, t, reg)).run(); queued.push(g.full_name); }
     }
     if (why) skipped.push({ repo: b.display_name, why });
     await db.prepare("UPDATE trawl_backlog SET released_at = ?, outcome = ? WHERE full_name = ?").bind(t, why ? `skipped: ${why}` : "queued", b.full_name).run();
   }
+  await flushSightings(db, sightings);
   const left = (await db.prepare("SELECT count(*) AS n FROM trawl_backlog WHERE released_at IS NULL").first<{ n: number }>())?.n ?? 0;
   if (queued.length) { await bump(db, "found", queued.length); await markDirty(db); }
   return { queued, skipped, left, note };
@@ -244,11 +274,20 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   const budget = Math.min(Math.max(0, Math.floor(n)), 50);
   if (!budget) return out;
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
-  const deny = await loadDenyRows(db);
-  const queries = trawlQueriesUnwindowed();
+  const [deny, toolRows] = await Promise.all([loadDenyRows(db), loadToolRows(db)]);
+  // The registry as it stands this hour: the frozen tools plus every approved one. Built once per run, so the
+  // claim regex is compiled once and not per README.
+  const reg = registry(allTools(toolRows));
+  const queries = trawlQueriesUnwindowed(toolRows);
+  // The bare searches, for keying per-query state: a registry search is keyed by its text rather than its
+  // index, so approving or retiring a tool can never re-bind another search's window to it.
+  const bare = trawlQueryList(toolRows);
+  const key = (kind: "fresh" | "win" | "yield", qi: number) => (qi < TRAWL_QUERIES.length ? `trawl:${kind}:${qi}` : `trawl:${kind}:q:${bare[qi]}`);
+  await setState(db, "trawl:nq", String(queries.length));
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
   const maxJudged = Math.max(MIN_JUDGE_CALLS, budget * JUDGE_PER_KEPT);
   const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
+  const sightings: SightingAt[] = [];
   let calls = 0;
 
   // Which searches are worth the run. The rotation used to give a search matching 2,340 repos and one matching
@@ -257,7 +296,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   const work: number[] = [];
   for (let k = 0; k < queries.length && work.length < QUERIES_PER_RUN; k++) {
     const qi = (start + k) % queries.length;
-    if (worthWorking(await getState(db, `trawl:yield:${qi}`), t)) work.push(qi);
+    if (worthWorking(await getState(db, key("yield", qi)), t)) work.push(qi);
   }
 
   // The judge's daily ceiling, across every run of the day. Per-run floors bound one run and nothing
@@ -296,10 +335,14 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
       if (g.stargazers_count < MIN_STARS || g.stargazers_count > MAX_STARS) continue;
       const pushed = Math.floor(Date.parse(g.pushed_at) / 1000) || 0;
       if (pushed < since) continue;
-      const hard = curatedCheck(g, { known: new Set(), deny }) ?? cheapReject(g);
+      // What the registry does not know, noted before anything can throw the repo back: the rejects are
+      // where new tools live, and this costs no call at all.
+      noteSightings(sightings, g, null, reg);
+      const hard = curatedCheck(g, { known: new Set(), deny }) ?? cheapReject(g, reg);
       if (hard) { skips.push({ full_name: g.full_name.toLowerCase(), why: hard }); continue; }
       const readme = await gh.readmeText(g.owner.login, g.name);
-      const claim = claimSnippet(`${g.description ?? ""}. ${readme}`);
+      noteSightings(sightings, g, readme, reg);
+      const claim = claimSnippet(`${g.description ?? ""}. ${readme}`, reg);
       if (!claim) { skips.push({ full_name: g.full_name.toLowerCase(), why: "no past-tense claim that an AI tool wrote it" }); continue; }
       const reason = autoReason(g, claim);
       if (!reason) { skips.push({ full_name: g.full_name.toLowerCase(), why: "could not build a reason" }); continue; }
@@ -310,7 +353,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
       // The verdict is kept either way: what the trawl threw back is the larger, more interesting half of the
       // sample, and /trends counts both. Only `code` decides anything; `domain` is recorded and nothing else.
       if (!verdict.keep) { skips.push({ full_name: g.full_name.toLowerCase(), why: `judge: ${verdict.code ?? verdict.error ?? "no"}`, code: verdict.code, domain: verdict.domain }); continue; }
-      await insertPick(db, curatedPick(g, reason, t), verdict).run();
+      await insertPick(db, curatedPick(g, reason, t, reg), verdict).run();
       out.queued.push(g.full_name);
     }
     return true;
@@ -319,8 +362,8 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   for (const qi of work) {
     if (spent() || calls >= SEARCH_CALLS) break;
     const q = queries[qi];
-    const fresh = Number(await getState(db, `trawl:fresh:${qi}`)) || 0;
-    let win = parseWindow(await getState(db, `trawl:win:${qi}`));
+    const fresh = Number(await getState(db, key("fresh", qi))) || 0;
+    let win = parseWindow(await getState(db, key("win", qi)));
     let matched = -1;   // the largest total_count any pass reported; -1 until a search has answered
 
     /** One call, one page, worked. Null when GitHub did not answer, so no state moves on its account. */
@@ -345,10 +388,10 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
       }
       // Only a pass read to its end moves the mark. A busy hour, a failed call or a spent budget leaves it
       // where it was, and the same water is asked for again next time.
-      if (exhausted) await setState(db, `trawl:fresh:${qi}`, String(t));
+      if (exhausted) await setState(db, key("fresh", qi), String(t));
     } else {
       // Nothing to look back over yet: freshness starts now, and the deep walk below opens at the top.
-      await setState(db, `trawl:fresh:${qi}`, String(t));
+      await setState(db, key("fresh", qi), String(t));
     }
 
     // The deep walk: the window this search is in, page by page, then the one below it.
@@ -362,15 +405,15 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
         // More in this window than will ever be handed back: halve it and ask again. At the narrowest,
         // read the thousand that can be read and move on.
         const narrower = narrowWindow(win);
-        if (narrower) { win = narrower; await setState(db, `trawl:win:${qi}`, formatWindow(win)); continue; }
+        if (narrower) { win = narrower; await setState(db, key("win", qi), formatWindow(win)); continue; }
       }
       if (!p.complete) break;   // stopped mid-page on budget: this page is re-read next run
       win = afterPage(win, p.total, p.read, since).next;
-      await setState(db, `trawl:win:${qi}`, win ? formatWindow(win) : "");
+      await setState(db, key("win", qi), win ? formatWindow(win) : "");
     }
 
     // What this search is worth, so the rotation can stop giving empty water equal time.
-    if (matched >= 0) await setState(db, `trawl:yield:${qi}`, `${matched}|${t}`);
+    if (matched >= 0) await setState(db, key("yield", qi), `${matched}|${t}`);
   }
 
   out.skipped = skips.length;
@@ -379,6 +422,7 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   for (let i = 0; i < skips.length; i += 100) {
     await db.batch(skips.slice(i, i + 100).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason, judge_code, judge_domain) VALUES (?, ?, ?, ?)").bind(s.full_name, s.why.slice(0, 300), s.code ?? null, s.domain ?? null)));
   }
+  await flushSightings(db, sightings);
   await setState(db, "trawl:cursor", String(start + 1));
   if (out.queued.length) { await bump(db, "found", out.queued.length); await markDirty(db); }
   return out;
@@ -508,8 +552,9 @@ export async function trawl(env: Env, n?: number): Promise<TrawlResult> {
   if (budget <= 0) return { ...out, note: `today's ${perDay} already trawled` };
 
   const gh = new GitHub(env.GITHUB_CRAWL_TOKEN);
-  const deny = await loadDenyRows(db);
-  const queries = trawlQueries(t);
+  const [deny, toolRows] = await Promise.all([loadDenyRows(db), loadToolRows(db)]);
+  const reg = registry(allTools(toolRows));
+  const queries = trawlQueries(t, toolRows);
   const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
   for (let qi = 0; qi < queries.length && out.picked < budget; qi++) {
     const q = queries[(start + qi) % queries.length];
@@ -527,12 +572,15 @@ export async function trawl(env: Env, n?: number): Promise<TrawlResult> {
         db.prepare(`SELECT full_name AS n FROM trawl_skipped WHERE full_name IN (${ph})`).bind(...names).all<{ n: string }>(),
       ]);
       const knownSet = new Set([...(known.results ?? []), ...(skippedBefore.results ?? [])].map((k) => k.n));
-      const res = pickCandidates(items, { known: knownSet, deny, at: t });
+      const res = pickCandidates(items, { known: knownSet, deny, at: t, reg });
       out.skipped += res.skipped.length;
       const take = res.picks.slice(0, budget - out.picked);
+      const sightings: SightingAt[] = [];
+      for (const g of items) if (!knownSet.has(g.full_name.toLowerCase())) noteSightings(sightings, g, null, reg);
       const stmts = [
         ...take.map((p) => insertPick(db, p)),
         ...res.skipped.filter((s) => s.record).map((s) => db.prepare("INSERT OR IGNORE INTO trawl_skipped (full_name, reason) VALUES (?, ?)").bind(s.full_name, s.why.slice(0, 300))),
+        ...sightingStatements(db, sightings),
       ];
       if (stmts.length) await db.batch(stmts);
       out.picked += take.length;

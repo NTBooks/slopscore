@@ -11,7 +11,27 @@ import {
   parseWindow, formatWindow, openWindow, narrowWindow, afterPage, deepQuery, freshQuery,
   WINDOW_SPAN, WINDOW_MIN, WINDOW_MAX, RESULT_CAP, SPARSE, JUDGE_PER_DAY, judgeCap, HOURLY_TRAWL,
 } from "../src/jobs/trawl";
-import { cheapReject } from "../src/lib/virtual";
+import { cheapReject, registry } from "../src/lib/virtual";
+import { allTools, type ToolRow } from "../src/lib/tools";
+
+const KIRO_ROW: ToolRow = { key: "kiro", name: "Kiro", aliases: ["kiro"], claim_topics: ["built-with-kiro"], topics: ["kiro", "built-with-kiro"], phrases: ['"built with kiro" in:description'], note: null, approved_by: "NTBooks", approved_at: 1, retired_at: null };
+const WITH_KIRO = registry(allTools([KIRO_ROW]));
+
+describe("an approved tool reaches every part of the sieve", () => {
+  it("is a claim, a signal, a credit and a listing, none of which it was before approval", () => {
+    const g = repo({ topics: ["built-with-kiro"], description: "A snack bot, built with Kiro over a weekend." });
+    expect(claimSnippet("Built with Kiro over a weekend.")).toBeNull();
+    expect(claimSnippet("Built with Kiro over a weekend.", WITH_KIRO)).toContain("Kiro");
+    expect(trawlSignals(g)).toEqual([]);
+    expect(trawlSignals(g, WITH_KIRO)).toEqual(["tagged built-with-kiro", "says it was built with Kiro in its description"]);
+    expect(cheapReject({ ...g, description: "An IDE for vibe coding, built with Kiro" })).toBe("a tool for vibe coding, not something vibe coded");
+    expect(cheapReject({ ...g, description: "An IDE for vibe coding, built with Kiro" }, WITH_KIRO)).toBeNull();
+    const picked = pickCandidates([g], { known: new Set(), deny: [], at: AT, reg: WITH_KIRO });
+    expect(picked.picks).toHaveLength(1);
+    expect(parseSlopMd(picked.picks[0].virtualMd).meta?.built_with).toEqual(["kiro"]);
+    expect(pickCandidates([g], { known: new Set(), deny: [], at: AT }).picks).toHaveLength(0);
+  });
+});
 
 const AT = Date.parse("2026-09-12T00:00:00Z") / 1000;
 const repo = (over: Partial<GhRepo> = {}): GhRepo => ({

@@ -17,6 +17,10 @@ import { getState, setState } from "../jobs/stats";
 import { retireTrawled, relistTrawled } from "../lib/virtual";
 import { addToBacklog, releaseBacklog, trawlDaily, HOURLY_TRAWL, type CuratedInput } from "../jobs/trawl";
 import { counts as tripCounts, BLOCK_SECONDS } from "../lib/tripwire";
+import { STATIC_TOOLS, allTools, loadToolRows, upsertToolRow, validateToolInput, type ToolRow } from "../lib/tools";
+import { cleanReason } from "../lib/virtual";
+import { parseJson } from "../lib/db";
+import { SCOUT_MIN, SIGHTING_DAYS } from "../jobs/scout";
 
 export const mod = new Hono<AppEnv>();
 
@@ -63,7 +67,7 @@ mod.get("/", async (c) => {
     "SELECT day, sum(CASE WHEN severity = 'targeted' THEN n ELSE 0 END) AS targeted, sum(CASE WHEN severity != 'targeted' THEN n ELSE 0 END) AS noise FROM tripwire GROUP BY day ORDER BY day DESC LIMIT 14",
   ).all<{ day: string; targeted: number; noise: number }>().then((r) => r.results ?? []);
   const takedowns = await db.prepare("SELECT t.id, t.full_name, t.login, t.contact, t.message, t.outcome, t.settle_at, t.created_at, r.status FROM takedowns t LEFT JOIN repos r ON r.id = t.repo_id WHERE t.resolved_at IS NULL ORDER BY t.created_at DESC LIMIT 100").all<{ id: number; full_name: string; login: string | null; contact: string | null; message: string; outcome: string; settle_at: number | null; created_at: number; status: string | null }>().then((r) => r.results ?? []);
-  const [reports, quarantined, hidden, delisted, held, banned, buckets, deny] = await Promise.all([
+  const [reports, quarantined, hidden, delisted, held, banned, buckets, deny, candidates, toolRows] = await Promise.all([
     db.prepare(
       `SELECT rp.id, rp.target_type, rp.target_id, rp.reason, rp.note, rp.created_at, u.login AS reporter,
          CASE rp.target_type WHEN 'repo' THEN r.full_name ELSE r2.full_name END AS label,
@@ -83,7 +87,10 @@ mod.get("/", async (c) => {
     db.prepare("SELECT id, login, banned_at, ban_reason FROM users WHERE banned_at IS NOT NULL ORDER BY banned_at DESC LIMIT 100").all<{ id: number; login: string; banned_at: number; ban_reason: string | null }>().then((r) => r.results ?? []),
     allBuckets(db),
     db.prepare("SELECT term, kind, scope, added_by, created_at FROM denylist ORDER BY created_at DESC").all<{ term: string; kind: string; scope: string; added_by: string | null; created_at: number }>().then((r) => r.results ?? []),
+    db.prepare("SELECT term, n, kinds, samples, first_seen, last_seen FROM tool_candidates WHERE status = 'open' ORDER BY n DESC, last_seen DESC LIMIT 50").all<{ term: string; n: number; kinds: string; samples: string; first_seen: number; last_seen: number }>().then((r) => r.results ?? []),
+    loadToolRows(db),
   ]);
+  const toolKeys = allTools(toolRows).map((t) => t.key);
   // group reports by target
   const groups = new Map<string, ReportRow[]>();
   for (const r of reports) { const k = `${r.target_type}:${r.target_id}`; groups.set(k, [...(groups.get(k) ?? []), r]); }
@@ -225,6 +232,52 @@ mod.get("/", async (c) => {
           <div><label>release now <input type="number" name="release_now" value="0" min="0" max="50" style="width:5em" /></label> <button class="btn secondary">add to backlog</button></div>
         </form>
         <form method="post" action="/mod/trawl/release" class="inline">{csrf}<input type="number" name="n" value="10" min="1" max="50" style="width:5em" /> <button class="btn secondary">release from backlog now</button></form>
+
+        <h3 id="scout">The scout's log <span class="muted">· tool names the trawl did not know · {candidates.length} to decide</span></h3>
+        <p class="muted small">Each is a name {SCOUT_MIN} or more repos credited in the last {SIGHTING_DAYS} days that the registry does not know. <strong>Approving takes effect at once</strong>: the trawl searches for it from the next hour, it is credited and counted on every chart, and it is listed with today's date on <a href="/method">/method</a>. Merge it into a tool you already know when it is the same thing under another name. Dismissed names keep being counted but never surface again. Agents can POST the same fields to <code>/mod/tool/approve</code> with an admin bearer token.</p>
+        {candidates.length === 0 ? <div class="empty">Nothing the registry does not already know.</div> : null}
+        {candidates.map((t) => {
+          const samples = parseJson<string[]>(t.samples, []);
+          const kinds = parseJson<string[]>(t.kinds, []);
+          const words = t.term.replace(/-/g, " ");
+          const name = words.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
+          return (
+            <div class="modcard" id={`scout-${t.term}`}>
+              <div><strong>{t.term}</strong> · {t.n} repos · {kinds.map((k) => <span class="chip">{k}</span>)} · first seen {ago(t.first_seen)} · {samples.map((s, i) => <>{i ? ", " : ""}<a href={`https://github.com/${s}`} target="_blank" rel="noopener">{s}</a></>)}</div>
+              <form method="post" action="/mod/tool/approve" class="commentform">{csrf}<input type="hidden" name="term" value={t.term} />
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px">
+                  <label>key <input type="text" name="key" value={t.term} maxlength={40} required /></label>
+                  <label>name <input type="text" name="name" value={name} maxlength={40} required /></label>
+                  <label>aliases <input type="text" name="aliases" value={words} title="comma-separated words a claim may use" /></label>
+                  <label>claim topics <input type="text" name="claim_topics" value={`built-with-${t.term}`} title="comma-separated topics that ARE a claim; each is also a search" /></label>
+                  <label>credit topics <input type="text" name="topics" value={`${t.term}, built-with-${t.term}`} title="comma-separated topics that credit the tool" /></label>
+                  <label>phrases <input type="text" name="phrases" value={`"built with ${words}" in:description`} title="comma-separated GitHub searches" /></label>
+                  <label style="grid-column:1 / -1">note <input type="text" name="note" placeholder="what it is, for /method (10 to 280 characters)" maxlength={280} /></label>
+                </div>
+                <div><button class="btn">approve</button></div>
+              </form>
+              <div class="actions">
+                <form method="post" action="/mod/tool/merge" class="inline">{csrf}<input type="hidden" name="term" value={t.term} /><select name="into">{toolKeys.map((k) => <option value={k}>{k}</option>)}</select> <button class="btn secondary">merge into</button></form>
+                <form method="post" action="/mod/tool/dismiss" class="inline">{csrf}<input type="hidden" name="term" value={t.term} /><button class="btn secondary">dismiss</button></form>
+              </div>
+            </div>
+          );
+        })}
+        {toolRows.length ? (
+          <>
+            <h4>Approved tools</h4>
+            <table class="list"><tr><th>key</th><th>name</th><th>aliases</th><th>topics</th><th>by</th><th>when</th><th></th></tr>
+              {toolRows.map((r) => (
+                <tr>
+                  <td>{r.key}{STATIC_TOOLS.some((s) => s.key === r.key) ? <span class="muted"> (widens a frozen tool)</span> : null}</td><td>{r.name}</td>
+                  <td class="muted">{r.aliases.join(", ")}</td><td class="muted">{[...new Set([...r.claim_topics, ...r.topics])].join(", ")}</td>
+                  <td class="muted">{r.approved_by}</td><td class="muted">{isoDate(r.approved_at)}{r.retired_at ? ` · retired ${isoDate(r.retired_at)}` : ""}</td>
+                  <td>{r.retired_at ? null : <form method="post" action="/mod/tool/retire" class="inline" data-confirm={`Retire ${r.key}? The trawl stops searching for it and the claim gate stops accepting it. Listings that already credit it keep the credit.`}>{csrf}<input type="hidden" name="key" value={r.key} /><button class="link">retire</button></form>}</td>
+                </tr>
+              ))}
+            </table>
+          </>
+        ) : null}
 
         <h3 id="takedowns">Takedowns <span class="muted">· trawled listings · {takedowns.length} open</span></h3>
         {takedowns.length === 0 ? <div class="empty">No takedown requests.</div> : null}
@@ -616,4 +669,72 @@ mod.post("/denylist/remove", requireUser, async (c) => {
   await c.env.DB.prepare("DELETE FROM denylist WHERE term = ?").bind((b.term ?? "").toLowerCase()).run();
   await logAction(c.env.DB, { actor: user.login, role: "admin", action: "denylist-remove", targetType: "denylist", targetId: 0 });
   return wantsJson(c) ? c.json({ ok: true }) : c.redirect("/mod");
+});
+
+// ---- the scout's log: the tool dictionary grows here, and only here ----
+
+const csv = (s?: string) => (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const scoutFail = (c: Context<AppEnv>, error: string) => (wantsJson(c) ? c.json({ error }, 400) : c.redirect(`/mod?flash=${encodeURIComponent(error)}#scout`));
+const scoutDone = (c: Context<AppEnv>, msg: string, extra: Record<string, unknown> = {}) => (wantsJson(c) ? c.json({ ok: true, ...extra }) : c.redirect(`/mod?flash=${encodeURIComponent(msg)}#scout`));
+const decide = (db: D1Database, term: string, status: "approved" | "merged" | "dismissed", by: string, into: string | null, at: number) =>
+  db.prepare("UPDATE tool_candidates SET status = ?, decided_by = ?, decided_at = ?, decided_into = ? WHERE term = ?").bind(status, by, at, into, term).run();
+
+/** Approve: a new tool, or a wider frozen one. Validated like a regex is at stake, because one is. */
+mod.post("/tool/approve", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const b = await body(c);
+  const db = c.env.DB;
+  const rows = await loadToolRows(db);
+  const v = validateToolInput({ key: b.key ?? "", name: b.name ?? "", aliases: csv(b.aliases), claimTopics: csv(b.claim_topics), topics: csv(b.topics), phrases: csv(b.phrases) }, allTools(rows));
+  if (!v.ok) return scoutFail(c, v.error);
+  const note = b.note?.trim() ? cleanReason(b.note) : null;
+  if (b.note?.trim() && !note) return scoutFail(c, "the note must be plain text, 10 to 280 characters");
+  const t = now();
+  const how = await upsertToolRow(db, v.tool, user.login, note, t);
+  const term = (b.term ?? "").trim().toLowerCase();
+  if (term) await decide(db, term, "approved", user.login, v.tool.key, t);
+  await logAction(db, { actor: user.login, role: "admin", action: how === "added" ? "tool-approve" : "tool-widen", targetType: "tool", targetId: 0, label: v.tool.key, note: note ?? `${v.tool.name}: ${v.tool.aliases.join(", ")}` });
+  return scoutDone(c, `${v.tool.key} ${how}: the trawl searches for it from the next hour, and /method lists it from now.`, { key: v.tool.key, how });
+});
+
+/** Merge: the term is another name for a tool the registry already knows. Writes an extension row for that key. */
+mod.post("/tool/merge", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const b = await body(c);
+  const db = c.env.DB;
+  const term = (b.term ?? "").trim().toLowerCase();
+  const into = (b.into ?? "").trim().toLowerCase();
+  const rows = await loadToolRows(db);
+  const tools = allTools(rows);
+  const target = tools.find((x) => x.key === into);
+  if (!term || !target) return scoutFail(c, `merge needs a term and a tool the registry knows; "${into}" is not one`);
+  const v = validateToolInput({ key: into, name: target.name, aliases: [term.replace(/-/g, " ")], claimTopics: [`built-with-${term}`], topics: [term, `built-with-${term}`], phrases: [] }, tools.filter((x) => x.key !== into));
+  if (!v.ok) return scoutFail(c, v.error);
+  const t = now();
+  await upsertToolRow(db, v.tool, user.login, null, t);
+  await decide(db, term, "merged", user.login, into, t);
+  await logAction(db, { actor: user.login, role: "admin", action: "tool-merge", targetType: "tool", targetId: 0, label: into, note: `${term} is another name for ${into}` });
+  return scoutDone(c, `${term} now counts as ${into}.`, { key: into });
+});
+
+/** Dismiss: not a tool, or not one worth counting. The scout keeps counting it and never surfaces it again. */
+mod.post("/tool/dismiss", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const b = await body(c);
+  const term = (b.term ?? "").trim().toLowerCase();
+  if (!term) return scoutFail(c, "term required");
+  await decide(c.env.DB, term, "dismissed", user.login, null, now());
+  await logAction(c.env.DB, { actor: user.login, role: "admin", action: "tool-dismiss", targetType: "tool", targetId: 0, label: term });
+  return scoutDone(c, `${term} dismissed.`);
+});
+
+/** Retire: stop searching for it and stop accepting its claim. Listings that credit it keep the credit; the row stays, dated, on /method. */
+mod.post("/tool/retire", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const b = await body(c);
+  const key = (b.key ?? "").trim().toLowerCase();
+  const r = await c.env.DB.prepare("UPDATE tool_registry SET retired_at = ? WHERE key = ? AND retired_at IS NULL").bind(now(), key).run();
+  if (!r.meta.changes) return scoutFail(c, `${key || "(no key)"} is not an approved tool, or is already retired`);
+  await logAction(c.env.DB, { actor: user.login, role: "admin", action: "tool-retire", targetType: "tool", targetId: 0, label: key });
+  return scoutDone(c, `${key} retired: no longer searched for or accepted as a claim.`);
 });

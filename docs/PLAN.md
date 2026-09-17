@@ -372,3 +372,17 @@ What the sites that solved this actually do: Reddit, HN, Product Hunt and Stack 
 - **Similar slop** — five listed repos sharing the most `repo_tags` values, on the repo page. One cached query.
 - **Skipped on purpose:** collections, following, notifications, newsletter, digests (all need email or per-user write volume); upcoming pages, launch scheduling, hunters, star-rated reviews (contradict "just add the file" and the reddit-style brief); admin-featured tier (awards do it without editorial).
 
+
+## The scout: the tool dictionary grows in public (2026-09-16)
+
+A tool used to be seven hand-edited lists and a method bump. Now `src/lib/tools.ts` is the one registry the
+claim gate, the topic map, the signal names, the built_with vocabulary and the search grounds are derived from,
+and `tool_registry` rows a moderator approves are merged in at runtime (a row for a frozen key widens it).
+The trawl records every tool name it meets and does not know (`tool_sightings`, from `built-with-*` topics and
+"built with X" in descriptions and READMEs, taken before the sieves so the rejects count); `src/jobs/scout.ts`
+counts them nightly into `tool_candidates` at three distinct repos, refreshes counts without ever touching a
+status, and mails the owner once a day when a name newly crosses the line. `/mod#scout` approves (validated
+before anything reaches a regex), merges into a known tool, dismisses, or retires. An approved tool is searched
+for from the next hour under one extra static ground, The New Waters, whose queries are appended after every
+static one so no cursor index moves; `/method` lists each addition with its date; every bulletin freezes the
+keys its tool credit was counted over. Method v3 records the rule. The spec's built_with list stays frozen.

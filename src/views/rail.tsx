@@ -3,7 +3,7 @@ import { MINIMAL_EXAMPLE, SAMPLE_BUCKETS } from "../lib/slopmd";
 import { Mascot, StepIcon } from "./art";
 import type { ChatLine, ChatWindow } from "../lib/critics";
 import { BalconyChat, QuietBalcony } from "./balconychat";
-import { SeaChart } from "./sea";
+import { SeaChart, type SeaData } from "./sea";
 import { flagOn } from "../lib/flags";
 import { SITE } from "./layout";
 
@@ -16,7 +16,7 @@ export interface RailData {
   /** The newest bulletin, for the box that advertises it. Null until the first one is written. */
   report?: { slug: string; line: string } | null;
   /** The Sloptrawler's log, or null with -chart. */
-  sea?: { last_run: number | null; cursor: number; lane: number; hauled: number; spent: boolean } | null;
+  sea?: SeaData | null;
 }
 
 /** `chat` is the reader's own window into data.chat, sliced per request by the route (chatFor). */

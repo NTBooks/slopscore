@@ -181,16 +181,19 @@ export const SEARCH_OPERATORS: Record<string, { facet?: string; column?: string 
   tier: { column: "tier" },
 };
 
-export function normalizeValue(raw: unknown): string {
+/** `extra` is the tool registry's alias map (lib/tools.ts aliasMap), applied after the static aliases so an approved tool folds like a frozen one. */
+export function normalizeValue(raw: unknown, extra?: Record<string, string>): string {
   const s = String(raw ?? "").trim().toLowerCase();
   const aliased = ALIASES[s] ?? s;
-  return aliased.replace(/\s+/g, "-").replace(/[^a-z0-9.+#-]/g, "");
+  const n = aliased.replace(/\s+/g, "-").replace(/[^a-z0-9.+#-]/g, "");
+  return extra?.[n] ?? n;
 }
 
-export function isRecognized(facet: string, value: string): boolean {
+/** `extra` is the registry's built_with keys, for the one controlled facet that can grow without a deploy. */
+export function isRecognized(facet: string, value: string, extra?: readonly string[]): boolean {
   const vocab = CONTROLLED[facet];
   if (!vocab) return true; // free facet
-  return vocab.includes(value);
+  return vocab.includes(value) || (facet === "built_with" && Boolean(extra?.includes(value)));
 }
 
 export const vocabJson = () => ({

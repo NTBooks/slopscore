@@ -13,7 +13,7 @@
 //
 // Everything here is pure. What the browser does with it is public/rail.js, which mirrors LEGS and
 // nothing else: all the arithmetic that could be wrong lives in this file, where it is tested.
-import { TRAWL_GROUNDS, groundOfQuery } from "./virtual";
+import { TRAWL_GROUNDS, TRAWL_QUERIES, groundOfQuery } from "./virtual";
 
 /** One fishing ground: a TRAWL_GROUNDS entry with a place on the 280x180 chart. */
 export interface Ground {
@@ -37,6 +37,8 @@ const BERTHS: { x: number; y: number }[] = [
   { x: 84, y: 96 }, { x: 116, y: 54 }, { x: 178, y: 46 },
   { x: 216, y: 74 }, { x: 238, y: 116 }, { x: 166, y: 132 },
   { x: 132, y: 100 },
+  // The New Waters: open water off the Deeps, for the tools the scout found and a moderator approved.
+  { x: 198, y: 104 },
 ];
 
 export const GROUNDS: Ground[] = TRAWL_GROUNDS.map((g, i) => ({
@@ -49,8 +51,8 @@ export const GROUNDS: Ground[] = TRAWL_GROUNDS.map((g, i) => ({
  * The cursor indexes the flattened query list, not the grounds, because that is what autoTrawl walks and
  * advances. groundOfQuery does the mapping, and it wraps, so a counter that only ever goes up still lands.
  */
-export function groundFor(cursor: number): Ground {
-  return GROUNDS[groundOfQuery(cursor)] ?? GROUNDS[0];
+export function groundFor(cursor: number, total = TRAWL_QUERIES.length): Ground {
+  return GROUNDS[groundOfQuery(cursor, total)] ?? GROUNDS[0];
 }
 
 /** One trawl to the next: the cron is `7 * * * *`. public/rail.js carries a copy of this number. */

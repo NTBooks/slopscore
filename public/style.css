@@ -680,3 +680,12 @@ details.note[open] summary { margin-bottom: 4px; }
 /* Nobody here (awake.js: tab at the back, window behind another, or no input for a while): the two loops
    hold still rather than repaint for an empty chair. They pick up mid-cycle when the reader is back. */
 html.ss-idle .seachart .bob, html.ss-idle .balconychat .typing i { animation-play-state: paused; }
+
+/* The "?" beside a key or a criterion on the report, and the line it opens to. Hover or focus shows it; a tap focuses. */
+.why { position: relative; display: inline-block; margin-left: 4px; vertical-align: 1px; font-weight: normal; text-transform: none; letter-spacing: 0; }
+.why .q { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1; cursor: help; user-select: none; }
+.why .q:hover, .why .q:focus { border-color: var(--accent); color: var(--accent); outline: none; }
+.why .tip { display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: max-content; max-width: min(320px, calc(100vw - 32px)); padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); color: var(--fg); font-size: 12px; line-height: 1.4; text-align: left; white-space: normal; }
+.why:hover .tip, .why:focus-within .tip { display: block; }
+/* On a phone the line opens as a sheet along the bottom of the screen, so it can never run off the right edge. */
+@media (max-width: 720px) { .why .tip { position: fixed; left: 12px; right: 12px; top: auto; bottom: 48px; width: auto; max-width: none; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); } }

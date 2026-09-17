@@ -12,6 +12,7 @@ import { LISTABLE_CODES } from "../lib/method";
 import { isoDateTime, weekStart } from "../lib/time";
 import { COHORT_LABEL, type Cohort } from "../jobs/trends";
 import type { ArchiveRow, Move, ReportRow, ReportView, Section } from "../jobs/report";
+import { Why, annotateKeys } from "./why";
 import { Donut, Fig, Kpi, Kpis, Movers, Sparkline, SplitBar, Swings, OTHER_CLASS, donutSlices, pct, slotClass, type Slice, type Swing } from "./charts";
 
 /** The frozen markdown split at its `## ` headings. The preamble comes first, with no heading. */
@@ -66,7 +67,7 @@ const SectionFig: FC<{ v: ReportView; s: Section; slices?: Slice[]; hero?: strin
   const sl = slices ?? sectionSlices(s);
   const top = sl[0];
   return (
-    <Fig cls="pair" caption={<>{s.total.toLocaleString()} {what} in the {COHORT_LABEL[s.cohort as Cohort] ?? s.cohort} sample.{v.first ? " The first bulletin, so there is nothing to move from yet." : " In what moved, the bar is this week, the hollow marker is where it stood a week ago, and the chip is the distance in share points."}</>}>
+    <Fig cls="pair" caption={<>{s.total.toLocaleString()} {what}<Why k={what} /> in the {COHORT_LABEL[s.cohort as Cohort] ?? s.cohort}<Why k={s.cohort === "opted" ? "opted in" : "trawled"} /> sample.{v.first ? " The first bulletin, so there is nothing to move from yet." : <> In what moved, the bar is this week, the hollow marker is where it stood a week ago, and the chip is the distance in share points<Why k="share points" />.</>}</>}>
       <div>
         <h4>the pile</h4>
         <Donut slices={sl} hero={hero ?? (top ? pct(top.n / s.total) : "")} caption={caption ?? (top && top.key.length <= 16 ? top.key : "the biggest slice")} title={ringTitle} size={160} />
@@ -113,7 +114,7 @@ const SwingsFig: FC<{ v: ReportView }> = ({ v }) => {
   return (
     <>
       <h2 id="biggest-swings">Biggest swings this week</h2>
-      <Fig caption={<>Share points gained or lost against last week's snapshot, across every counted section. Pink went up, purple went down; the number is the move, not the size. A big swing on a small section is the mix changing, not the world.</>}>
+      <Fig caption={<>Share points<Why k="share points" /> gained or lost against last week's snapshot, across every counted section. Pink went up, purple went down; the number is the move, not the size. A big swing on a small section is the mix changing, not the world.</>}>
         <Swings rows={rows} />
       </Fig>
     </>
@@ -150,10 +151,10 @@ const Masthead: FC<{ row: ReportRow; v: ReportView }> = ({ row, v }) => (
       <p class="meta">Written {isoDateTime(row.at)} · method v{v.method}{v.since ? null : " · the first one, so nothing here moves yet"} · counted, never generated</p>
     </header>
     <Kpis>
-      <Kpi label="listed" value={v.totals.listed} delta={v.totals.added} since="this week" sub={`across ${v.totals.owners.toLocaleString()} owners`} />
-      <Kpi label="trawled" value={v.totals.trawl} delta={v.totals.added_trawl} sub={<><i class="swatch trawl"></i> dragged out of public GitHub; nobody submitted them</>} />
-      <Kpi label="opted in" value={v.totals.opted} delta={v.totals.added_opted} sub={<><i class="swatch opted"></i> committed a slopscore.md and asked to be counted</>} />
-      <Kpi label="the judge has seen" value={v.judged.seen} delta={v.judged.was_seen == null ? null : v.judged.seen - v.judged.was_seen} since="this week" sub={v.judged.seen ? `${pct(v.judged.software_share)} was software somebody made` : "nothing yet, so no pass rate"} />
+      <Kpi label={<>listed<Why k="listed" /></>} value={v.totals.listed} delta={v.totals.added} since="this week" sub={`across ${v.totals.owners.toLocaleString()} owners`} />
+      <Kpi label={<>trawled<Why k="trawled" /></>} value={v.totals.trawl} delta={v.totals.added_trawl} sub={<><i class="swatch trawl"></i> dragged out of public GitHub; nobody submitted them</>} />
+      <Kpi label={<>opted in<Why k="opted in" /></>} value={v.totals.opted} delta={v.totals.added_opted} sub={<><i class="swatch opted"></i> committed a slopscore.md and asked to be counted</>} />
+      <Kpi label={<>the judge has seen<Why k="the judge has seen" /></>} value={v.judged.seen} delta={v.judged.was_seen == null ? null : v.judged.seen - v.judged.was_seen} since="this week" sub={v.judged.seen ? `${pct(v.judged.software_share)} was software somebody made` : "nothing yet, so no pass rate"} />
     </Kpis>
   </>
 );
@@ -221,13 +222,13 @@ export const ReportPage: FC<{ row: ReportRow; archive: ArchiveRow[]; list: { url
               <>
                 <h2 id={slugify(heading)}>{heading}</h2>
                 {Figure ? <Figure v={v} /> : null}
-                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(md) }} />
+                <div dangerouslySetInnerHTML={{ __html: annotateKeys(renderMarkdown(md)) }} />
               </>
             );
           })}
         </>
       ) : (
-        <div dangerouslySetInnerHTML={{ __html: renderMarkdown(row.body) }} />
+        <div dangerouslySetInnerHTML={{ __html: annotateKeys(renderMarkdown(row.body)) }} />
       )}
       <Subscribe list={list} />
       <p class="muted small">

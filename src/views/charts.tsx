@@ -9,6 +9,7 @@
 // follows the dark-mode token flip for free, and `fill="var(--c3)"` on the element would not.
 import type { Child, FC, PropsWithChildren } from "hono/jsx";
 import { weekStart } from "../lib/time";
+import { Why } from "./why";
 
 export const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 /** Two decimals: hono/jsx prints numbers raw, and `33.333333333333336` in a path is noise in every diff. */
@@ -125,7 +126,7 @@ export const Legend: FC<{ keys: { key: string; cls: string }[] }> = ({ keys }) =
 /** The headline row. A handful of numbers, each with its label and, where there is a week before, its move. */
 export const Kpis: FC<PropsWithChildren> = ({ children }) => <div class="kpis">{children}</div>;
 
-export const Kpi: FC<{ label: string; value: string | number; delta?: number | null; since?: string; sub?: Child; title?: string }> = ({ label, value, delta, since, sub, title }) => (
+export const Kpi: FC<{ label: Child; value: string | number; delta?: number | null; since?: string; sub?: Child; title?: string }> = ({ label, value, delta, since, sub, title }) => (
   <div class="kpi" title={title}>
     <span class="label">{label}</span>
     <strong class="value">{typeof value === "number" ? value.toLocaleString("en-US") : value}</strong>
@@ -162,7 +163,7 @@ export const Donut: FC<{ slices: Slice[]; hero: Child; caption: Child; title: st
       </div>
       <ul class="dlegend">
         {arcs.map((a) => (
-          <li><i class={`swatch ${a.cls}`}></i><span class="k">{a.key}</span><span class="n">{a.n}{unit} <span class="muted">{pct(a.share)}</span></span></li>
+          <li><i class={`swatch ${a.cls}`}></i><span class="k">{a.key}<Why k={a.key} /></span><span class="n">{a.n}{unit} <span class="muted">{pct(a.share)}</span></span></li>
         ))}
       </ul>
     </div>
@@ -210,7 +211,7 @@ export const Movers: FC<{ rows: MoveRow[]; first?: boolean; limit?: number; unit
         const tip = `${r.key}: ${r.n}${unit} (${pct(r.share)})${moved ? `, was ${pct(r.was_share!)}` : first ? "" : r.was_share == null ? ", new this week" : ""}`;
         return (
           <div class="mrow" title={tip}>
-            <span class="mkey">{r.key}</span>
+            <span class="mkey">{r.key}<Why k={r.key} /></span>
             <span class="mtrack">
               {moved ? <i class="mgap" style={`left:${x(lo)};width:${x(hi - lo)}`}></i> : null}
               <i class="mbar" style={`width:${x(r.share)}`}></i>
@@ -253,7 +254,7 @@ export const SplitBar: FC<{ parts: { key: string; n: number; cls: string }[]; ti
       <div class="sbar" role="img" aria-label={title} title={title}>
         {parts.filter((p) => p.n > 0).map((p) => <i class={`seg ${p.cls}`} style={`flex:${p.n}`} title={`${p.key}: ${p.n}${unit} (${pct(p.n / total)})`}></i>)}
       </div>
-      <p class="legend">{parts.map((p) => <span class="lkey"><i class={`swatch ${p.cls}`}></i>{p.key} <strong>{p.n.toLocaleString("en-US")}</strong> <span class="muted">{pct(p.n / total)}</span></span>)}</p>
+      <p class="legend">{parts.map((p) => <span class="lkey"><i class={`swatch ${p.cls}`}></i>{p.key}<Why k={p.key} /> <strong>{p.n.toLocaleString("en-US")}</strong> <span class="muted">{pct(p.n / total)}</span></span>)}</p>
     </div>
   );
 };
@@ -276,7 +277,7 @@ export const Swings: FC<{ rows: Swing[]; limit?: number }> = ({ rows, limit = 8 
         const text = `${up ? "+" : "−"}${(Math.abs(r.points) * 100).toFixed(1)} pts`;
         return (
           <div class="srow" title={`${r.key}${r.group ? ` (${r.group})` : ""}: ${text} of share since last week`}>
-            <span class="skey">{r.key}{r.group ? <span class="muted"> · {r.group}</span> : null}</span>
+            <span class="skey">{r.key}<Why k={r.key} />{r.group ? <span class="muted"> · {r.group}</span> : null}</span>
             <span class="strack"><i class={up ? "up" : "down"} style={up ? `left:50%;width:${w}%` : `right:50%;width:${w}%`}></i></span>
             <span class={`sn ${up ? "up" : "down"}`}>{text}</span>
           </div>

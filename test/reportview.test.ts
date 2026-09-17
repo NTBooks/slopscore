@@ -60,7 +60,7 @@ describe("the page", () => {
     expect(out).toContain('class="mwas"');
     for (const h of ["The trough", "How much of it is software", "Which tool gets the credit", "What it is written in", "What the net threw back", "The small print"]) expect(out).toContain(`>${h}</h2>`);
     // The frozen lists are still there under the figures: the prose is the record, the figure is the picture.
-    expect(out).toContain("<li><strong>claude-code</strong> — 60 (60%), flat</li>");
+    expect(out).toMatch(/<li><strong>claude-code<\/strong>(<span class="why">.*?<\/span><\/span>)? — 60 \(60%\), flat<\/li>/);
     expect(out).toContain("how loudly each tool&#39;s users say its name");
     expect(out).not.toContain("<h2>The Trawl Report");
   });

@@ -115,7 +115,7 @@ export function netBucket(reason: string): string {
   if (r.startsWith("license ") || r.includes("permissive list")) return "a licence we cannot quote from";
   if (r.startsWith("denylist")) return "tripped the denylist";
   if (r.includes("prompt pack") || r.includes("not vibe-coded software")) return "writing about vibe coding, not vibe-coded";
-  if (r.includes("org-owned")) return "owned by an org, so nobody can claim it";
+  if (r.includes("org-owned")) return "owned by an org, so nobody could claim or remove it";
   if (r.includes("stars")) return "outside the star window";
   if (r.includes("pushed")) return "not touched in 90 days";
   if (r.includes("description")) return "no description to quote";

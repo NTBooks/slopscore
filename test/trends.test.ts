@@ -39,7 +39,7 @@ describe("buckets", () => {
     expect(netBucket("no past-tense claim that an AI tool wrote it")).toBe("never claims a model wrote it");
     expect(netBucket("license GPL-3.0 is not on the permissive list")).toBe("a licence we cannot quote from");
     expect(netBucket("denylist: spamword")).toBe("tripped the denylist");
-    expect(netBucket("org-owned: nobody can log in as the repo owner")).toBe("owned by an org, so nobody can claim it");
+    expect(netBucket("org-owned: nobody can log in as the repo owner")).toBe("owned by an org, so nobody could claim or remove it");
   });
 
   it("folds an unknown judge answer in with the judge rather than inventing a category", () => {

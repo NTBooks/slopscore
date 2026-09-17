@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { archiveRow, reportMd, reportTitle, shapeReport, type ReportRow } from "../src/jobs/report";
 import type { TrendRow } from "../src/jobs/trends";
-import { ReportArchive, ReportPage, SECTION_FIGURES, readView, splitSections, verdictSlices, weekText } from "../src/views/report";
+import { ReportArchive, ReportPage, SECTION_FIGURES, readView, splitSections, swingsOf, verdictSlices, weekText } from "../src/views/report";
 
 const row = (over: Partial<TrendRow>): TrendRow => ({ cohort: "trawl", metric: "language", period: "", key: "python", n: 1, mean_score: null, ...over });
 const snapshot = (k = 1): TrendRow[] => [
@@ -65,9 +65,29 @@ describe("the page", () => {
     expect(out).not.toContain("<h2>The Trawl Report");
   });
 
+  it("gives every counted section a ring beside its movers, and one swings chart for the week", () => {
+    const out = html(ReportPage({ row: rowOf(view), archive: [], list: null }));
+    expect(out.split('class="donut').length - 1).toBe(4); // verdict, tools, languages, net
+    expect(out.split('class="movers').length - 1).toBe(4);
+    expect(out).toContain('class="sbar"');
+    // `view` is last week scaled by a half, so every share is flat and there is nothing to swing: no chart.
+    expect(out).not.toContain("Biggest swings");
+    // A week where cursor lost ground gets the swings chart, drawn from every section together.
+    const moved = shapeReport("2026-W37", "2026-09-14", "2026-09-07", snapshot(1), snapshot(0.5).map((r) => (r.key === "cursor" ? { ...r, n: 40 } : r)));
+    const out2 = html(ReportPage({ row: rowOf(moved), archive: [], list: null }));
+    expect(out2).toContain(">Biggest swings this week</h2>");
+    expect(out2).toContain('class="swings"');
+    expect(out2).toContain('class="down"');
+    const sw = swingsOf(moved);
+    expect(sw.map((r) => r.group)).toEqual(expect.arrayContaining(["tool", "language", "verdict", "thrown back"]));
+    expect(sw.find((r) => r.key === "cursor")!.points).toBeLessThan(0);
+    expect(swingsOf(first)).toEqual([]);
+  });
+
   it("draws no movement on a first bulletin", () => {
     const out = html(ReportPage({ row: rowOf(first), archive: [], list: null }));
     expect(out).toContain("nothing here moves yet");
+    expect(out).not.toContain("Biggest swings");
     expect(out).not.toContain("mwas");
     expect(out).not.toContain("pts");
     expect(out).not.toContain("this week</span>");

@@ -142,3 +142,21 @@ describe("rendering", () => {
     expect(html(Kpi({ label: "listed", value: 214, delta: null }))).not.toContain("delta");
   });
 });
+
+describe("a split bar and the swings", () => {
+  it("draws the whole as one bar with every count under it, and nothing for an empty whole", async () => {
+    const { SplitBar, Swings } = await import("../src/views/charts");
+    const out = html(SplitBar({ title: "t", parts: [{ key: "trawled", n: 295, cls: "trawl" }, { key: "opted in", n: 12, cls: "opted" }] }));
+    expect(out).toContain('class="seg trawl"');
+    expect(out).toContain("<strong>295</strong>");
+    expect(out).toContain("3.9%");
+    expect(SplitBar({ title: "t", parts: [{ key: "a", n: 0, cls: "c1" }] })).toBeNull();
+    // Swings: biggest first, gained to the right of the line, lost to the left, and a flat row never drawn.
+    const sw = html(Swings({ rows: [{ key: "a", points: 0.02 }, { key: "b", group: "tool", points: -0.09 }, { key: "c", points: 0.001 }] }));
+    expect(sw.indexOf("b")).toBeLessThan(sw.indexOf(">a<"));
+    expect(sw).toContain('class="down" style="right:50%;width:50%"');
+    expect(sw).toContain("−9.0 pts");
+    expect(sw).not.toContain(">c<");
+    expect(Swings({ rows: [{ key: "c", points: 0.001 }] })).toBeNull();
+  });
+});

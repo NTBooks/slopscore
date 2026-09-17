@@ -12,7 +12,7 @@ import { LISTABLE_CODES } from "../lib/method";
 import { isoDateTime, weekStart } from "../lib/time";
 import { COHORT_LABEL, type Cohort } from "../jobs/trends";
 import type { ArchiveRow, Move, ReportRow, ReportView, Section } from "../jobs/report";
-import { Donut, Fig, Kpi, Kpis, Movers, Sparkline, OTHER_CLASS, pct, slotClass, type Slice } from "./charts";
+import { Donut, Fig, Kpi, Kpis, Movers, Sparkline, SplitBar, Swings, OTHER_CLASS, donutSlices, pct, slotClass, type Slice, type Swing } from "./charts";
 
 /** The frozen markdown split at its `## ` headings. The preamble comes first, with no heading. */
 export function splitSections(body: string): { heading: string | null; md: string }[] {
@@ -54,22 +54,71 @@ export function verdictSlices(codes: Move[]): Slice[] {
   return thrown ? [...kept, { key: "thrown back", n: thrown, cls: OTHER_CLASS }] : kept;
 }
 
-const SoftwareFig: FC<{ v: ReportView }> = ({ v }) => (
-  v.judged.seen ? (
-    <Fig caption={<>Both halves of one population: everything the judge was paid to look at, listed or not. The five listable codes keep their colours; every reason to throw a candidate back is the grey slice. A <strong>model's</strong> labels off a closed list, not a maker's.</>}>
-      <Donut slices={verdictSlices(v.judged.codes)} hero={pct(v.judged.software_share)} caption="software somebody made" title={`What the judge saw over ${v.judged.seen} candidates`} />
+/** A section's rows as a ring: six named slices and the grey fold, in the section's own order (biggest first). */
+const sectionSlices = (s: Section): Slice[] => donutSlices(s.rows);
+
+/**
+ * A counted section as a card: the ring on the left says what the pile is made of, the movers on the right say
+ * what changed. The bar is this week, the hollow marker is last week, the chip is the distance in points.
+ */
+const SectionFig: FC<{ v: ReportView; s: Section; slices?: Slice[]; hero?: string; caption?: string; what: string; ringTitle: string; rows?: Section["rows"] }> = ({ v, s, slices, hero, caption, what, ringTitle, rows }) => {
+  if (!s.total) return null;
+  const sl = slices ?? sectionSlices(s);
+  const top = sl[0];
+  return (
+    <Fig cls="pair" caption={<>{s.total.toLocaleString()} {what} in the {COHORT_LABEL[s.cohort as Cohort] ?? s.cohort} sample.{v.first ? " The first bulletin, so there is nothing to move from yet." : " In what moved, the bar is this week, the hollow marker is where it stood a week ago, and the chip is the distance in share points."}</>}>
+      <div>
+        <h4>the pile</h4>
+        <Donut slices={sl} hero={hero ?? (top ? pct(top.n / s.total) : "")} caption={caption ?? (top && top.key.length <= 16 ? top.key : "the biggest slice")} title={ringTitle} size={160} />
+      </div>
+      <div>
+        <h4>{v.first ? "where they stand" : "what moved"}</h4>
+        <Movers rows={rows ?? s.rows} first={v.first} tone={s.cohort === "opted" ? "opted" : ""} />
+      </div>
+    </Fig>
+  );
+};
+
+/** The judge's verdict: the same card, but the ring keeps the five listable codes apart from everything thrown back. */
+const SoftwareFig: FC<{ v: ReportView }> = ({ v }) => {
+  if (!v.judged.seen) return null;
+  const s: Section = { cohort: "trawl", total: v.judged.seen, was_total: v.judged.was_seen, rows: v.judged.codes };
+  return (
+    <>
+      <SectionFig v={v} s={s} slices={verdictSlices(v.judged.codes)} hero={pct(v.judged.software_share)} caption="software somebody made" what="candidates judged" ringTitle={`What the judge saw over ${v.judged.seen} candidates`} />
+      <p class="muted small">One population, both halves: everything the judge was paid to look at, whether it was listed or not. The five listable codes keep their own colours; every reason to throw a candidate back shares the grey slice. These are a <strong>model's</strong> labels from a closed list, not a maker's own words.</p>
+    </>
+  );
+};
+
+/** The trough as one bar: how much of the pile was dragged in and how much walked in. */
+const TroughFig: FC<{ v: ReportView }> = ({ v }) => (
+  v.totals.listed ? (
+    <Fig caption={<>Every listing, by how it got here. The purple sliver is the only part of the site anyone volunteered for.</>}>
+      <SplitBar title={`${v.totals.listed} listings: ${v.totals.trawl} trawled, ${v.totals.opted} opted in`} parts={[{ key: "trawled", n: v.totals.trawl, cls: "trawl" }, { key: "opted in", n: v.totals.opted, cls: "opted" }]} />
     </Fig>
   ) : null
 );
 
-/** One counted section as movers: the bar is this week, the hollow marker is last week, the chip is the distance. */
-const MoversFig: FC<{ s: Section; first: boolean; unit: string; what: string }> = ({ s, first, unit, what }) => (
-  s.total ? (
-    <Fig caption={<>{s.total.toLocaleString()} {what} across the {COHORT_LABEL[s.cohort as Cohort] ?? s.cohort} sample.{first ? " First bulletin: nothing to move from yet." : " The hollow marker is where each one stood a week ago."}</>}>
-      <Movers rows={s.rows} first={first} unit={unit} tone={s.cohort === "opted" ? "opted" : ""} />
-    </Fig>
-  ) : null
-);
+/** Everything that moved this week, every section together, biggest swing first. Never on a first bulletin. */
+export function swingsOf(v: ReportView): Swing[] {
+  if (v.first) return [];
+  const from = (rows: Section["rows"], group: string): Swing[] => rows.filter((m) => m.points != null).map((m) => ({ key: m.key, group, points: m.points! }));
+  return [...from(v.tools.rows, "tool"), ...from(v.languages.rows, "language"), ...from(v.judged.codes, "verdict"), ...from(v.net.rows, "thrown back")];
+}
+
+const SwingsFig: FC<{ v: ReportView }> = ({ v }) => {
+  const rows = swingsOf(v).filter((r) => Math.abs(r.points) >= 0.005);
+  if (!rows.length) return null;
+  return (
+    <>
+      <h2 id="biggest-swings">Biggest swings this week</h2>
+      <Fig caption={<>Share points gained or lost against last week's snapshot, across every counted section. Pink went up, purple went down; the number is the move, not the size. A big swing on a small section is the mix changing, not the world.</>}>
+        <Swings rows={rows} />
+      </Fig>
+    </>
+  );
+};
 
 /**
  * Which figure goes under which heading, keyed by the heading text jobs/report.ts writes. A heading with no
@@ -78,11 +127,11 @@ const MoversFig: FC<{ s: Section; first: boolean; unit: string; what: string }> 
  * written under different words) simply renders as prose.
  */
 export const SECTION_FIGURES: Record<string, FC<{ v: ReportView }> | null> = {
-  "The trough": null,
+  "The trough": TroughFig,
   "How much of it is software": SoftwareFig,
-  "Which tool gets the credit": ({ v }) => <MoversFig s={v.tools} first={v.first} unit="" what="credits" />,
-  "What it is written in": ({ v }) => <MoversFig s={v.languages} first={v.first} unit="" what="repos with a language" />,
-  "What the net threw back": ({ v }) => <MoversFig s={v.net} first={v.first} unit="" what="candidates thrown back in 30 days" />,
+  "Which tool gets the credit": ({ v }) => <SectionFig v={v} s={v.tools} what="credits" ringTitle={`Which tool gets the credit, ${v.tools.total} credits`} />,
+  "What it is written in": ({ v }) => <SectionFig v={v} s={v.languages} what="language credits" ringTitle={`What it is written in, ${v.languages.total} language credits`} />,
+  "What the net threw back": ({ v }) => <SectionFig v={v} s={v.net} what="candidates thrown back in 30 days" ringTitle={`What the net threw back, ${v.net.total} candidates`} />,
   "The small print": null,
 };
 
@@ -102,8 +151,8 @@ const Masthead: FC<{ row: ReportRow; v: ReportView }> = ({ row, v }) => (
     </header>
     <Kpis>
       <Kpi label="listed" value={v.totals.listed} delta={v.totals.added} since="this week" sub={`across ${v.totals.owners.toLocaleString()} owners`} />
-      <Kpi label="trawled" value={v.totals.trawl} delta={v.totals.added_trawl} sub={<><i class="swatch trawl"></i> found by us, never asked to be here</>} />
-      <Kpi label="opted in" value={v.totals.opted} delta={v.totals.added_opted} sub={<><i class="swatch opted"></i> committed a slopscore.md</>} />
+      <Kpi label="trawled" value={v.totals.trawl} delta={v.totals.added_trawl} sub={<><i class="swatch trawl"></i> dragged out of public GitHub; nobody submitted them</>} />
+      <Kpi label="opted in" value={v.totals.opted} delta={v.totals.added_opted} sub={<><i class="swatch opted"></i> committed a slopscore.md and asked to be counted</>} />
       <Kpi label="the judge has seen" value={v.judged.seen} delta={v.judged.was_seen == null ? null : v.judged.seen - v.judged.was_seen} since="this week" sub={v.judged.seen ? `${pct(v.judged.software_share)} was software somebody made` : "nothing yet, so no pass rate"} />
     </Kpis>
   </>
@@ -164,6 +213,7 @@ export const ReportPage: FC<{ row: ReportRow; archive: ArchiveRow[]; list: { url
       {v ? (
         <>
           <Masthead row={row} v={v} />
+          <SwingsFig v={v} />
           {splitSections(row.body).map(({ heading, md }) => {
             if (heading == null) return <div dangerouslySetInnerHTML={{ __html: renderMarkdown(md.replace(/^# [^\n]*\n?/, "")) }} />;
             const Figure = SECTION_FIGURES[heading] ?? null;

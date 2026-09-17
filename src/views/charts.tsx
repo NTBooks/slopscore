@@ -147,8 +147,10 @@ export const Donut: FC<{ slices: Slice[]; hero: Child; caption: Child; title: st
   const arcs = donutArcs(slices, 46);
   if (!arcs.length) return <p class="muted small">{empty}</p>;
   const label = (a: Arc) => `${a.key}: ${a.n}${unit} (${pct(a.share)})`;
+  // Long names (the net's reasons are sentences) go under the ring rather than being folded beside it.
+  const stack = arcs.some((a) => a.key.length > 18);
   return (
-    <div class="donut">
+    <div class={`donut${stack ? " stack" : ""}`}>
       <div class="ring" style={`width:${size}px;height:${size}px`}>
         <svg viewBox="0 0 120 120" width={size} height={size} role="img" aria-label={title}>
           <title>{title}</title>
@@ -236,5 +238,50 @@ export const Sparkline: FC<{ values: number[]; title: string; cls?: string }> = 
       <title>{title}</title>
       <path d={sparkPath(values)} fill="none" vector-effect="non-scaling-stroke" />
     </svg>
+  );
+};
+
+/**
+ * One bar split by its parts: the cheapest honest picture of a whole and its pieces when there are only two or
+ * three of them, with every count printed underneath. Two segments is not a pie, on purpose.
+ */
+export const SplitBar: FC<{ parts: { key: string; n: number; cls: string }[]; title: string; unit?: string }> = ({ parts, title, unit = "" }) => {
+  const total = parts.reduce((s, p) => s + p.n, 0);
+  if (!total) return null;
+  return (
+    <div class="split">
+      <div class="sbar" role="img" aria-label={title} title={title}>
+        {parts.filter((p) => p.n > 0).map((p) => <i class={`seg ${p.cls}`} style={`flex:${p.n}`} title={`${p.key}: ${p.n}${unit} (${pct(p.n / total)})`}></i>)}
+      </div>
+      <p class="legend">{parts.map((p) => <span class="lkey"><i class={`swatch ${p.cls}`}></i>{p.key} <strong>{p.n.toLocaleString("en-US")}</strong> <span class="muted">{pct(p.n / total)}</span></span>)}</p>
+    </div>
+  );
+};
+
+/**
+ * What moved most, either way, around a zero line: share points gained to the right in the up colour, lost to
+ * the left in the down colour. The one chart on the bulletin that reads as news, which is why it only ever
+ * draws rows that actually moved and is never drawn on a first week.
+ */
+export interface Swing { key: string; group?: string; points: number }
+export const Swings: FC<{ rows: Swing[]; limit?: number }> = ({ rows, limit = 8 }) => {
+  const shown = rows.filter((r) => Math.abs(r.points) >= 0.005).sort((a, b) => Math.abs(b.points) - Math.abs(a.points)).slice(0, limit);
+  if (!shown.length) return null;
+  const max = Math.max(...shown.map((r) => Math.abs(r.points)));
+  return (
+    <div class="swings">
+      {shown.map((r) => {
+        const up = r.points > 0;
+        const w = r2((Math.abs(r.points) / max) * 50);
+        const text = `${up ? "+" : "−"}${(Math.abs(r.points) * 100).toFixed(1)} pts`;
+        return (
+          <div class="srow" title={`${r.key}${r.group ? ` (${r.group})` : ""}: ${text} of share since last week`}>
+            <span class="skey">{r.key}{r.group ? <span class="muted"> · {r.group}</span> : null}</span>
+            <span class="strack"><i class={up ? "up" : "down"} style={up ? `left:50%;width:${w}%` : `right:50%;width:${w}%`}></i></span>
+            <span class={`sn ${up ? "up" : "down"}`}>{text}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 };

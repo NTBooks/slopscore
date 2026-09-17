@@ -39,6 +39,7 @@ h2 { font-size: 18px; } h3 { font-size: 14px; margin: 14px 0 6px; }
 button.link { background: none; border: 0; color: var(--link); cursor: pointer; padding: 0; font: inherit; }
 .wrap { max-width: 1200px; margin: 0 auto; padding: 8px 14px; display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 22px; }
 .wrap.narrow { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+.wrap > .wrap.narrow { grid-column: 1 / -1; width: 100%; }
 @media (max-width: 880px) { .wrap { grid-template-columns: minmax(0, 1fr); } .rail { order: 2; } }
 
 /* tag bar (subreddit bar) */
@@ -466,7 +467,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 .swatch.trawl, .seg.trawl { background: var(--trawl); } .swatch.opted, .seg.opted { background: var(--opted); }
 .fig { margin: 8px 0 18px; }
 .fig figcaption { margin-top: 6px; }
-.fig.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 22px; align-items: start; }
+.fig.pair { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 8px 24px; align-items: start; }
 /* Twelve weekly columns in half a page: shorter labels, no year, and the ring's legend never wraps a name letter by letter. */
 .fig.pair .cols { gap: 2px; } .fig.pair .collabel { font-size: 9px; } .fig.pair .collabel .yr { display: none; }
 .fig.pair figcaption { grid-column: 1 / -1; }
@@ -492,7 +493,7 @@ details.note summary { cursor: pointer; font-weight: bold; font-size: 14px; marg
 details.note[open] summary { margin-bottom: 4px; }
 
 /* The ring. Slices are stroked arcs, so a 2px angular gap is the surface showing through. */
-.donut { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; }
+.donut { display: grid; grid-template-columns: auto minmax(0, max-content); gap: 6px 18px; align-items: center; justify-content: start; }
 .donut .ring { position: relative; }
 .donut svg { display: block; }
 .donut .slice { fill: none; stroke-width: 16; }
@@ -502,9 +503,11 @@ details.note[open] summary { margin-bottom: 4px; }
 .donut .centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; padding: 0 30px; }
 .donut .centre strong { font-size: 24px; line-height: 1; letter-spacing: -.5px; }
 .donut .centre span { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 4px; line-height: 1.2; }
-.dlegend { list-style: none; margin: 0; padding: 0; font-size: 12px; display: grid; gap: 3px; }
+.dlegend { list-style: none; margin: 0; padding: 0; font-size: 12px; display: grid; gap: 3px; max-width: 300px; }
+.donut.stack { grid-template-columns: 1fr; justify-items: start; }
+.donut.stack .dlegend { max-width: none; width: 100%; }
 .dlegend li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; gap: 7px; align-items: center; }
-.dlegend .k { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+.dlegend .k { line-height: 1.25; }
 .dlegend .n { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 /* Movers: the bar is now, the hollow marker is last week, the chip is the distance in points. */
@@ -533,8 +536,27 @@ details.note[open] summary { margin-bottom: 4px; }
 .masthead .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
 .masthead h1 { margin: 2px 0 4px; font-family: var(--serif); font-size: 26px; letter-spacing: -.3px; line-height: 1.15; }
 .masthead .meta { color: var(--muted); font-size: 12px; }
-.report h2 { font-size: 17px; margin: 24px 0 6px; }
-.report .fig { margin-top: 6px; }
+.report h2 { font-size: 17px; margin: 26px 0 8px; }
+.report .fig { margin: 6px 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px 10px; }
+.report .fig figcaption { margin-top: 8px; }
+.report .fig .movers { margin: 4px 0 2px; }
+
+/* The split bar: one whole, two or three pieces, and every count printed under it. */
+.sbar { display: flex; gap: 2px; height: 16px; border-radius: 4px; overflow: hidden; }
+.sbar .seg { display: block; min-width: 3px; }
+.split .legend { margin: 6px 0 0; font-size: 12px; }
+
+/* Swings: share points around a zero line, gained to the right, lost to the left. */
+.swings { display: grid; gap: 5px; margin: 6px 0 4px; }
+.srow { display: grid; grid-template-columns: minmax(0, 13em) 1fr 5.5em; gap: 8px; align-items: center; font-size: 12px; }
+.skey { overflow-wrap: anywhere; line-height: 1.25; }
+.strack { position: relative; height: 12px; background: var(--panel-2); border-radius: 4px; }
+.strack::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+.strack i { position: absolute; top: 2px; height: 8px; }
+.strack i.up { background: var(--up); border-radius: 0 4px 4px 0; }
+.strack i.down { background: var(--down); border-radius: 4px 0 0 4px; }
+.sn { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sn.up { color: var(--ok-fg); } .sn.down { color: var(--bad-fg); }
 
 /* Every bulletin so far, and the line they draw once there are enough of them. */
 .sparks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 10px; }
@@ -548,7 +570,7 @@ details.note[open] summary { margin-bottom: 4px; }
 .archive .muted { display: block; font-size: 11px; }
 
 /* The content column is 640px on a laptop (the page grid keeps a rail's width), so a ring beside twelve columns only fits on a wide screen. */
-@media (max-width: 1099px) { .fig.pair { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 959px) { .fig.pair { grid-template-columns: minmax(0, 1fr); } }
 .fig.pair > div { min-width: 0; }
 @media (max-width: 600px) {
   .donut, .sparks { grid-template-columns: 1fr; }
@@ -558,6 +580,8 @@ details.note[open] summary { margin-bottom: 4px; }
   .kpis { grid-template-columns: 1fr 1fr; }
   .kpi .value { font-size: 22px; }
   .mrow { grid-template-columns: minmax(0, 7em) 1fr auto auto; gap: 5px; }
+  .srow { grid-template-columns: minmax(0, 8em) 1fr auto; gap: 6px; }
+  .report .fig { padding: 10px 10px 8px; }
   .mrow .delta { font-size: 10px; padding: 0 4px; }
 }
 

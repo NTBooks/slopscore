@@ -146,8 +146,8 @@ describe("the bulletin", () => {
     expect(first.since).toBeNull();
     expect(first.totals.added).toBeNull();
     const md = reportMd(first);
-    expect(md).toContain("First one");
-    expect(md).not.toMatch(/points on/);
+    expect(md).toContain("The first bulletin");
+    expect(md).not.toMatch(/points from/);
     // Every key is absent from a snapshot that does not exist. Calling them all "new this week" would be a
     // finding about growth invented out of having no history at all.
     expect(md).not.toContain("new this week");

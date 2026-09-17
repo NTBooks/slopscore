@@ -191,6 +191,12 @@ export function shapeReport(slug: string, date: string, since: string | null, no
 const pct = (x: number) => `${Math.round(x * 1000) / 10}%`;
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 const points = (x: number) => `${x > 0 ? "+" : "−"}${(Math.abs(x) * 100).toFixed(1)} points`;
+/** A week's change on a headline count: "+61 this week", or the honest "no change this week" rather than "+0". */
+const thisWeek = (n: number | null) => (n == null ? "" : n === 0 ? ", no change this week" : `, ${signed(n)} this week`);
+/** The same for a parenthesised sub-count. */
+const paren = (n: number | null) => (n == null ? "" : n === 0 ? " (no change)" : ` (${signed(n)})`);
+/** Small counts read better as words in running prose. */
+const words = (n: number) => ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][n] ?? String(n);
 
 /**
  * One mover as a phrase. Says what it is now, then what moved, and never claims movement it cannot see.
@@ -203,14 +209,21 @@ function line(m: Move, first = false): string {
   if (first) return head;
   if (m.was == null) return `${head}, new this week`;
   if (m.points == null || Math.abs(m.points) < 0.005) return `${head}, flat`;
-  return `${head}, ${points(m.points)} on ${m.was}`;
+  return `${head}, ${points(m.points)} from ${m.was} (${pct(m.was_share!)})`;
 }
 
-/** The caveat a small section gets instead of a trend. Printed, not omitted: n is the finding at this size. */
-const noise = (n: number, floor = NOISE_FLOOR) => (n < floor ? ` On n=${n} a week's movement here is noise; it is printed because the count is, not because it means anything yet.` : "");
+/**
+ * The caveat a small section gets instead of a trend. Printed, not omitted: n is the finding at this size.
+ * On a first bulletin there is no movement to disown, so the warning is about the sample rather than the swing.
+ */
+const noise = (n: number, first: boolean, floor = NOISE_FLOOR) => (
+  n >= floor ? ""
+    : first ? ` At n=${n} the sample is too thin to lean on. It is printed because it is the count, not because it means anything yet.`
+      : ` At n=${n} a week's swing is noise. Quote the count and leave the movement alone.`
+);
 
 /** Which column a section was counted over, said out loud whenever it is not the near-random one. */
-const counted = (s: Section) => (s.cohort === "trawl" ? "" : " Counted over the **opted-in** repos — the trawl has nothing here yet — so this is a fact about volunteers, not about makers.");
+const counted = (s: Section) => (s.cohort === "trawl" ? "" : " Counted over the **opted-in** repos, because the trawl has nothing here yet. That makes it a fact about volunteers, not about makers at large.");
 
 /** The report as published. Frozen into the row at write time, so this function never rewrites an old week. */
 export function reportMd(r: ReportView): string {
@@ -220,66 +233,69 @@ export function reportMd(r: ReportView): string {
   push(`# The Trawl Report · ${r.slug}`, "");
   push(
     r.first
-      ? `First one. Counted from the snapshot of ${r.date}; there is no earlier snapshot to compare against, so nothing below moves yet. Method v${r.method}.`
-      : `Counted from the snapshot of ${r.date} against ${r.since}. Method v${r.method}. Nothing here was written by a model: every sentence is a template with a count in it.`,
+      ? `The first bulletin. Counted from the snapshot of ${r.date}, with no earlier snapshot to set it against, so nothing below moves yet. Method v${r.method}. No model wrote a word of this: every sentence is a template with a count in it.`
+      : `Counted from the snapshot of ${r.date}, set against the one from ${r.since}. Method v${r.method}. No model wrote a word of this: every sentence is a template with a count in it.`,
     "",
   );
-  push(`> The Cap'm counts what he hauled and what he threw back. Read [how we count](/method) before you quote any of it — particularly the tool numbers, which measure how loudly a tool's users say its name and not what anybody uses.`, "");
+  push(`> The Cap'm counts what came up in the net and what went back over the side. Read [how we count](/method) before you quote any of it, the tool numbers most of all: they measure how loudly a tool's users say its name, not what anybody uses.`, "");
 
   push("## The trough", "");
   push(
-    `${r.totals.listed.toLocaleString()} repos listed${r.totals.added == null ? "" : `, ${signed(r.totals.added)} this week`} across ${r.totals.owners.toLocaleString()} owners.`,
-    `- ${COHORT_LABEL.trawl}: ${r.totals.trawl.toLocaleString()}${r.totals.added_trawl == null ? "" : ` (${signed(r.totals.added_trawl)})`} — found by us, never asked to be here`,
-    `- ${COHORT_LABEL.opted}: ${r.totals.opted.toLocaleString()}${r.totals.added_opted == null ? "" : ` (${signed(r.totals.added_opted)})`} — committed a slopscore.md`,
+    `${r.totals.listed.toLocaleString()} repos listed${thisWeek(r.totals.added)}, from ${r.totals.owners.toLocaleString()} owners.`,
+    `- ${COHORT_LABEL.trawl}: ${r.totals.trawl.toLocaleString()}${paren(r.totals.added_trawl)} — dragged out of public GitHub; nobody submitted them`,
+    `- ${COHORT_LABEL.opted}: ${r.totals.opted.toLocaleString()}${paren(r.totals.added_opted)} — committed a slopscore.md and asked to be counted`,
     "",
   );
 
   push("## How much of it is software", "");
   if (!r.judged.seen) {
-    push("The judge has not seen anything yet, so there is no pass rate to report.", "");
+    push("The judge has not seen a candidate yet, so there is no pass rate to report.", "");
   } else {
     push(
-      `Of the ${r.judged.seen.toLocaleString()} candidates the judge has looked at${r.judged.was_seen == null ? "" : ` (${signed(r.judged.seen - r.judged.was_seen)} this week)`}, **${pct(r.judged.software_share)} were software somebody made** — an app, a game, a tool, a library, or something with hardware attached. The rest were thrown back.`,
+      `The judge has looked at ${r.judged.seen.toLocaleString()} candidates so far${r.judged.was_seen == null ? "" : ` (${r.judged.seen - r.judged.was_seen === 0 ? "none new" : `${signed(r.judged.seen - r.judged.was_seen)} new`} this week)`}, and **${pct(r.judged.software_share)} were software somebody made**: an app, a game, a tool, a library, or something with hardware attached. The rest went back over the side.`,
       "",
-      "This is the number worth having, and the reason the trawl stores what it rejects. Every other leaderboard keeps only what it accepted and so cannot tell you what the pile looks like. What the judge saw, best first:",
+      "That is the number this bulletin exists for, and the reason the trawl keeps what it rejects. A leaderboard that keeps only what it accepted can tell you what its winners look like and nothing about the pile they came out of. The pile, largest bucket first:",
       "",
       ...r.judged.codes.slice(0, 8).map((m) => `- ${line(m, r.first)}`),
       "",
-      `Both of those are a model's labels off a closed list, not a maker's — the only judged numbers in this bulletin, marked as such wherever they appear.${noise(r.judged.seen)}`,
+      `These are a model's labels, picked from a closed list, not a maker's own words. They are the only judged numbers in the bulletin, and they say so wherever they appear.${noise(r.judged.seen, r.first)}`,
       "",
     );
   }
 
   push("## Which tool gets the credit", "");
   if (!r.tools.total) {
-    push("Nothing credits a tool by name yet, in either cohort.", "");
+    push("No repo in either cohort credits a tool by name yet.", "");
   } else {
     push(
-      `${r.tools.total.toLocaleString()} credits across the ${r.tools.cohort === "trawl" ? "trawled" : "opted-in"} sample. A repo can name more than one tool, so the denominator is credits, not repos.`,
+      `${r.tools.total.toLocaleString()} credits in the ${r.tools.cohort === "trawl" ? "trawled" : "opted-in"} sample. A repo can name more than one tool, so the shares are of credits, not of repos.`,
       "",
       ...r.tools.rows.slice(0, 8).map((m) => `- ${line(m, r.first)}`),
       "",
-      `**Read this as: how loudly each tool's users say its name in public.** The trawl searches ${TRAWL_GROUNDS.length} grounds, most named after tools ([method](/method), bias 2), so a tool whose users never tag or describe their repos is undercounted here by construction. It is not market share and it is not usage.${counted(r.tools)}${noise(r.tools.total, TOOL_NOISE_FLOOR)}`,
+      `**Read this as how loudly each tool's users say its name in public.** Most of the trawl's ${words(TRAWL_GROUNDS.length)} grounds are named after a tool ([method](/method), bias 2), so a tool whose users never tag or describe their repos is undercounted by construction. It is not market share and it is not usage.${counted(r.tools)}${noise(r.tools.total, r.first, TOOL_NOISE_FLOOR)}`,
       "",
     );
     const moved = bigMoves(r.tools.rows);
-    if (moved.length) push(`Biggest swings: ${moved.map((m) => `${m.key} ${points(m.points!)}`).join(", ")}.`, "");
+    if (moved.length) push(`Biggest swings since last week: ${moved.map((m) => `${m.key} ${points(m.points!)}`).join(", ")}.`, "");
   }
 
   push("## What it is written in", "");
-  if (!r.languages.total) push("No languages counted yet.", "");
+  if (!r.languages.total) push("No languages to count yet.", "");
   else {
     push(...r.languages.rows.slice(0, 8).map((m) => `- ${line(m, r.first)}`), "");
-    const fresh = r.first ? [] : newcomers(r.languages.rows);
-    if (fresh.length) push(`New in the sample this week: ${fresh.map((m) => `${m.key} (${m.n})`).join(", ")}.`, "");
-    push(`Denominator: ${r.languages.total.toLocaleString()} ${r.languages.cohort === "trawl" ? "trawled" : "opted-in"} repos GitHub gave a language for.${counted(r.languages)}${noise(r.languages.total)}`, "");
+    // Only newcomers the list above did not already flag; a key in the top eight has said "new this week" itself.
+    const shown = new Set(r.languages.rows.slice(0, 8).map((m) => m.key));
+    const fresh = r.first ? [] : newcomers(r.languages.rows).filter((m) => !shown.has(m.key));
+    if (fresh.length) push(`Also new to the sample this week, below the top eight: ${fresh.map((m) => `${m.key} (${m.n})`).join(", ")}.`, "");
+    // repo_tags holds every language GitHub lists for a repo, so this is language credits, not repos.
+    push(`Shares are of ${r.languages.total.toLocaleString()} language credits over the ${r.languages.cohort === "trawl" ? "trawled" : "opted-in"} sample. GitHub lists every language a repo uses, so one repo can count more than once.${counted(r.languages)}${noise(r.languages.total, r.first)}`, "");
   }
 
   push("## What the net threw back", "");
-  if (!r.net.total) push("Nothing evaluated and rejected in the last 30 days.", "");
+  if (!r.net.total) push("The net came up empty: nothing looked at and rejected in the last 30 days.", "");
   else {
     push(
-      `${r.net.total.toLocaleString()} candidates evaluated in the last 30 days and not listed, by reason. This is a rolling 30-day window, so week-over-week movement here is the mix changing, not a week's intake.`,
+      `${r.net.total.toLocaleString()} candidates looked at in the last 30 days and not listed, by reason. The window rolls, so movement here is the mix of reasons shifting, not one week's intake.`,
       "",
       ...r.net.rows.slice(0, 8).map((m) => `- ${line(m, r.first)}`),
       "",
@@ -288,10 +304,10 @@ export function reportMd(r: ReportView): string {
 
   push("## The small print", "");
   push(
-    `- Method v${r.method}, frozen and versioned: [/method](/method). If a rule changes, the version goes up and the change is dated.`,
+    `- Counted under method v${r.method}, frozen and versioned at [/method](/method). When a rule changes the version goes up and the change is dated; nothing is edited in place.`,
     "- This site measures software whose author **says in public** that an AI tool wrote it. It does not measure AI-written software, and no number here can.",
-    `- The numbers this bulletin was written from: [\`/report/${r.slug}.json\`](/report/${r.slug}.json). They are frozen with it and will still be there when the snapshot behind them has been pruned.`,
-    "- Something wrong? [Say so](/contact). Corrections are published in the next bulletin, never edited in quietly.",
+    `- The numbers behind every sentence above: [\`/report/${r.slug}.json\`](/report/${r.slug}.json), frozen with the bulletin and still there after the nightly snapshot they came from has been pruned.`,
+    "- Spotted an error? [Say so](/contact). Corrections run in the next bulletin; nothing is edited in quietly.",
   );
   return out.join("\n");
 }

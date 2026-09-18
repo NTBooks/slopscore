@@ -1,0 +1,2533 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>AI Nutrition Label, Fiction | SlopScore</title>
+  <meta name="description" content="A back-jacket disclosure for books: six tiers from Human-made to AI-authored over an ingredient panel that says what the AI actually did. Self-reported, printable, CC BY. One of the SlopScore labels." />
+  <link rel="canonical" href="https://slopscore.org/label/fiction/" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #f3ede1;
+      --paper-2: #e9e1d2;
+      --ink: #1a1816;
+      --ink-2: #4a443c;
+      --ink-3: #7a7367;
+      --rule: #1a1816;
+      --accent: #8a2a1f;
+      /* oxblood stamp */
+      --accent-2: #b6603a;
+      --display: "DM Serif Display", "Crimson Pro", Georgia, serif;
+      --serif: "Crimson Pro", Georgia, "Times New Roman", serif;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      font-size: clamp(13px, calc(10px + 0.3125vw), 16px);
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 1rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      background-image:
+        radial-gradient(rgba(0, 0, 0, .02) 1px, transparent 1px),
+        radial-gradient(rgba(0, 0, 0, .025) 1px, transparent 1px);
+      background-size: 3px 3px, 7px 7px;
+      background-position: 0 0, 1px 2px;
+    }
+
+    body[data-theme="kraft"] {
+      --paper: #d9c9aa;
+      --paper-2: #c9b793;
+      --ink: #2a2218;
+      --rule: #2a2218;
+      --accent: #6e2418;
+    }
+
+    body[data-theme="white"] {
+      --paper: #fafaf7;
+      --paper-2: #f0eee7;
+      --ink: #111;
+      --rule: #111;
+      --accent: #b22222;
+    }
+
+    body[data-theme="noir"] {
+      --paper: #131210;
+      --paper-2: #1d1b18;
+      --ink: #ede6d3;
+      --ink-2: #c8bfaa;
+      --ink-3: #948c7a;
+      --rule: #ede6d3;
+      --accent: #d97757;
+    }
+
+    /* Top header strip */
+    .topbar {
+      border-bottom: 1px solid var(--ink);
+      padding: 0.875rem 1.75rem;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+
+    .topbar b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .page {
+      max-width: 82.5rem;
+      margin: 0 auto;
+      padding: 3.5rem 2rem 7.5rem 2rem;
+    }
+
+    /* ───── Hero / tier system ───── */
+    .hero {
+      margin-bottom: 3.5rem;
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .eyebrow .dot {
+      width: 0.375rem;
+      height: 0.375rem;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+
+    h1.display {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: clamp(2.75rem, 5vw, 5rem);
+      line-height: .98;
+      letter-spacing: -.02em;
+      margin: 0.875rem 0 1.125rem;
+    }
+
+    h1.display em {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .lede {
+      font-size: 1.1875rem;
+      line-height: 1.55;
+      color: var(--ink-2);
+      max-width: 56ch;
+    }
+
+    .lede strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* Tier system row */
+    .tiers {
+      margin-top: 2.75rem;
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      padding: 1.375rem 0 1.625rem;
+    }
+
+    .tiers-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 1.125rem;
+    }
+
+    .tiers-head .lbl {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+
+    .tiers-head h2 {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 1.625rem;
+      margin: 0.25rem 0 0;
+      letter-spacing: -.01em;
+    }
+
+    .tiers-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.875rem;
+    }
+
+    /* The stamp button itself */
+    .stamp {
+      position: relative;
+      appearance: none;
+      -webkit-appearance: none;
+      border: 0.15625rem solid var(--ink);
+      border-radius: 0;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      transition: transform .12s ease, background .15s ease, color .15s ease;
+      font-family: var(--serif);
+    }
+
+    .stamp:hover {
+      transform: translateY(-0.125rem);
+    }
+
+    .stamp[data-active="true"] {
+      box-shadow: 0.25rem 0.25rem 0 var(--accent);
+    }
+
+    .stamp::after {
+      content: "";
+      position: absolute;
+      inset: 0.25rem;
+      border: 0.03125rem solid currentColor;
+      opacity: .25;
+      pointer-events: none;
+    }
+
+    /* ───── Main content split ───── */
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 30rem;
+      gap: 3.75rem;
+      align-items: start;
+    }
+
+    @media (max-width: 68.75rem) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .essay {
+      max-width: 60ch;
+    }
+
+    .essay h3 {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      margin: 0 0 0.625rem;
+      font-weight: 600;
+    }
+
+    .essay h2 {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 2rem;
+      line-height: 1.1;
+      margin: 0 0 1rem;
+      letter-spacing: -.01em;
+    }
+
+    .essay p {
+      font-size: 1.0625rem;
+      line-height: 1.6;
+      color: var(--ink-2);
+      margin: 0 0 0.875rem;
+    }
+
+    .essay p strong {
+      color: var(--ink);
+    }
+
+    .essay-block {
+      margin-bottom: 2.25rem;
+    }
+
+    /* Makers note (in essay column) */
+    .makers-block {
+      margin-top: 0.5rem;
+      padding-top: 1.75rem;
+      border-top: 2px solid var(--ink);
+    }
+
+    .makers-block h2 em {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .makers-block .irony-stamp {
+      margin-top: 0.875rem;
+    }
+
+    /* Sources block (inside essay column) */
+    .sources-block {
+      margin-top: 0.5rem;
+    }
+
+    .sources-list {
+      list-style: none;
+      margin: 1.125rem 0 0;
+      padding: 0;
+    }
+
+    .sources-list li {
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .sources-list li:first-child {
+      border-top: 1.5px solid var(--ink);
+    }
+
+    .sources-list a {
+      display: grid;
+      grid-template-columns: 2.25rem 1fr 1.125rem;
+      gap: 0.875rem;
+      align-items: start;
+      padding: 1rem 0.25rem 1rem 0;
+      color: var(--ink);
+      text-decoration: none;
+      transition: background .15s ease, padding-left .15s ease;
+    }
+
+    .sources-list a:hover {
+      background: var(--paper-2);
+      padding-left: 0.625rem;
+    }
+
+    .src-num {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--accent);
+      letter-spacing: .14em;
+      font-weight: 700;
+      line-height: 1.6;
+      padding-top: 0.25rem;
+    }
+
+    .src-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+
+    .src-title {
+      font-family: var(--display);
+      font-size: 1.1875rem;
+      line-height: 1.2;
+      letter-spacing: -.005em;
+      color: var(--ink);
+    }
+
+    .src-meta {
+      font-family: var(--serif);
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: var(--ink-2);
+      letter-spacing: 0;
+    }
+
+    .src-arrow {
+      font-family: var(--mono);
+      font-size: 1rem;
+      color: var(--ink-3);
+      transition: color .15s ease, transform .15s ease;
+      padding-top: 0.25rem;
+    }
+
+    .sources-list a:hover .src-arrow {
+      color: var(--accent);
+      transform: translate(0.125rem, -0.125rem);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.625rem;
+      margin-top: 1.125rem;
+      border-top: 1px solid var(--ink);
+      padding-top: 1rem;
+    }
+
+    .legend-row {
+      display: grid;
+      grid-template-columns: 5rem 1fr;
+      gap: 0.875rem;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      align-items: center;
+    }
+
+    .legend-row .term {
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .legend-row .desc {
+      color: var(--ink-2);
+      font-family: var(--serif);
+      font-size: 0.875rem;
+    }
+
+    /* ───── Label ───── */
+    .label-wrap {
+      position: sticky;
+      top: 1.5rem;
+    }
+
+    .label {
+      background: var(--paper);
+      border: 0.1875rem solid var(--ink);
+      padding: 1.375rem 1.375rem 1.125rem;
+      color: var(--ink);
+      box-shadow: 0.5rem 0.5rem 0 var(--accent);
+      position: relative;
+    }
+
+    .label::before {
+      content: "";
+      position: absolute;
+      inset: 0.3125rem;
+      border: 0.0625rem solid var(--ink);
+      pointer-events: none;
+    }
+
+    .label-head {
+      padding-bottom: 0.25rem;
+    }
+
+    .label-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.59375rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      display: flex;
+      gap: 0.5rem;
+      color: var(--ink-2);
+      margin-bottom: 0.375rem;
+    }
+
+    .label-title {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 2.25rem;
+      line-height: .95;
+      margin: 0.125rem 0 0.75rem;
+      letter-spacing: -.01em;
+    }
+
+    .label-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.25rem 1.125rem;
+      font-size: 0.8125rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .label-meta .meta-k {
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin-right: 0.375rem;
+    }
+
+    .label-meta .meta-v {
+      color: var(--ink);
+      font-style: italic;
+    }
+
+    .label-rule {
+      height: 0.0625rem;
+      background: var(--ink);
+      margin: 0.625rem 0;
+    }
+
+    .label-rule--thick {
+      height: 0.375rem;
+      background: var(--ink);
+      margin: 0.5rem 0;
+    }
+
+    .label-summary {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: 0.25rem 0 0.375rem;
+    }
+
+    .label-summary .stamp {
+      transform: none;
+    }
+
+    .label-summary .stamp:hover {
+      transform: none;
+    }
+
+    .label-summary-text {
+      padding-top: 0.125rem;
+    }
+
+    .kv {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 0.0625rem dotted var(--ink);
+      padding: 0.25rem 0;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .04em;
+    }
+
+    .kv>span:first-child {
+      color: var(--ink-2);
+      text-transform: uppercase;
+      font-size: 0.625rem;
+      letter-spacing: .12em;
+    }
+
+    .kv .num {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 1.625rem;
+      line-height: 1;
+    }
+
+    .kv .num-sm {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: var(--ink-2);
+    }
+
+    .label-blurb {
+      margin: 0.625rem 0 0;
+      font-style: italic;
+      font-size: 0.84375rem;
+      line-height: 1.45;
+      color: var(--ink-2);
+    }
+
+    /* Cols */
+    .label-cols {
+      display: grid;
+      grid-template-columns: 1fr auto 3.75rem;
+      gap: 0.625rem;
+      font-family: var(--mono);
+      font-size: 0.59375rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      padding: 0.125rem 0 0.25rem;
+    }
+
+    /* Group label */
+    .label-group {
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--ink);
+      background: var(--paper-2);
+      padding: 0.25rem 0.375rem;
+      margin: 0.375rem -0.25rem 0.25rem;
+      font-weight: 700;
+    }
+
+    .ing-row {
+      display: grid;
+      grid-template-columns: 1fr auto 3.75rem;
+      gap: 0.625rem;
+      align-items: center;
+      padding: 0.4375rem 0;
+      border-bottom: 0.0625rem solid rgba(0, 0, 0, .12);
+    }
+
+    body[data-theme="noir"] .ing-row {
+      border-bottom-color: rgba(255, 255, 255, .12);
+    }
+
+    .ing-row[data-none="true"] {
+      opacity: .55;
+    }
+
+    .ing-label {
+      font-family: var(--serif);
+      font-size: 0.90625rem;
+      font-weight: 500;
+      line-height: 1.2;
+    }
+
+    .ing-sub {
+      font-family: var(--mono);
+      font-size: 0.59375rem;
+      color: var(--ink-3);
+      letter-spacing: .04em;
+      margin-top: 0.125rem;
+    }
+
+    .ing-state {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      text-align: right;
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .ing-row[data-none="true"] .ing-state {
+      color: var(--ink-3);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .ing-bars {
+      text-align: right;
+    }
+
+    /* Footer */
+    .label-foot p {
+      font-family: var(--serif);
+      font-size: 0.71875rem;
+      line-height: 1.45;
+      color: var(--ink-2);
+      margin: 0.5rem 0;
+    }
+
+    .label-foot strong {
+      color: var(--ink);
+    }
+
+    .label-foot em {
+      font-style: italic;
+    }
+
+    .label-cert {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.875rem;
+      padding-top: 0.75rem;
+      border-top: 0.125rem solid var(--ink);
+    }
+
+    .cert-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }
+
+    .cert-name {
+      font-family: var(--display);
+      font-style: italic;
+      font-size: 1.25rem;
+      line-height: 1;
+      margin-top: 0.125rem;
+    }
+
+    .cert-stamp {
+      border: 0.125rem solid currentColor;
+      padding: 0.375rem 0.625rem;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      transform: rotate(-7deg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      line-height: 1.1;
+      font-weight: 700;
+    }
+
+    /* Footer of page */
+    .pagefoot {
+      margin-top: 6rem;
+      padding-top: 1.375rem;
+      border-top: 1px solid var(--ink);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.625rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+
+    /* Preset toggle row */
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.125rem;
+    }
+
+    .preset-btn {
+      appearance: none;
+      border: 1.5px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      padding: 0.4375rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.656rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .12s ease, color .12s ease;
+    }
+
+    .preset-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .preset-btn:hover {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    /* Score ledger (below label) */
+    .ledger {
+      margin-top: 1.375rem;
+      padding: 1.125rem 1.25rem;
+      border: 1.5px solid var(--ink);
+      background: var(--paper);
+      position: relative;
+    }
+
+    .ledger::before {
+      content: "";
+      position: absolute;
+      inset: 0.25rem;
+      border: .5px solid var(--ink);
+      opacity: .25;
+      pointer-events: none;
+    }
+
+    .ledger-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ledger-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.594rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+    }
+
+    .ledger-title {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 1.5rem;
+      line-height: 1;
+      margin: 0.25rem 0 0;
+      letter-spacing: -.01em;
+    }
+
+    .ledger-total {
+      font-family: var(--display);
+      font-weight: 400;
+      line-height: 1;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ledger-total-num {
+      font-size: 2.25rem;
+    }
+
+    .ledger-total-unit {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .08em;
+      color: var(--ink-2);
+    }
+
+    .ledger-formula {
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      padding: 0.625rem 0;
+      margin-bottom: 0.625rem;
+    }
+
+    .ledger-eq {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--ink);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .ledger-eq .kw {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 0.0625rem 0.375rem;
+      font-weight: 600;
+    }
+
+    .ledger-eq .op {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .ledger-mults {
+      margin-top: 0.375rem;
+      font-family: var(--mono);
+      font-size: 0.656rem;
+      color: var(--ink-2);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 0.5rem;
+    }
+
+    .ledger-mults b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .ledger-mults .sep {
+      color: var(--ink-3);
+    }
+
+    .ledger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      margin-top: 0.25rem;
+    }
+
+    .ledger-table th {
+      text-align: left;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-size: 0.594rem;
+      color: var(--ink-2);
+      padding: 0.25rem 0.375rem 0.5rem;
+      border-bottom: 1px solid var(--ink);
+    }
+
+    .ledger-table th.r {
+      text-align: right;
+    }
+
+    .ledger-table td {
+      padding: 0.375rem;
+      border-bottom: 1px dotted rgba(0, 0, 0, .18);
+      color: var(--ink);
+    }
+
+    body[data-theme="noir"] .ledger-table td {
+      border-bottom-color: rgba(255, 255, 255, .18);
+    }
+
+    .ledger-table td.r {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ledger-table td.strong {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .ledger-table td.lvl {
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: 0.625rem;
+      color: var(--ink-2);
+    }
+
+    .ledger-total-row td {
+      border-bottom: 0;
+      border-top: 2px solid var(--ink);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      font-size: 0.625rem;
+      padding-top: 0.5rem;
+    }
+
+    .ledger-total-row+.ledger-total-row td {
+      border-top: 1px solid var(--ink-2);
+    }
+
+    .ledger-total-row .raw {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--ink-3);
+    }
+
+    .ledger-empty {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      color: var(--ink-2);
+      padding: 0.875rem 0;
+      text-align: center;
+      border-top: 1px dotted var(--ink-3);
+      border-bottom: 1px dotted var(--ink-3);
+    }
+
+    .ledger-note {
+      font-family: var(--serif);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      color: var(--ink-2);
+      margin: 0.875rem 0 0;
+    }
+
+    .ledger-note b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* Irony coda */
+    .irony {
+      margin-top: 5.5rem;
+      padding: 4.5rem 0 3rem;
+      text-align: center;
+      position: relative;
+    }
+
+    .irony-rule {
+      width: 3.75rem;
+      height: 0.1875rem;
+      background: var(--accent);
+      margin: 0 auto 1.75rem;
+    }
+
+    .irony-eyebrow {
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.125rem;
+    }
+
+    .irony-headline {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: clamp(1.75rem, 3vw, 2.75rem);
+      line-height: 1.15;
+      letter-spacing: -.01em;
+      margin: 0 auto 1.375rem;
+      max-width: 24ch;
+    }
+
+    .irony-headline em {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .irony-body {
+      max-width: 56ch;
+      margin: 0 auto 1.75rem;
+      font-size: 1.0625rem;
+      line-height: 1.6;
+      color: var(--ink-2);
+    }
+
+    .irony-stamp {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.125rem;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      padding: 0.625rem 1rem;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      transform: rotate(-4deg);
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    /* ───── In-place edit mode ───── */
+    .label--editing {
+      box-shadow: 0.5rem 0.5rem 0 var(--accent), 0 0 0 0.125rem var(--accent);
+    }
+
+    .label-edit-inline {
+      appearance: none;
+      border: 0;
+      border-bottom: 1.5px dashed var(--accent);
+      background: transparent;
+      font: inherit;
+      color: inherit;
+      padding: 0 0 0.0625rem;
+      outline: none;
+      min-width: 0;
+    }
+
+    .label-edit-inline:focus {
+      border-bottom-style: solid;
+      background: rgba(138, 42, 31, .06);
+    }
+
+    .label-edit-meta {
+      font-style: italic;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+
+    .label-edit-num {
+      width: 4.5rem;
+      font-size: inherit;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ing-row--edit {
+      grid-template-columns: 1fr auto !important;
+      gap: 0.5rem !important;
+    }
+
+    .ing-row--edit[data-none="true"] {
+      opacity: 1;
+    }
+
+    .label-cols--edit {
+      grid-template-columns: 1fr auto !important;
+    }
+
+    .ing-edit-levels {
+      display: flex;
+      gap: 0;
+    }
+
+    .ing-lvl-btn {
+      appearance: none;
+      border: 1.5px solid var(--ink);
+      border-right-width: 0;
+      background: var(--paper);
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 0.5625rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      transition: background .1s ease, color .1s ease;
+      line-height: 1.2;
+    }
+
+    .ing-lvl-btn:last-child {
+      border-right-width: 1.5px;
+    }
+
+    .ing-lvl-btn:hover {
+      background: var(--paper-2);
+      color: var(--ink);
+    }
+
+    .ing-lvl-btn.is-on {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .ing-lvl-btn.is-on.ing-lvl-generated {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .ing-lvl-btn.is-on.ing-lvl-applied {
+      background: #6b5840;
+      border-color: #6b5840;
+      color: var(--paper);
+    }
+
+    .ing-lvl-btn.is-on.ing-lvl-advisory {
+      background: #a89878;
+      border-color: #a89878;
+      color: var(--paper);
+    }
+
+    .export-btn-edit.is-editing {
+      background: var(--accent);
+      color: var(--paper);
+      border-color: var(--accent);
+    }
+
+    /* Export toolbar */
+    .export-bar {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin-bottom: 0.875rem;
+      border: 1.5px solid var(--ink);
+      background: var(--paper);
+    }
+
+    .export-bar .lbl {
+      font-family: var(--mono);
+      font-size: 0.594rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      padding: 0.5625rem 0.75rem;
+      border-right: 1px solid var(--ink);
+      display: flex;
+      align-items: center;
+      background: var(--paper-2);
+    }
+
+    .export-btn {
+      appearance: none;
+      border: 0;
+      border-right: 1px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      padding: 0.5625rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.656rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      flex: 1;
+      min-width: 0;
+      transition: background .12s ease, color .12s ease;
+      white-space: nowrap;
+    }
+
+    .export-btn:last-child {
+      border-right: 0;
+    }
+
+    .export-btn:hover {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .export-btn.flash {
+      background: var(--accent);
+      color: var(--paper);
+    }
+
+    .export-btn svg {
+      width: 0.75rem;
+      height: 0.75rem;
+      vertical-align: -0.125rem;
+      margin-right: 0.375rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 1.75rem;
+      transform: translateX(-50%);
+      background: var(--ink);
+      color: var(--paper);
+      padding: 0.625rem 1.125rem;
+      font-family: var(--mono);
+      font-size: 0.6875rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      z-index: 2147483647;
+      border: 2px solid var(--ink);
+      box-shadow: 0.25rem 0.25rem 0 var(--accent);
+      animation: toast-in .25s ease forwards;
+    }
+
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translate(-50%, 0.5rem);
+      }
+
+      to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+    }
+
+    /* ───── Responsive breakpoints ───── */
+    @media (max-width: 68.75rem) {
+      .page {
+        padding: 2.5rem 1.5rem 5rem;
+      }
+
+      .tiers-row {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .tiers-head {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .label-wrap {
+        position: static;
+        display: grid;
+        grid-template-columns: 30rem 1fr;
+        gap: 1.375rem;
+      }
+
+      .export-bar {
+        grid-column: 1 / -1;
+      }
+
+      .label {
+        grid-column: 1;
+      }
+
+      .ledger {
+        grid-column: 2;
+        margin-top: 0;
+        align-self: start;
+      }
+    }
+
+    @media (max-width: 48rem) {
+      .page {
+        padding: 1.5rem 1rem 3rem;
+      }
+
+      .topbar {
+        padding: 0.625rem 1rem;
+        font-size: 0.5625rem;
+      }
+
+      h1.display {
+        font-size: 2.25rem;
+      }
+
+      .tiers-row {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .lede {
+        font-size: 1rem;
+      }
+
+      .essay h2 {
+        font-size: 1.5rem;
+      }
+
+      .pagefoot {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+      }
+
+      .label-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .export-bar {
+        grid-column: 1;
+      }
+
+      .label {
+        grid-column: 1;
+      }
+
+      .ledger {
+        grid-column: 1;
+      }
+    }
+
+    /* Print stylesheet — isolate just the label, fit one page */
+    /* Print — scale via root font-size (all label values are rem) */
+    @media print {
+      @page {
+        size: 4.25in 14.5in;
+        margin: 0.15in;
+      }
+
+      html {
+        font-size: 12px !important;
+      }
+
+      html,
+      body {
+        height: auto !important;
+        background: white !important;
+      }
+
+      body[data-theme] {
+        --paper: #fff;
+        --paper-2: #f0eee7;
+        --ink: #111;
+        --rule: #111;
+        --accent: #b22222;
+      }
+
+      .topbar,
+      .hero,
+      .essay,
+      .pagefoot,
+      .irony,
+      .export-bar,
+      .toast,
+      [data-print="hide"] {
+        display: none !important;
+      }
+
+      .page {
+        padding: 0 !important;
+        max-width: none !important;
+      }
+
+      .grid {
+        display: block !important;
+      }
+
+      .label-wrap {
+        position: static !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .label {
+        box-shadow: none !important;
+        width: 30rem;
+        margin: 0 auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .label::before {
+        display: none !important;
+      }
+
+      .ing-sub {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <!-- React 18 production + Babel standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin="anonymous"></script>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Rating tiers — MPAA-style stamps. Order = ascending AI involvement.
+    // "score" is a numeric weight used to pick the active tier from the ingredient mix.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const TIERS = [
+      { code: "H", name: "HUMAN-MADE", tag: "100% HUMAN PROSE", max: 0, blurb: "Every word written by the author. No AI in the loop." },
+      { code: "HE", name: "HUMAN+EDITOR", tag: "AI USED AS EDITOR ONLY", max: 15, blurb: "Author wrote every word. AI used to flag issues; author revised by hand." },
+      { code: "HP", name: "POLISHED", tag: "AI COPY-EDITED", max: 30, blurb: "Human-written prose. AI applied for grammar, typos, and line-level cleanup." },
+      { code: "AA", name: "AI-ASSISTED", tag: "SOME AI-GENERATED PASSAGES", max: 55, blurb: "Author and AI collaborated. AI generated portions of the prose." },
+      { code: "AC", name: "CO-WRITTEN", tag: "SUBSTANTIAL AI PROSE", max: 80, blurb: "Significant portions of the prose were generated by AI and revised by a human." },
+      { code: "AI", name: "AI-AUTHORED", tag: "AI-GENERATED PROSE", max: 200, blurb: "AI generated the prose. Human supervised, prompted, or curated." },
+    ];
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Ingredient model. Each line has a category and a level: none / advisory / applied / generated
+    // "weight" controls how much it nudges the tier score.
+    // ─────────────────────────────────────────────────────────────────────────────
+    const LEVELS = {
+      none: { label: "None", short: "—", score: 0, dot: 0 },
+      advisory: { label: "Advisory only", short: "Advisory", score: 1, dot: 1 },
+      applied: { label: "AI-applied", short: "Applied", score: 1, dot: 2 },
+      generated: { label: "AI-generated", short: "Generated", score: 1, dot: 3 },
+    };
+
+    // Each ingredient defines which levels are valid + its weight when "active"
+    const INGREDIENTS = [
+      { id: "brainstorm", group: "PRE-WRITING", label: "Brainstorming & ideation", sub: "premise, themes, what-ifs", allow: ["none", "advisory", "applied", "generated"], weight: 6 },
+      { id: "outline", group: "PRE-WRITING", label: "Outline & structure", sub: "chapter beats, plot scaffold", allow: ["none", "advisory", "applied", "generated"], weight: 10 },
+      { id: "bible", group: "PRE-WRITING", label: "Story bible / worldbuilding", sub: "characters, settings, lore", allow: ["none", "advisory", "applied", "generated"], weight: 8 },
+
+      { id: "prose", group: "PROSE", label: "Prose generation", sub: "narrative paragraphs, scenes", allow: ["none", "generated"], weight: 60 },
+      { id: "dialog", group: "PROSE", label: "Dialog generation", sub: "character speech", allow: ["none", "generated"], weight: 35 },
+      { id: "rewrite", group: "PROSE", label: "Voice / passage rewrite", sub: "in author's style", allow: ["none", "applied", "generated"], weight: 30 },
+
+      { id: "developmental", group: "EDITORIAL", label: "Developmental edit", sub: "structure, arc, pacing notes", allow: ["none", "advisory"], weight: 4 },
+      { id: "line", group: "EDITORIAL", label: "Line edit", sub: "sentence-level rephrasing", allow: ["none", "advisory", "applied"], weight: 18 },
+      { id: "copy", group: "EDITORIAL", label: "Copy edit", sub: "grammar, punctuation", allow: ["none", "advisory", "applied"], weight: 8 },
+      { id: "spell", group: "EDITORIAL", label: "Spelling & typos", sub: "mechanical proofing", allow: ["none", "advisory", "applied"], weight: 3 },
+
+      { id: "continuity", group: "ANALYSIS", label: "Continuity audit", sub: "characters, objects, settings", allow: ["none", "advisory"], weight: 2 },
+      { id: "chronology", group: "ANALYSIS", label: "Chronology audit", sub: "timeline consistency", allow: ["none", "advisory"], weight: 2 },
+      { id: "pov", group: "ANALYSIS", label: "POV discipline", sub: "viewpoint consistency", allow: ["none", "advisory"], weight: 2 },
+      { id: "pacing", group: "ANALYSIS", label: "Pacing analysis", sub: "beat structure, tension arc", allow: ["none", "advisory"], weight: 2 },
+      { id: "research", group: "ANALYSIS", label: "Research assistance", sub: "facts, references", allow: ["none", "advisory", "applied"], weight: 4 },
+
+      { id: "translation", group: "PRODUCTION", label: "Translation", sub: "from another language", allow: ["none", "applied", "generated"], weight: 25 },
+      { id: "cover", group: "PRODUCTION", label: "Cover art", sub: "front jacket image", allow: ["none", "applied", "generated"], weight: 0 },
+      { id: "audiobook", group: "PRODUCTION", label: "Audiobook narration", sub: "synthetic voice / TTS", allow: ["none", "applied", "generated"], weight: 0 },
+      { id: "synopsis", group: "PRODUCTION", label: "Synopsis", sub: "plot summary for pitch / catalog", allow: ["none", "advisory", "applied", "generated"], weight: 0 },
+      { id: "blurb", group: "PRODUCTION", label: "Marketing copy", sub: "back-cover blurb, query letter", allow: ["none", "advisory", "applied", "generated"], weight: 0 },
+    ];
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Score & tier selection
+    // ─────────────────────────────────────────────────────────────────────────────
+    function computeScore(values) {
+      let score = 0;
+      for (const ing of INGREDIENTS) {
+        const v = values[ing.id] || "none";
+        if (v === "none") continue;
+        // generated: full weight; applied: 0.4×; advisory: 0.05×
+        const mult = v === "generated" ? 1 : v === "applied" ? 0.4 : 0.05;
+        score += ing.weight * mult;
+      }
+      // clamp at 100 so "score / 100" is always coherent
+      return Math.min(100, Math.round(score * 10) / 10);
+    }
+
+    // Per-ingredient breakdown — same math as computeScore, but returns the rows
+    // (ingredient, level, weight, multiplier, contribution) for the math panel.
+    const LEVEL_MULT = { none: 0, advisory: 0.05, applied: 0.4, generated: 1 };
+    function scoreBreakdown(values) {
+      const rows = [];
+      let raw = 0;
+      for (const ing of INGREDIENTS) {
+        const v = values[ing.id] || "none";
+        if (v === "none" || ing.weight === 0) continue;
+        const mult = LEVEL_MULT[v];
+        const contrib = ing.weight * mult;
+        if (contrib === 0) continue;
+        raw += contrib;
+        rows.push({ id: ing.id, label: ing.label, level: v, weight: ing.weight, mult, contrib: Math.round(contrib * 10) / 10 });
+      }
+      rows.sort((a, b) => b.contrib - a.contrib);
+      const final = Math.min(100, Math.round(raw * 10) / 10);
+      const clamped = raw > 100;
+      return { rows, raw: Math.round(raw * 10) / 10, final, clamped };
+    }
+
+    function tierForScore(score) {
+      for (const t of TIERS) if (score <= t.max) return t;
+      return TIERS[TIERS.length - 1];
+    }
+
+    function humanPercent(score) {
+      // crude inverse — readers see "% Human Authored"
+      const pct = Math.max(0, Math.min(100, 100 - score));
+      return Math.round(pct);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Defaults — three preset profiles user can flip between
+    // ─────────────────────────────────────────────────────────────────────────────
+    const PRESETS = {
+      pure: {
+        title: "The Lantern Keeper",
+        author: "M. R. Halloway",
+        publisher: "Driftwood Press",
+        edition: "First edition · 2026",
+        words: 92400,
+        values: Object.fromEntries(INGREDIENTS.map(i => [i.id, "none"])),
+      },
+      toolkit: { // matches the manuscript-editor-toolkit philosophy
+        title: "The Lantern Keeper",
+        author: "M. R. Halloway",
+        publisher: "Driftwood Press",
+        edition: "First edition · 2026",
+        words: 92400,
+        values: {
+          brainstorm: "none", outline: "none", bible: "advisory",
+          prose: "none", dialog: "none", rewrite: "none",
+          developmental: "advisory", line: "none", copy: "advisory", spell: "applied",
+          continuity: "advisory", chronology: "advisory", pov: "advisory", pacing: "advisory", research: "advisory",
+          translation: "none", cover: "none", audiobook: "none", synopsis: "advisory", blurb: "advisory",
+        },
+      },
+      polished: {
+        title: "The Lantern Keeper",
+        author: "M. R. Halloway",
+        publisher: "Driftwood Press",
+        edition: "First edition · 2026",
+        words: 92400,
+        values: {
+          brainstorm: "advisory", outline: "advisory", bible: "applied",
+          prose: "none", dialog: "none", rewrite: "none",
+          developmental: "advisory", line: "applied", copy: "applied", spell: "applied",
+          continuity: "advisory", chronology: "advisory", pov: "advisory", pacing: "advisory", research: "applied",
+          translation: "none", cover: "none", audiobook: "none", synopsis: "applied", blurb: "applied",
+        },
+      },
+      assisted: {
+        title: "Tideglass",
+        author: "K. Verren",
+        publisher: "Driftwood Press",
+        edition: "First edition · 2026",
+        words: 78200,
+        values: {
+          brainstorm: "applied", outline: "applied", bible: "generated",
+          prose: "none", dialog: "none", rewrite: "applied",
+          developmental: "advisory", line: "applied", copy: "applied", spell: "applied",
+          continuity: "advisory", chronology: "advisory", pov: "advisory", pacing: "advisory", research: "applied",
+          translation: "none", cover: "applied", audiobook: "applied", synopsis: "generated", blurb: "generated",
+        },
+      },
+      cowritten: {
+        title: "The Hollow Mirror",
+        author: "J. Anders (with AI co-writer)",
+        publisher: "Driftwood Press",
+        edition: "First edition · 2026",
+        words: 71500,
+        values: {
+          brainstorm: "applied", outline: "applied", bible: "applied",
+          prose: "none", dialog: "generated", rewrite: "applied",
+          developmental: "advisory", line: "applied", copy: "applied", spell: "applied",
+          continuity: "advisory", chronology: "advisory", pov: "advisory", pacing: "advisory", research: "applied",
+          translation: "none", cover: "applied", audiobook: "applied", synopsis: "generated", blurb: "generated",
+        },
+      },
+      authored: {
+        title: "Synth Prairie",
+        author: "Anonymous (with AI)",
+        publisher: "Direct-to-platform",
+        edition: "v1.0 · 2026",
+        words: 65000,
+        values: {
+          brainstorm: "generated", outline: "generated", bible: "generated",
+          prose: "generated", dialog: "generated", rewrite: "generated",
+          developmental: "applied", line: "applied", copy: "applied", spell: "applied",
+          continuity: "applied", chronology: "applied", pov: "advisory", pacing: "applied", research: "generated",
+          translation: "none", cover: "generated", audiobook: "generated", synopsis: "generated", blurb: "generated",
+        },
+      },
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Tier stamp (MPAA-style) — used in the row above the label and on the label itself
+    // ─────────────────────────────────────────────────────────────────────────────
+    function TierStamp({ tier, active, size = "md", onClick }) {
+      const sizes = {
+        sm: { w: "8.25rem", code: "1.75rem", name: "0.59375rem", pad: "0.625rem 0.625rem 0.5625rem" },
+        md: { w: "10.5rem", code: "2.5rem", name: "0.6875rem", pad: "0.75rem 0.75rem 0.6875rem" },
+        lg: { w: "13.75rem", code: "3.375rem", name: "0.8125rem", pad: "1rem 1rem 0.875rem" },
+      }[size];
+      return (
+        <button
+          onClick={onClick}
+          className="stamp"
+          data-active={active ? "true" : "false"}
+          style={{
+            width: sizes.w,
+            padding: sizes.pad,
+            background: active ? "var(--ink)" : "transparent",
+            color: active ? "var(--paper)" : "var(--ink)",
+            borderColor: "var(--ink)",
+            cursor: onClick ? "pointer" : "default",
+          }}
+        >
+          <div style={{ fontFamily: "var(--mono)", fontSize: "0.5625rem", letterSpacing: ".14em", opacity: .65, marginBottom: "0.25rem" }}>
+            AI USE · TIER
+          </div>
+          <div style={{ fontFamily: "var(--display)", fontWeight: 800, fontSize: sizes.code, lineHeight: .9, letterSpacing: "-.02em" }}>
+            {tier.code}
+          </div>
+          <div style={{ marginTop: "0.375rem", height: "0.0625rem", background: active ? "var(--paper)" : "var(--ink)", opacity: .35 }} />
+          <div style={{ marginTop: "0.375rem", fontFamily: "var(--display)", fontWeight: 700, fontSize: sizes.name, letterSpacing: ".06em" }}>
+            {tier.name}
+          </div>
+          <div style={{ marginTop: "0.125rem", fontFamily: "var(--mono)", fontSize: "0.5rem", letterSpacing: ".08em", opacity: .7, textTransform: "uppercase" }}>
+            {tier.tag}
+          </div>
+        </button>
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Level dots: visual "% daily AI" — 0 to 3 filled bars
+    // ─────────────────────────────────────────────────────────────────────────────
+    function LevelBars({ level }) {
+      const filled = LEVELS[level]?.dot ?? 0;
+      return (
+        <span style={{ display: "inline-flex", gap: "0.125rem", verticalAlign: "middle" }}>
+          {[0, 1, 2].map(i => (
+            <span key={i} style={{
+              display: "inline-block", width: "0.5rem", height: "0.625rem",
+              border: "0.0625rem solid var(--ink)",
+              background: i < filled ? "var(--ink)" : "transparent",
+            }} />
+          ))}
+        </span>
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // The main label
+    // ─────────────────────────────────────────────────────────────────────────────
+    function NutritionLabel({ data, tier, score, humanPct, accent, editing, onChangeField, onChangeIngredient }) {
+      const groups = ["PRE-WRITING", "PROSE", "EDITORIAL", "ANALYSIS", "PRODUCTION"];
+      return (
+        <div className={"label" + (editing ? " label--editing" : "")}>
+          {/* Header */}
+          <div className="label-head">
+            <div className="label-eyebrow">
+              <span>AI INGREDIENT LABEL</span>
+              <span>· · ·</span>
+              {editing ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  PER <input
+                    type="number"
+                    className="label-edit-inline label-edit-num"
+                    value={data.words}
+                    min="0" step="500"
+                    onChange={e => onChangeField("words", Number(e.target.value) || 0)}
+                  /> WORDS
+                </span>
+              ) : (
+                <span>PER {data.words.toLocaleString()} WORDS</span>
+              )}
+            </div>
+            <h1 className="label-title">AI Nutrition Facts</h1>
+            <div className="label-meta">
+              {[
+                ["title", "Title", data.title],
+                ["author", "Author", data.author],
+                ["edition", "Edition", data.edition],
+                ["publisher", "Publisher", data.publisher],
+              ].map(([key, label, val]) => (
+                <div key={key}>
+                  <span className="meta-k">{label}</span>
+                  {editing ? (
+                    <input
+                      className="label-edit-inline label-edit-meta"
+                      value={val}
+                      placeholder={label}
+                      onChange={e => onChangeField(key, e.target.value)}
+                    />
+                  ) : (
+                    <span className="meta-v">{val}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="label-rule label-rule--thick" />
+
+          {/* Tier + summary block */}
+          <div className="label-summary">
+            <TierStamp tier={tier} active={true} size="md" />
+            <div className="label-summary-text">
+              <div className="kv">
+                <span>AI Influence Score</span>
+                <span className="num">{score}<span className="num-sm"> / 100</span></span>
+              </div>
+              <div className="kv">
+                <span>Human-Authored Prose</span>
+                <span className="num">{humanPct}<span className="num-sm">%</span></span>
+              </div>
+              <p className="label-blurb">{tier.blurb}</p>
+            </div>
+          </div>
+
+          <div className="label-rule label-rule--thick" />
+
+          {/* Column headers */}
+          <div className={"label-cols" + (editing ? " label-cols--edit" : "")}>
+            <span>Ingredient</span>
+            {editing ? (
+              <span style={{ textAlign: "right" }}>AI Use Level</span>
+            ) : (
+              <>
+                <span style={{ textAlign: "right" }}>AI Use</span>
+                <span style={{ textAlign: "right", letterSpacing: ".04em" }}>Level</span>
+              </>
+            )}
+          </div>
+          <div className="label-rule" />
+
+          {/* Ingredient rows */}
+          {groups.map(group => {
+            const items = INGREDIENTS.filter(i => i.group === group);
+            return (
+              <div key={group}>
+                <div className="label-group">{group}</div>
+                {items.map(ing => {
+                  const v = data.values[ing.id] || "none";
+                  const lvl = LEVELS[v];
+                  return (
+                    <div key={ing.id} className={"ing-row" + (editing ? " ing-row--edit" : "")} data-none={!editing && v === "none" ? "true" : "false"}>
+                      <div>
+                        <div className="ing-label">{ing.label}</div>
+                        <div className="ing-sub">{ing.sub}</div>
+                      </div>
+                      {editing ? (
+                        <div className="ing-edit-levels">
+                          {ing.allow.map(a => (
+                            <button
+                              key={a}
+                              className={"ing-lvl-btn" + (v === a ? " is-on" : "") + " ing-lvl-" + a}
+                              onClick={() => onChangeIngredient(ing.id, a)}
+                            >
+                              {LEVELS[a].short}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="ing-state">
+                            <strong>{lvl.label}</strong>
+                          </div>
+                          <div className="ing-bars"><LevelBars level={v} /></div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          <div className="label-rule label-rule--thick" />
+
+          {/* Footnotes */}
+          <div className="label-foot">
+            <p>
+              <strong>Advisory</strong> means an AI tool flagged a problem; the author resolved it by hand.
+              <strong> Applied</strong> means an AI tool made the change directly.
+              <strong> Generated</strong> means an AI tool produced new text.
+            </p>
+            <p>
+              Disclosure follows the <em>Author-Disclosed AI Use</em> framework. Ratings are self-reported.
+              Readers may use this label to decide whether they want to read this book, the same way they
+              read carbs and protein on the back of a box.
+            </p>
+            <div className="label-cert">
+              <div>
+                <div className="cert-eyebrow">Self-disclosed by</div>
+                <div className="cert-name">{data.author}</div>
+              </div>
+              <div className="cert-stamp" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
+                <span>SELF</span>
+                <span>DISCLOSED</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ScoreLedger({ values, score }) {
+      const breakdown = useMemo(() => scoreBreakdown(values), [values]);
+      return (
+        <section className="ledger" data-print="hide">
+          <header className="ledger-head">
+            <div>
+              <div className="ledger-eyebrow">How the score is calculated</div>
+              <h3 className="ledger-title">Score Ledger</h3>
+            </div>
+            <div className="ledger-total">
+              <span className="ledger-total-num">{breakdown.final}</span>
+              <span className="ledger-total-unit"> / 100</span>
+            </div>
+          </header>
+
+          <div className="ledger-formula">
+            <div className="ledger-eq">
+              <span className="kw">score</span>
+              <span className="op">=</span>
+              <span className="kw">Σ</span>
+              <span>(</span>
+              <span className="kw">weight</span>
+              <span className="op">×</span>
+              <span className="kw">level&nbsp;multiplier</span>
+              <span>)</span>
+            </div>
+            <div className="ledger-mults">
+              <span><b>advisory</b> ×&nbsp;0.05</span>
+              <span className="sep">·</span>
+              <span><b>applied</b> ×&nbsp;0.40</span>
+              <span className="sep">·</span>
+              <span><b>generated</b> ×&nbsp;1.00</span>
+            </div>
+          </div>
+
+          {breakdown.rows.length === 0 ? (
+            <div className="ledger-empty">
+              No AI use disclosed. Every line evaluates to <b>0</b>. Score = <b>0</b>.
+            </div>
+          ) : (
+            <table className="ledger-table">
+              <thead>
+                <tr>
+                  <th>Ingredient</th>
+                  <th>Level</th>
+                  <th className="r">Weight</th>
+                  <th className="r">×&nbsp;mult</th>
+                  <th className="r">=&nbsp;contribution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breakdown.rows.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.label}</td>
+                    <td className="lvl">{LEVELS[r.level].label}</td>
+                    <td className="r">{r.weight}</td>
+                    <td className="r">{r.mult.toFixed(2)}</td>
+                    <td className="r strong">{r.contrib.toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="ledger-total-row">
+                  <td colSpan="4">
+                    Raw total{breakdown.clamped && <span className="raw"> &nbsp;(clamped to 100)</span>}
+                  </td>
+                  <td className="r strong">{breakdown.raw.toFixed(2)}</td>
+                </tr>
+                {breakdown.clamped && (
+                  <tr className="ledger-total-row">
+                    <td colSpan="4">Final score</td>
+                    <td className="r strong">{breakdown.final.toFixed(2)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          <p className="ledger-note">
+            Weights reflect how much each disclosure should move the score. <b>Prose
+              generation (60)</b> dominates because that's what the discourse actually
+            cares about; <b>translation and voice rewrites</b> are mid-weight; audits
+            and proofing are low. <b>Production lines</b> (cover, audiobook,
+            synopsis, blurb) appear on the back-jacket label but contribute zero to
+            the score. They describe the package, not the prose.
+          </p>
+        </section>
+      );
+    }
+
+    // ───────── Export helpers ─────────
+    function buildDisclosureText({ data, tier, score, humanPct }) {
+      const lines = [];
+      lines.push("AI USE DISCLOSURE: " + (data.title || "Untitled"));
+      if (data.author) lines.push("by " + data.author);
+      if (data.edition) lines.push(data.edition);
+      if (data.publisher) lines.push(data.publisher);
+      lines.push("");
+      lines.push("TIER: " + tier.code + ", " + tier.name);
+      lines.push(tier.tag);
+      lines.push("");
+      lines.push("AI Influence Score: " + score + " / 100");
+      lines.push("Human-Authored Prose: " + humanPct + "%");
+      lines.push("Word count: " + Number(data.words || 0).toLocaleString());
+      lines.push("");
+      lines.push(tier.blurb);
+      lines.push("");
+      const groups = ["PRE-WRITING", "PROSE", "EDITORIAL", "ANALYSIS", "PRODUCTION"];
+      for (const g of groups) {
+        lines.push("─ " + g + " ─");
+        for (const ing of INGREDIENTS.filter(i => i.group === g)) {
+          const v = data.values[ing.id] || "none";
+          lines.push("  " + ing.label.padEnd(28, " ") + "  " + LEVELS[v].label);
+        }
+        lines.push("");
+      }
+      lines.push("Self-disclosed by " + (data.author || "the author") + ".");
+      lines.push("Open standard · author-disclosed AI use · fiction edition");
+      lines.push("Non-fiction edition coming soon.");
+      return lines.join("\n");
+    }
+
+    function downloadFile(name, text, mime) {
+      const blob = new Blob([text], { type: mime || "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+    }
+
+    function exportLabelSVG({ data, tier, score, humanPct }) {
+      const computed = getComputedStyle(document.documentElement);
+      const c = {
+        paper: computed.getPropertyValue("--paper").trim(),
+        paper2: computed.getPropertyValue("--paper-2").trim(),
+        ink: computed.getPropertyValue("--ink").trim(),
+        ink2: computed.getPropertyValue("--ink-2").trim(),
+        ink3: computed.getPropertyValue("--ink-3").trim(),
+        accent: computed.getPropertyValue("--accent").trim(),
+      };
+      const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+      const W = 480, pad = 22, cw = W - pad * 2;
+      const mono = "'JetBrains Mono', monospace";
+      const serif = "'Crimson Pro', Georgia, serif";
+      const display = "'DM Serif Display', Georgia, serif";
+      let y = 0;
+      const els = [];
+
+      const groups = ["PRE-WRITING", "PROSE", "EDITORIAL", "ANALYSIS", "PRODUCTION"];
+      const GROUPS_MAP = {};
+      for (const ing of INGREDIENTS) {
+        if (!GROUPS_MAP[ing.group]) GROUPS_MAP[ing.group] = [];
+        GROUPS_MAP[ing.group].push(ing);
+      }
+
+      // ── helpers ──
+      const text = (x, ty, str, opts = {}) => {
+        const { font = serif, size = 14, weight = "normal", fill = c.ink, anchor = "start",
+          spacing = "0", transform = "none", style = "normal", opacity = 1 } = opts;
+        const attrs = [
+          `x="${x}" y="${ty}"`,
+          `font-family="${esc(font)}" font-size="${size}" font-weight="${weight}"`,
+          `fill="${fill}" text-anchor="${anchor}"`,
+          spacing !== "0" ? `letter-spacing="${spacing}"` : "",
+          style !== "normal" ? `font-style="${style}"` : "",
+          transform !== "none" ? `transform="${transform}"` : "",
+          opacity < 1 ? `opacity="${opacity}"` : "",
+        ].filter(Boolean).join(" ");
+        els.push(`<text ${attrs}>${esc(str)}</text>`);
+      };
+      const rect = (x, ry, w, h, fill, opts = {}) => {
+        const { stroke, strokeW, opacity: op, rx } = opts;
+        let s = `<rect x="${x}" y="${ry}" width="${w}" height="${h}" fill="${fill}"`;
+        if (stroke) s += ` stroke="${stroke}" stroke-width="${strokeW || 1}"`;
+        if (op != null) s += ` opacity="${op}"`;
+        if (rx) s += ` rx="${rx}"`;
+        s += `/>`;
+        els.push(s);
+      };
+      const line = (x1, ly, x2, ly2, opts = {}) => {
+        const { stroke = c.ink, width = 1, opacity: op } = opts;
+        let s = `<line x1="${x1}" y1="${ly}" x2="${x2}" y2="${ly2}" stroke="${stroke}" stroke-width="${width}"`;
+        if (op != null) s += ` opacity="${op}"`;
+        s += `/>`;
+        els.push(s);
+      };
+
+      // word wrap helper: splits str into lines that fit maxW at given font size
+      // uses a rough character-width estimate (monospace vs proportional)
+      const wrapText = (str, maxW, fontSize, isMono) => {
+        const charW = isMono ? fontSize * 0.6 : fontSize * 0.48;
+        const maxChars = Math.floor(maxW / charW);
+        const words = str.split(" ");
+        const lines = [];
+        let cur = "";
+        for (const w of words) {
+          if (cur && (cur.length + 1 + w.length) > maxChars) {
+            lines.push(cur);
+            cur = w;
+          } else {
+            cur = cur ? cur + " " + w : w;
+          }
+        }
+        if (cur) lines.push(cur);
+        return lines;
+      };
+
+      // ── background ──
+      rect(0, 0, W, 9999, c.paper); // placeholder, height adjusted at end
+
+      // ── outer border ──
+      els.push(`<rect x="1.5" y="1.5" width="${W - 3}" height="__H__" fill="none" stroke="${c.ink}" stroke-width="3"/>`);
+      // inner decorative border
+      els.push(`<rect x="6" y="6" width="${W - 12}" height="__Hi__" fill="none" stroke="${c.ink}" stroke-width="1" opacity="0.2"/>`);
+
+      y = 20;
+
+      // ── EYEBROW ──
+      const wordsStr = data.words ? data.words.toLocaleString() : "0";
+      text(pad, y + 10, "AI INGREDIENT LABEL", { font: mono, size: 9.5, weight: "400", fill: c.ink2, spacing: "0.2em" });
+      text(pad + cw / 2, y + 10, "· · ·", { font: mono, size: 9.5, fill: c.ink2, anchor: "middle" });
+      text(pad + cw, y + 10, `PER ${wordsStr} WORDS`, { font: mono, size: 9.5, fill: c.ink2, spacing: "0.2em", anchor: "end" });
+      y += 22;
+
+      // ── TITLE ──
+      text(pad, y + 32, "AI Nutrition Facts", { font: display, size: 36, weight: "400", spacing: "-0.01em" });
+      y += 46;
+
+      // ── META ──
+      const metaFields = [
+        ["Title", data.title],
+        ["Author", data.author],
+        ["Edition", data.edition],
+        ["Publisher", data.publisher],
+      ];
+      const col2x = pad + cw / 2 + 10;
+      for (let i = 0; i < metaFields.length; i++) {
+        const [label, val] = metaFields[i];
+        const mx = i % 2 === 0 ? pad : col2x;
+        const my = y + Math.floor(i / 2) * 18;
+        text(mx, my + 12, label, { font: mono, size: 9, weight: "400", fill: c.ink3, spacing: "0.14em" });
+        text(mx + 68, my + 12, val || "", { font: serif, size: 13, style: "italic" });
+      }
+      y += Math.ceil(metaFields.length / 2) * 18 + 8;
+
+      // ── THICK RULE ──
+      rect(pad, y, cw, 6, c.ink);
+      y += 14;
+
+      // ── SUMMARY BLOCK ──
+      const stampW = 168, stampH = 110, stampX = pad;
+      const summaryStartY = y;
+
+      // stamp background
+      rect(stampX, y, stampW, stampH, c.ink);
+      // stamp shadow
+      rect(stampX + 4, y + 4, stampW, stampH, c.accent, { opacity: 0.9 });
+      // stamp background (on top of shadow)
+      rect(stampX, y, stampW, stampH, c.ink);
+      // stamp inner border
+      rect(stampX + 4, y + 4, stampW - 8, stampH - 8, "none", { stroke: c.paper, strokeW: 1, opacity: 0.25 });
+
+      // stamp text
+      const stampCx = stampX + stampW / 2;
+      text(stampCx, y + 18, "AI USE · TIER", { font: mono, size: 9, fill: c.paper, anchor: "middle", spacing: "0.14em", opacity: 0.65 });
+      text(stampCx, y + 56, tier.code, { font: display, size: 40, weight: "800", fill: c.paper, anchor: "middle", spacing: "-0.02em" });
+      line(stampX + 12, y + 64, stampX + stampW - 12, y + 64, { stroke: c.paper, width: 1, opacity: 0.35 });
+      text(stampCx, y + 80, tier.name, { font: display, size: 11, weight: "700", fill: c.paper, anchor: "middle", spacing: "0.06em" });
+      text(stampCx, y + 94, tier.tag, { font: mono, size: 8, fill: c.paper, anchor: "middle", spacing: "0.08em", opacity: 0.7 });
+
+      // right side: score + human%
+      const rx = stampX + stampW + 16;
+      const rw = pad + cw - rx;
+      // AI Influence Score
+      text(rx, y + 16, "AI INFLUENCE SCORE", { font: mono, size: 10, fill: c.ink2, spacing: "0.12em" });
+      els.push(`<text x="${rx + rw}" y="${y + 16}" text-anchor="end" font-family="${esc(display)}" font-size="26" fill="${c.ink}"><tspan>${esc(String(score))}</tspan><tspan font-family="${esc(mono)}" font-size="11" font-weight="500" fill="${c.ink2}"> / 100</tspan></text>`);
+
+      // dotted line
+      els.push(`<line x1="${rx}" y1="${y + 24}" x2="${rx + rw}" y2="${y + 24}" stroke="${c.ink}" stroke-width="1" stroke-dasharray="2,3"/>`);
+
+      // Human-Authored Prose
+      text(rx, y + 44, "HUMAN-AUTHORED PROSE", { font: mono, size: 10, fill: c.ink2, spacing: "0.12em" });
+      els.push(`<text x="${rx + rw}" y="${y + 44}" text-anchor="end" font-family="${esc(display)}" font-size="26" fill="${c.ink}"><tspan>${esc(String(humanPct))}</tspan><tspan font-family="${esc(mono)}" font-size="11" font-weight="500" fill="${c.ink2}">%</tspan></text>`);
+
+      els.push(`<line x1="${rx}" y1="${y + 52}" x2="${rx + rw}" y2="${y + 52}" stroke="${c.ink}" stroke-width="1" stroke-dasharray="2,3"/>`);
+
+      // blurb
+      const blurbLines = wrapText(tier.blurb, rw, 13.5, false);
+      for (let i = 0; i < blurbLines.length; i++) {
+        text(rx, y + 70 + i * 17, blurbLines[i], { font: serif, size: 13.5, style: "italic", fill: c.ink2 });
+      }
+
+      y = Math.max(y + stampH, y + 70 + blurbLines.length * 17) + 8;
+
+      // ── THICK RULE ──
+      rect(pad, y, cw, 6, c.ink);
+      y += 14;
+
+      // ── COLUMN HEADERS ──
+      const colIngX = pad;
+      const colBarsX = pad + cw - 60;
+      const colStateX = colBarsX - 10;
+      text(colIngX, y + 10, "INGREDIENT", { font: mono, size: 9.5, fill: c.ink2, spacing: "0.14em" });
+      text(colStateX, y + 10, "AI USE", { font: mono, size: 9.5, fill: c.ink2, spacing: "0.14em", anchor: "end" });
+      text(pad + cw, y + 10, "LEVEL", { font: mono, size: 9.5, fill: c.ink2, spacing: "0.14em", anchor: "end" });
+      y += 16;
+
+      // thin rule
+      line(pad, y, pad + cw, y);
+      y += 4;
+
+      // ── INGREDIENT ROWS ──
+      for (const group of groups) {
+        const items = GROUPS_MAP[group];
+        // group header
+        y += 4;
+        rect(pad - 4, y, cw + 8, 20, c.paper2);
+        text(pad + 2, y + 14, group, { font: mono, size: 10, weight: "700", spacing: "0.2em" });
+        y += 24;
+
+        for (const ing of items) {
+          const v = data.values[ing.id] || "none";
+          const lvl = LEVELS[v];
+          const isNone = v === "none";
+          const rowOpacity = isNone ? 0.55 : 1;
+
+          els.push(`<g opacity="${rowOpacity}">`);
+
+          // ingredient name
+          text(colIngX, y + 13, ing.label, { font: serif, size: 14.5, weight: "500" });
+          // sub description
+          text(colIngX, y + 24, ing.sub, { font: mono, size: 9.5, fill: c.ink3, spacing: "0.04em" });
+
+          // AI use state
+          if (isNone) {
+            text(colStateX, y + 15, lvl.label, { font: mono, size: 11, fill: c.ink3, anchor: "end" });
+          } else {
+            text(colStateX, y + 15, lvl.label, { font: mono, size: 11, weight: "700", anchor: "end", spacing: "0.08em" });
+          }
+
+          // level bars (3 small rectangles)
+          const barsX = pad + cw - 28;
+          const filled = lvl.dot;
+          for (let i = 0; i < 3; i++) {
+            const bx = barsX + i * 10;
+            rect(bx, y + 7, 8, 10, i < filled ? c.ink : "none", { stroke: c.ink, strokeW: 1 });
+          }
+
+          els.push(`</g>`);
+
+          // row separator
+          y += 32;
+          line(pad, y, pad + cw, y, { opacity: 0.12 });
+          y += 2;
+        }
+      }
+
+      y += 4;
+      // ── THICK RULE ──
+      rect(pad, y, cw, 6, c.ink);
+      y += 16;
+
+      // ── FOOTER ──
+      const footFontSize = 11.5;
+      const footLineH = 15;
+      const footMaxW = cw;
+
+      const foot1 = "Advisory means an AI tool flagged a problem; the author resolved it by hand. Applied means an AI tool made the change directly. Generated means an AI tool produced new text.";
+      const foot1Lines = wrapText(foot1, footMaxW, footFontSize, false);
+      for (let i = 0; i < foot1Lines.length; i++) {
+        // bold keywords
+        let ln = foot1Lines[i];
+        const boldWords = ["Advisory", "Applied", "Generated"];
+        let hasKeyword = false;
+        for (const bw of boldWords) {
+          if (ln.startsWith(bw + " ")) {
+            hasKeyword = true;
+            const rest = ln.slice(bw.length);
+            els.push(`<text x="${pad}" y="${y + i * footLineH}" font-family="${esc(serif)}" font-size="${footFontSize}" fill="${c.ink2}"><tspan font-weight="700" fill="${c.ink}">${esc(bw)}</tspan>${esc(rest)}</text>`);
+            break;
+          }
+        }
+        if (!hasKeyword) {
+          text(pad, y + i * footLineH, ln, { font: serif, size: footFontSize, fill: c.ink2 });
+        }
+      }
+      y += foot1Lines.length * footLineH + 6;
+
+      const foot2 = "Disclosure follows the Author-Disclosed AI Use framework. Ratings are self-reported. Readers may use this label to decide whether they want to read this book, the same way they read carbs and protein on the back of a box.";
+      const foot2Lines = wrapText(foot2, footMaxW, footFontSize, false);
+      for (let i = 0; i < foot2Lines.length; i++) {
+        text(pad, y + i * footLineH, foot2Lines[i], { font: serif, size: footFontSize, fill: c.ink2 });
+      }
+      y += foot2Lines.length * footLineH + 14;
+
+      // ── CERTIFICATION ──
+      line(pad, y, pad + cw, y, { width: 2 });
+      y += 14;
+
+      text(pad, y, "SELF-DISCLOSED BY", { font: mono, size: 9, fill: c.ink3, spacing: "0.18em" });
+      y += 4;
+      text(pad, y + 18, data.author || "", { font: display, size: 20, style: "italic" });
+
+      // cert stamp (rotated)
+      const csX = pad + cw - 70, csY = y - 6;
+      els.push(`<g transform="rotate(-7, ${csX + 35}, ${csY + 18})">`);
+      rect(csX, csY, 70, 36, "none", { stroke: c.accent, strokeW: 2 });
+      text(csX + 35, csY + 14, "SELF", { font: mono, size: 10, weight: "700", fill: c.accent, anchor: "middle", spacing: "0.2em" });
+      text(csX + 35, csY + 27, "DISCLOSED", { font: mono, size: 10, weight: "700", fill: c.accent, anchor: "middle", spacing: "0.2em" });
+      els.push(`</g>`);
+
+      y += 30;
+
+      // ── finalize ──
+      const totalH = y + 10;
+      // shadow behind label (as first element)
+      els.unshift(`<rect x="8" y="8" width="${W}" height="${totalH}" fill="${c.accent}" opacity="0.85"/>`);
+      // fix background and border heights (indices shifted by 1 after unshift)
+      els[1] = `<rect x="0" y="0" width="${W}" height="${totalH}" fill="${c.paper}"/>`;
+      els[2] = els[2].replace("__H__", String(totalH - 3));
+      els[3] = els[3].replace("__Hi__", String(totalH - 12));
+
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH + 8}" viewBox="0 0 ${W + 8} ${totalH + 8}">\n${els.join("\n")}\n</svg>`;
+    }
+
+    function ExportBar({ data, tier, score, humanPct, showToast, editing, onToggleEdit }) {
+      const [flash, setFlash] = useState(null);
+      const flashBtn = (k) => { setFlash(k); setTimeout(() => setFlash(null), 600); };
+
+      const onPrint = () => { flashBtn("print"); setTimeout(() => window.print(), 80); };
+
+      const onCopy = async () => {
+        const txt = buildDisclosureText({ data, tier, score, humanPct });
+        try {
+          await navigator.clipboard.writeText(txt);
+          flashBtn("copy");
+          showToast("Copied to clipboard");
+        } catch {
+          // fallback
+          const ta = document.createElement("textarea");
+          ta.value = txt; document.body.appendChild(ta); ta.select();
+          try { document.execCommand("copy"); showToast("Copied to clipboard"); } catch { }
+          document.body.removeChild(ta);
+        }
+      };
+
+
+      const onSVG = () => {
+        const svg = exportLabelSVG({ data, tier, score, humanPct });
+        if (!svg) return;
+        const safe = (data.title || "ai-nutrition-label").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+        downloadFile(safe + "-label.svg", svg, "image/svg+xml");
+        flashBtn("svg");
+        showToast("Downloaded .svg");
+      };
+
+      return (
+        <div className="export-bar" data-print="hide">
+          <span className="lbl">Export</span>
+          <button className={"export-btn" + (flash === "print" ? " flash" : "")} onClick={onPrint} title="Print or Save as PDF">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 5V2h8v3M4 12H2V6h12v6h-2M4 9h8v5H4z" /></svg>
+            PDF
+          </button>
+          <button className={"export-btn" + (flash === "svg" ? " flash" : "")} onClick={onSVG} title="Download label as SVG">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="1" width="14" height="14" rx="1.5" /><path d="M4 11c1-2 2-4 4-4s2 3 4 1" /></svg>
+            SVG
+          </button>
+          <button className={"export-btn" + (flash === "copy" ? " flash" : "")} onClick={onCopy} title="Copy disclosure text">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="5" y="5" width="9" height="9" /><path d="M2 11V2h9v3" /></svg>
+            Copy text
+          </button>
+          <button className={"export-btn export-btn-edit" + (editing ? " is-editing" : "")} onClick={onToggleEdit} title={editing ? "Done editing" : "Edit label in place"}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11.5 1.5l3 3L5 14H2v-3z" />{!editing && <path d="M9.5 3.5l3 3" />}</svg>
+            {editing ? "Done" : "Edit"}
+          </button>
+        </div>
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // TWEAK_DEFAULTS & App
+    // ─────────────────────────────────────────────────────────────────────────────
+    const TWEAK_DEFAULTS = {
+      "preset": "pure",
+      "theme": "cream",
+      "title": "The Lantern Keeper",
+      "author": "M. R. Halloway",
+      "publisher": "Driftwood Press",
+      "edition": "First edition · 2026",
+      "words": 92400,
+      "values": {
+        "brainstorm": "none",
+        "outline": "none",
+        "bible": "none",
+        "prose": "none",
+        "dialog": "none",
+        "rewrite": "none",
+        "developmental": "none",
+        "line": "none",
+        "copy": "none",
+        "spell": "none",
+        "continuity": "none",
+        "chronology": "none",
+        "pov": "none",
+        "pacing": "none",
+        "research": "none",
+        "translation": "none",
+        "cover": "none",
+        "audiobook": "none",
+        "synopsis": "none",
+        "blurb": "none"
+      }
+    };
+
+    function App() {
+      const [t, setT] = useState(TWEAK_DEFAULTS);
+      const setTweak = (update) => {
+        if (typeof update === "object") {
+          setT(prev => ({ ...prev, ...update }));
+        }
+      };
+
+      const [toast, setToast] = useState(null);
+      const [editing, setEditing] = useState(false);
+      const showToast = (msg) => {
+        setToast(msg);
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => setToast(null), 1800);
+      };
+
+      // theme
+      useEffect(() => {
+        document.body.setAttribute("data-theme", t.theme || "cream");
+      }, [t.theme]);
+
+      const data = {
+        title: t.title,
+        author: t.author,
+        publisher: t.publisher,
+        edition: t.edition,
+        words: t.words,
+        values: t.values,
+      };
+
+      const score = computeScore(t.values);
+      const tier = tierForScore(score);
+      const human = humanPercent(score);
+
+      const applyPreset = (key) => {
+        const p = PRESETS[key];
+        if (!p) return;
+        setTweak({
+          preset: key,
+          title: p.title,
+          author: p.author,
+          publisher: p.publisher,
+          edition: p.edition,
+          words: p.words,
+          values: { ...p.values },
+        });
+      };
+
+      const setIngredient = (id, level) => {
+        const next = { ...t.values, [id]: level };
+        setTweak({ values: next, preset: "custom" });
+      };
+
+      return (
+        <React.Fragment>
+          <div className="topbar">
+            <span><b>AI NUTRITION LABEL</b> · open standard for author-disclosed AI use · <a href="/schemas" style={{ color: "inherit" }}>one of the SlopScore labels</a></span>
+            <span>v0.2 Fiction · 2026</span>
+          </div>
+
+          <div className="page">
+
+            {/* HERO */}
+            <section className="hero">
+
+              <h1 className="display">
+                How many <em>carbs</em> does this&nbsp;book&nbsp;have?
+              </h1>
+              <p className="lede">
+                Banning AI from publishing is a fight we already lost.{" "}
+                <strong>Labeling is the fight worth winning.</strong> This is a back-jacket
+                disclosure system that tells readers exactly how AI was used in a book,
+                from spelling fixes to fully generated prose, so they can choose what to read.
+                Six tiers up top. Granular ingredient panel below.
+              </p>
+              <p className="lede" style={{ marginTop: "0.75rem", fontStyle: "italic" }}>
+                This is the <strong>fiction edition</strong>. Non-fiction edition coming soon.
+              </p>
+
+              {/* Tier row */}
+              <div className="tiers">
+                <div className="tiers-head">
+                  <div>
+                    <div className="lbl">The Six Tiers</div>
+                    <h2>From hand-written to fully machine-authored.</h2>
+                  </div>
+                  <div className="lbl">Click a stamp to jump to it →</div>
+                </div>
+                <div className="tiers-row">
+                  {TIERS.map(tt => (
+                    <TierStamp
+                      key={tt.code}
+                      tier={tt}
+                      active={tt.code === tier.code}
+                      size="md"
+                      onClick={() => {
+                        // pick a representative preset for the tier the user clicked
+                        const map = { H: "pure", HE: "toolkit", HP: "polished", AA: "assisted", AC: "cowritten", AI: "authored" };
+                        applyPreset(map[tt.code] || "toolkit");
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* MAIN GRID */}
+            <section className="grid">
+              {/* Essay column */}
+              <div className="essay">
+                <div className="essay-block">
+                  <h3>The Idea</h3>
+                  <h2>Tell readers what AI actually did. Let them choose.</h2>
+                  <p>
+                    "Written with AI" is too vague to be useful. It lumps a typo-fixer and a ghostwriter
+                    into the same bucket, and that's how honest authors get tarred alongside slop generators.
+                  </p>
+                  <p>
+                    This label gives readers a <strong>single tier rating</strong> for the gist, plus an
+                    <strong> ingredient panel</strong> for the details. Authors disclose what they used and
+                    how. Readers decide what they're comfortable buying. No bans. No suspicion. Just a label.
+                  </p>
+                </div>
+
+                <div className="essay-block">
+                  <h3>How to Read It</h3>
+                  <h2>The stamp is the elevator pitch. The panel is the ingredients list.</h2>
+                  <p>
+                    The stamp on the back of the book gives a reader the gist in one glance, the same
+                    job <strong>G / PG / PG-13 / R</strong> does for film. The panel underneath itemizes
+                    what AI actually touched, and how deeply.
+                  </p>
+                  <div className="legend">
+                    <div className="legend-row">
+                      <span className="term">— None</span>
+                      <span className="desc">AI never came near this category.</span>
+                    </div>
+                    <div className="legend-row">
+                      <span className="term">▮ Advisory</span>
+                      <span className="desc">AI flagged an issue. The author resolved it by hand.</span>
+                    </div>
+                    <div className="legend-row">
+                      <span className="term">▮▮ Applied</span>
+                      <span className="desc">AI made the change directly. Author reviewed.</span>
+                    </div>
+                    <div className="legend-row">
+                      <span className="term">▮▮▮ Generated</span>
+                      <span className="desc">AI produced new text or imagery from scratch.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="essay-block">
+                  <h3>Try It On Your Book</h3>
+                  <h2>Pick a profile that's close, then fine-tune.</h2>
+                  <p>
+                    Each preset is the same fictional novel disclosed under a different workflow.
+                    Click one to see the tier and ingredient panel update. Then use the
+                    <strong> Edit</strong> button above the label to swap in your own title, author, and ingredient
+                    levels. When it looks right, hit <strong>Export</strong> above the label to print, save
+                    a PDF, or copy a clean text disclosure.
+                  </p>
+                  <div className="presets">
+                    {[
+                      ["pure", "Pure Human"],
+                      ["toolkit", "Toolkit Workflow"],
+                      ["polished", "AI-Polished"],
+                      ["assisted", "AI-Assisted"],
+                      ["cowritten", "Co-Written"],
+                      ["authored", "AI-Authored"],
+                    ].map(([k, label]) => (
+                      <button
+                        key={k}
+                        className="preset-btn"
+                        aria-pressed={t.preset === k ? "true" : "false"}
+                        onClick={() => applyPreset(k)}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="essay-block makers-block">
+                  <h3>A Note From The Makers</h3>
+                  <h2>The irony that this label was <em>made with Claude</em> should not be lost on the reader.</h2>
+                  <p>
+                    We built a tool for disclosing AI use with the help of an AI. That's the point.
+                    The line isn't between people who touch these tools and people who don't.
+                    It's between people who tell you, and people who don't.
+                  </p>
+                  <div className="irony-stamp">
+                    <span>SELF</span>
+                    <span>AWARE</span>
+                  </div>
+                </div>
+
+                <div className="essay-block sources-block">
+                  <h3>Sources & Further Reading</h3>
+                  <ol className="sources-list">
+                    <li>
+                      <a href="https://github.com/NTBooks/manuscript-editor-toolkit" target="_blank" rel="noopener">
+                        <span className="src-num">01</span>
+                        <span className="src-body">
+                          <span className="src-title">Manuscript Editor Toolkit</span>
+                          <span className="src-meta">NTBooks · GitHub · open-source Claude Code commands for editorial-only AI use. The original taxonomy this label expands on.</span>
+                        </span>
+                        <span className="src-arrow">↗</span>
+                      </a>
+                    </li>
+                    <li>
+                      <a href="https://lumpdepot.com/blog/2026-05-08-the-inherent-hypocrisy-of-the-anti-ai-sentiment" target="_blank" rel="noopener">
+                        <span className="src-num">02</span>
+                        <span className="src-body">
+                          <span className="src-title">The Inherent Hypocrisy of the Anti-AI Sentiment</span>
+                          <span className="src-meta">LUMP Depot · 2026-05-08 · the "how many carbs does this book have?" framing that shaped this design.</span>
+                        </span>
+                        <span className="src-arrow">↗</span>
+                      </a>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Label column */}
+              <div className="label-wrap">
+                <ExportBar data={data} tier={tier} score={score} humanPct={human} showToast={showToast} editing={editing} onToggleEdit={() => setEditing(e => !e)} />
+                <NutritionLabel
+                  data={data}
+                  tier={tier}
+                  score={score}
+                  humanPct={human}
+                  editing={editing}
+                  onChangeField={(k, v) => setTweak({ [k]: v })}
+                  onChangeIngredient={setIngredient}
+                />
+                <ScoreLedger values={t.values} score={score} />
+              </div>
+            </section>
+
+            <div className="pagefoot">
+              <span>Open standard · self-reported · no enforcement body</span>
+              <span>Fiction edition · Non-fiction coming soon · <a href="https://creativecommons.org/licenses/by/4.0/" style={{ color: "inherit" }}>CC BY 4.0</a></span>
+              <span>AI Nutrition Label · v0.2 · <a href="/schemas" style={{ color: "inherit" }}>the labels</a> · <a href="/manifesto" style={{ color: "inherit" }}>why</a> · <a href="/" style={{ color: "inherit" }}>slopscore.org</a></span>
+            </div>
+          </div>
+
+          {toast && <div className="toast">{toast}</div>}
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+  </script>
+</body>
+
+</html>

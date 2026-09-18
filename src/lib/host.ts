@@ -97,6 +97,17 @@ export function homeUrl(request: Request, env: { PRIMARY_HOST?: string }): strin
   const primary = primaryHost(env);
   const url = new URL(request.url);
   if (!isSecondaryHost(url.hostname, primary)) return null;
+  const moved = MOVED_HOMES[url.hostname.replace(/^www\./, "")];
+  if (moved && (url.pathname === "/" || url.pathname === "")) url.pathname = moved;   // the old front door lands on the page that moved here
   url.hostname = primary;   // drops any www. in the same hop, so nobody is bounced twice
   return url.toString();
 }
+
+/**
+ * Hostnames that used to be a whole site of their own and are now one page here. Their front door goes to
+ * that page; any deeper path is sent home as-is, the same as any other secondary domain. The AI Nutrition
+ * Label lived at slopscore.lumpdepot.com before it moved in next to slopscore.md (see /schemas).
+ */
+const MOVED_HOMES: Record<string, string> = {
+  "slopscore.lumpdepot.com": "/label/fiction/",
+};

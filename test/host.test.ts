@@ -39,6 +39,12 @@ describe("one home, and every other domain points at it", () => {
       .toBe("https://slopscupper.com/r/a/b");
   });
 
+  it("lands the label's old front door on the label, and its deeper paths home as-is", () => {
+    expect(to("https://slopscore.lumpdepot.com/")).toBe("https://slopscore.org/label/fiction/");
+    expect(to("https://www.slopscore.lumpdepot.com/")).toBe("https://slopscore.org/label/fiction/");
+    expect(to("https://slopscore.lumpdepot.com/spec")).toBe("https://slopscore.org/spec");
+  });
+
   it("redirects temporarily, so a swap can never strand somebody in a cached loop", () => {
     expect(SECONDARY_REDIRECT).toBe(302);
   });

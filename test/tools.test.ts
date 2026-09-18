@@ -150,6 +150,15 @@ describe("sightings", () => {
     expect(normalizeTerm("  ")).toBeNull();
     expect(normalizeTerm("12")).toBeNull();
   });
+  it("leaves the sentence's full stop out of the name", () => {
+    expect(normalizeTerm("claude.")).toBe("claude");
+    expect(normalizeTerm("dot.tool")).toBe("dot.tool"); // a dot inside a name is the name's
+    expect(normalizeTerm("...")).toBeNull();
+    expect(extractSightings({ description: "A dashboard built with Claude." }, null)).toEqual([]);
+    expect(extractSightings({ description: "Built with Kiro. It tracks snacks." }, null)).toEqual([{ term: "kiro", kind: "phrase" }]);
+    expect(extractSightings({ description: "built with amazon q. Then polished." }, null)).toEqual([{ term: "amazon-q", kind: "phrase" }]);
+    expect(extractSightings({ description: "built with Kiro" }, "and this one was made using Claude. Twice.")).toEqual([{ term: "kiro", kind: "phrase" }]);
+  });
   it("sees a registry tool as known once it is approved", () => {
     const tools = allTools([row({})]);
     expect(extractSightings({ topics: ["built-with-kiro"], description: "built with kiro" }, null, tools)).toEqual([]);

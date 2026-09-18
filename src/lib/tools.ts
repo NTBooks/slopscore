@@ -261,9 +261,12 @@ export const STOPLIST = new Set([
 
 export interface Sighting { term: string; kind: "topic" | "phrase" }
 
-/** A term as the scout stores it: normalised like a facet value, aliases folded, 3 to 30 characters. */
+/**
+ * A term as the scout stores it: normalised like a facet value, aliases folded, 3 to 30 characters. A dot may
+ * sit inside a name (node.js) but never at either end: there it is the sentence's full stop, not the tool's.
+ */
 export function normalizeTerm(raw: string): string | null {
-  const t = normalizeValue(raw).replace(/^-+|-+$/g, "");
+  const t = normalizeValue(raw).replace(/^[-.]+|[-.]+$/g, "");
   return t.length >= 3 && t.length <= 30 && !/^\d+$/.test(t) ? t : null;
 }
 
@@ -307,10 +310,12 @@ export function extractSightings(g: { topics?: string[] | null; description?: st
     let guard = 0;
     while ((m = re.exec(flat)) && guard++ < 20) {
       const words: string[] = [];
-      for (const w of m[1].trim().toLowerCase().split(/\s+/)) {
-        if (CAPTURE_STOP.has(w)) break;
+      for (const raw of m[1].trim().toLowerCase().split(/\s+/)) {
+        // "built with Claude. It does X": the full stop ends the name as surely as it ends the sentence.
+        const w = raw.replace(/\.+$/, "");
+        if (!w || CAPTURE_STOP.has(w)) break;
         words.push(w);
-        if (words.length === 2) break;
+        if (words.length === 2 || w !== raw) break;
       }
       if (words.length) keep(words.join(" "), "phrase");
     }

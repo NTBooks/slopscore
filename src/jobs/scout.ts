@@ -78,7 +78,11 @@ export async function scout(env: Env, at = now()): Promise<ScoutResult> {
     db.prepare("SELECT term, status FROM tool_candidates").all<{ term: string; status: string }>().then((r) => r.results ?? []),
   ]);
   const rows = [...sightings, ...topics, ...declared];
-  const keep = new Set(existing.map((e) => e.term));
+  // A row an older normaliser wrote ("claude." with the sentence's full stop) can never be refreshed or decided:
+  // its sightings fold into the term it should have been. An open one is swept; a decided one is a record and stays.
+  const stale = existing.filter((e) => e.status === "open" && normalizeTerm(e.term) !== e.term).map((e) => e.term);
+  if (stale.length) await db.batch(stale.map((term) => db.prepare("DELETE FROM tool_candidates WHERE term = ? AND status = 'open'").bind(term)));
+  const keep = new Set(existing.filter((e) => !stale.includes(e.term)).map((e) => e.term));
   const candidates = shapeCandidates(rows, known, keep);
 
   // 2. Write the counts. Status is never in this statement: it belongs to whoever decided it.

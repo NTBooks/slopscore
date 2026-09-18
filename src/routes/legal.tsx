@@ -12,6 +12,13 @@
 //   takedown deletes after 3 days  TAKEDOWN_GRACE in lib/virtual.ts
 //   analytics is cookieless        Cloudflare Web Analytics, admitted by lib/csp.ts and nothing else
 //
+// Still to do before the site can call itself finished, each marked in place with todo() below so the note sits on
+// the exact line it changes and renders as nothing:
+//   1. name the controller: a legal name and country in the privacy intro (GDPR Art. 13), and a governing-law
+//      section at the end of the terms;
+//   2. register a DMCA agent with the US Copyright Office and put the agent line under "Copyright and takedowns";
+//   3. a self-serve delete on /me (routes/pages.tsx), so the "Delete it" promise is code rather than a chore.
+//
 // The date in the heading is the last time the words changed. The page is versioned in the public repo, and
 // the git history is the changelog the page points readers at, so there is no separate "previous versions" list.
 import { Hono, type Context } from "hono";
@@ -23,13 +30,15 @@ import { renderMarkdown } from "../lib/markdown";
 export const legal = new Hono<AppEnv>();
 
 export const LEGAL_UPDATED = "18 September 2026";
+/** A note on the line it belongs to, rendering as nothing. Grep for todo( to find what is still open. */
+const todo = (_note: string) => "";
 const SOURCE = "https://github.com/NTBooks/slopscore";
 
 const privacyMd = (origin: string, contact: string, abuse: string) => `# Privacy
 
 *Last changed ${LEGAL_UPDATED}. This page lives in the [public source](${SOURCE}); the git history is the changelog.*
 
-SlopScore is run by one person, not a company. Anything on this page, and every request it describes, goes to [${contact}](mailto:${contact}) or the [contact form](${origin}/contact). Legal notices go to [${abuse}](mailto:${abuse}).
+${todo("TODO name the controller: legal name and country, GDPR Art. 13; then rewrite the sentence that follows")}SlopScore is run by one person, not a company. Anything on this page, and every request it describes, goes to [${contact}](mailto:${contact}) or the [contact form](${origin}/contact). Legal notices go to [${abuse}](mailto:${abuse}).
 
 **The short version.** Log in with GitHub and we keep your GitHub id, login and avatar. We never see your password, your email or your code. No raw IP address is ever written to our database. There is no ad network, no tracking pixel and no cookie banner, because nothing here needs consent: every cookie is set only when you do the thing it exists for.
 
@@ -101,7 +110,7 @@ Wherever you are, you can ask for any of these. Where the GDPR, the UK GDPR or a
 
 - **See it.** Every page here is also \`.json\`, [/me](${origin}/me) lists your repos, and the moderation log is public. Ask, and we send everything held against your login.
 - **Fix it.** Your profile fields come from GitHub; log in again and they refresh.
-- **Delete it.** Ask through the [contact form](${origin}/contact) or by email, from the GitHub account in question. We delete your user record, votes, reports and messages, remove your comments, and confirm when it is done. Records tax law requires us to keep stay.
+${todo("TODO self-serve delete on /me (routes/pages.tsx); until then this is done by hand in D1 within a month")}- **Delete it.** Ask through the [contact form](${origin}/contact) or by email, from the GitHub account in question. We delete your user record, votes, reports and messages, remove your comments, and confirm when it is done. Records tax law requires us to keep stay.
 - **Object.** The takedown link on a trawled listing is the objection, and it is honoured before anyone reads it.
 - **Take it with you.** \`.json\` on any page, or ask for an export.
 - **Complain.** In the EU, to your national data protection authority; in the UK, to the ICO. We would rather hear it first.
@@ -167,7 +176,7 @@ A rush payment buys a place at the front of the scan queue and nothing else: not
 
 ## Copyright and takedowns
 
-If you believe something here infringes your copyright, send a notice to [${abuse}](mailto:${abuse}) with: the work, the URL here, your contact details, a statement of good-faith belief that the use is not authorised, a statement under penalty of perjury that you are the owner or act for them, and your signature. We remove or disable what the notice identifies and tell the poster, who may send a counter-notice. Repeat infringers are banned. If you only want your own repo off the site, the takedown link is faster than a lawyer.
+${todo("TODO register a DMCA agent with the US Copyright Office (copyright.gov/dmca-directory) and name the agent here")}If you believe something here infringes your copyright, send a notice to [${abuse}](mailto:${abuse}) with: the work, the URL here, your contact details, a statement of good-faith belief that the use is not authorised, a statement under penalty of perjury that you are the owner or act for them, and your signature. We remove or disable what the notice identifies and tell the poster, who may send a counter-notice. Repeat infringers are banned. If you only want your own repo off the site, the takedown link is faster than a lawyer.
 
 ## Moderation
 
@@ -193,7 +202,7 @@ Stop using the site whenever you like; ask and we delete your account, as the [p
 
 Versioned in the open. A material change gets a note on the site, and using the site afterwards means you accept it.
 
-## Contact
+${todo("TODO governing law: add a section naming the jurisdiction once the controller is named on /privacy")}## Contact
 
 [${contact}](mailto:${contact}) or the [contact form](${origin}/contact). Legal notices: [${abuse}](mailto:${abuse}).
 `;

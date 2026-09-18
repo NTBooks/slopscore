@@ -366,6 +366,8 @@ pages.get("/u/:login", async (c) => {
 });
 
 // ---- my repos: everything the logged-in slopsmith owns or maintains, in any status ----
+// TODO self-serve account deletion: /privacy promises deletion on request within a month, done by hand in D1 today.
+// A delete here would remove the user row, votes, comment_votes, reports and messages, and blank the comments.
 pages.get("/me", async (c) => {
   const user = c.get("user"); const url = new URL(c.req.url);
   if (!user) return wantsJson(c) ? c.json({ error: "login required", login: "/auth/github?next=/me" }, 401) : c.redirect("/auth/github?next=/me");

@@ -219,6 +219,10 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
 .foot p { margin: 3px 0; } .foot strong { font-family: var(--serif); font-size: 13px; color: var(--fg); margin-right: 10px; }
 .footlinks { white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
 .footlinks::-webkit-scrollbar { display: none; }
+/* The links are shelved: a run of links under a small italic label, the shelves a gap apart, so the eye lands
+   on a group rather than a row of thirty. Still one line per strip, still scrolling sideways past the edge. */
+.footgroup { display: inline-block; margin-left: 16px; } .foot strong + .footgroup, .footlinks > .footgroup:first-child { margin-left: 0; }
+.footlabel { font-family: var(--serif); font-style: italic; color: var(--muted); margin-right: 6px; } .footlabel a { color: inherit; }
 /* A short window (phone in landscape, a split screen) has no room to give away: let it scroll off. */
 @media (max-height: 520px) { .foot { position: static; } }
 /* On a phone the bar is one scrollable line of links: the motto and the note would cost three of them. */

@@ -132,11 +132,17 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <main class="wrap">{children}</main>
         {/* Sticky: the feed scrolls for ever (see INFINITE_JS), so the bottom of the document is a place nobody arrives at. */}
         <footer class="foot">
+          {/* Two strips, each one line that scrolls sideways (style.css .footlinks), grouped under a small label so
+              thirty links read as five shelves. The motto is only on the first; the second starts flush with it. */}
           <p class="footlinks">
             <strong>Nothing here is a secret. That's the point.</strong>
-            <a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/scan">request a scan</a> · <a href="/spec">spec</a> · <a href="/disclosure">disclosure</a> · <a href="/manifesto" title="what this place is for, in the owner's own words">manifesto</a> · <a href="/schemas" title="one disclosure panel per medium">the labels</a> · <a href="/campus" title="for courses, hackathons and student groups">campus</a> · <a href="/but-is-it-slop" title="seven questions, and every honest answer lands in the trough">is it slop?</a> · <a href="/trends">trends</a> · <a href="/method" title="the rules behind every number here, frozen and versioned">how we count</a> · <a href="/report" title="one bulletin a week, counted not generated">the report</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a>
-            · <a href="/for-agents">for agents</a>: <a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a>
-            · <a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a>
+            <span class="footgroup"><span class="footlabel">the site</span><a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/privacy" title="what the site keeps about you, and how to have it deleted">privacy</a> · <a href="/terms" title="the rules for using the site">terms</a> · <a href="/scan">request a scan</a></span>
+            <span class="footgroup"><span class="footlabel"><a href="/for-agents" title="how to hand SlopScore to an agent">for agents</a></span><a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a></span>
+            <span class="footgroup"><span class="footlabel">feeds</span><a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a></span>
+          </p>
+          <p class="footlinks">
+            <span class="footgroup"><span class="footlabel">what it's for</span><a href="/manifesto" title="what this place is for, in the owner's own words">manifesto</a> · <a href="/schemas" title="one disclosure panel per medium">the labels</a> · <a href="/disclosure">disclosure</a> · <a href="/spec">spec</a> · <a href="/campus" title="for courses, hackathons and student groups">campus</a> · <a href="/but-is-it-slop" title="seven questions, and every honest answer lands in the trough">is it slop?</a></span>
+            <span class="footgroup"><span class="footlabel">the numbers</span><a href="/trends">trends</a> · <a href="/method" title="the rules behind every number here, frozen and versioned">how we count</a> · <a href="/report" title="one bulletin a week, counted not generated">the report</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a></span>
           </p>
           <p class="muted">Every page is also <code>.json</code> and <code>.md</code>. Votes need a GitHub login; nothing else does. Made by slopsmiths, for slopsmiths.</p>
         </footer>

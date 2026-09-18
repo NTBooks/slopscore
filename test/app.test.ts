@@ -104,3 +104,43 @@ describe("the test host is behind a password, so it has no pages for an index to
     }
   });
 });
+
+describe("the legal pages: every claim on them is a claim about this code, so their existence is pinned here", () => {
+  it("serves /privacy and /terms as HTML, with the emails the environment names", async () => {
+    for (const path of ["/privacy", "/terms"]) {
+      const r = await hit(`https://slopscore.org${path}`);
+      expect(r.status).toBe(200);
+      expect(r.headers.get("content-type")).toContain("text/html");
+      const html = await r.text();
+      expect(html).toContain("hello@slopscore.org");
+      expect(html).toContain("abuse@slopscore.org");
+      expect(html).toContain("/contact");
+    }
+  });
+
+  it("serves both as markdown and JSON, like every other page", async () => {
+    const md = await hit("https://slopscore.org/privacy.md");
+    expect(md.status).toBe(200);
+    expect(await md.text()).toMatch(/^# Privacy/);
+    const j = await (await hit("https://slopscore.org/terms.json")).json() as { title: string; text: string; updated: string };
+    expect(j.title).toBe("Terms of use");
+    expect(j.text).toContain("## Limitation of liability");
+    expect(j.updated).toMatch(/\d{4}/);
+  });
+
+  it("says the things the code enforces: three cookies, no email, no raw address, and how to be deleted", async () => {
+    const text = await (await hit("https://slopscore.org/privacy.md")).text();
+    for (const cookie of ["`ss`", "`oauth_state`", "`anon`"]) expect(text).toContain(cookie);
+    expect(text).toContain("We do not store your email address");
+    expect(text).toContain("No raw IP address is ever written");
+    expect(text).toContain("**Delete it.**");
+    expect(text).toContain("35 days");
+    expect(text).toContain("14 days");
+  });
+
+  it("links both from every page's footer and lists both in the sitemap", async () => {
+    const home = await (await hit("https://slopscore.org/about")).text();
+    expect(home).toContain('href="/privacy"');
+    expect(home).toContain('href="/terms"');
+  });
+});

@@ -21,6 +21,7 @@ import { quiz } from "./routes/quiz";
 import { manifesto } from "./routes/manifesto";
 import { schemas } from "./routes/schemas";
 import { campus } from "./routes/campus";
+import { legal } from "./routes/legal";
 import { flagOn, setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
@@ -85,6 +86,7 @@ app.route("/", disclosure);
 app.route("/", manifesto);
 app.route("/", schemas);
 app.route("/", campus);
+app.route("/", legal);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => {
@@ -166,6 +168,7 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.
 - ${origin}/contact     contact form (GitHub login) · legal/abuse notices: ${c.env.ABUSE_EMAIL ?? "abuse@slopscore.org"}
+- ${origin}/privacy     what the site keeps about a person and for how long: GitHub id, login and avatar, hashed addresses, no email, no raw IP. ${origin}/terms are the rules for using it
 
 ## Formats
 Every HTML page is also available as JSON and Markdown: append .json or .md to the path, or send Accept: application/json / text/markdown.

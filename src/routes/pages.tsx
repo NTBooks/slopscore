@@ -842,7 +842,9 @@ pages.get("/about", (c) => {
 // ---- /ping ----
 pages.get("/ping/:owner/:name", async (c) => {
   const o = c.req.param("owner"); const n = c.req.param("name").replace(/\.git$/, "");
-  const ip = c.req.header("cf-connecting-ip") ?? "local";
+  // The per-network limit is keyed by the same salted hash every other row uses (lib/trust.ts): a rate_limits
+  // key is a database row, and the privacy page promises no raw address is ever written to one.
+  const ip = (await ipHash(c.req.header("cf-connecting-ip") ?? "local", c.env.SESSION_SECRET)) ?? "local";
   if (!(await rateLimit(c.env.DB, `ping:${o}/${n}`.toLowerCase(), 1, 600)) || !(await rateLimit(c.env.DB, `ping-ip:${ip}`, 10, 600))) {
     const existing = await getRepo(c.env.DB, o, n);
     return c.json({ ok: false, error: "pinged recently; try again in 10 minutes", status: existing?.status ?? null, url: existing ? `/r/${existing.full_name}` : null }, 429);

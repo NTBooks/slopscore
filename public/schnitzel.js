@@ -232,5 +232,7 @@
     run();
   }
 
-  fetch('/mascot.svg').then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) { if (t) setup(t); }).catch(function () {});
+  // Against the origin, not the document: a page opened through a link with the password in it (the test
+  // site) keeps those credentials in its base URL, and fetch refuses any URL that carries them.
+  fetch(location.origin + '/mascot.svg').then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) { if (t) setup(t); }).catch(function () {});
 })();

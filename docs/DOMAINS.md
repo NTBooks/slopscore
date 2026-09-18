@@ -60,6 +60,17 @@ the repo's own README, and Google is slow to index text it can already find on g
 the fix is making the parts of the page that are ours — the Cap'm's reason for the pick, the scan report, the
 disclosure chips, votes and comments — carry more weight above the README.
 
+## slopscore.lumpdepot.com
+
+The AI Nutrition Label (fiction edition) lived on this subdomain as a page of its own before it moved to
+`/label/fiction/` here (2026-09-18). `MOVED_HOMES` in `src/lib/host.ts` sends that hostname's front door
+to the label and any deeper path home as-is, the same 302 as every other secondary domain. For that to
+happen the subdomain has to reach this Worker: in the lumpdepot.com zone, point `slopscore` at
+`slopscore.org` (a proxied CNAME) and add `slopscore.lumpdepot.com` as a route or custom domain on the
+production Worker. Until then the old link keeps serving whatever the old record points at, and the blog's
+nav link (`src/_includes/partials/header.njk` in NTBooks/dev_blog) should point at
+`https://slopscore.org/label/fiction/` directly.
+
 ## If this ever reverses
 
 Keeping the list, because it is still the right order and the third item is the one that can hurt people:

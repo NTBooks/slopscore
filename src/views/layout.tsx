@@ -3,7 +3,7 @@ import { raw } from "hono/html";
 import type { SessionUser } from "../env";
 import { visibleSorts, type Sort } from "../lib/db";
 import { Wordmark, Icon } from "./art";
-import { inlineScript, INFINITE_JS, VOTE_JS, CLIP_JS, CONFIRM_JS } from "./clientjs";
+import { inlineScript, INFINITE_JS, VOTE_JS, CLIP_JS, CONFIRM_JS, FOOT_JS } from "./clientjs";
 
 export interface PageMeta {
   title: string;
@@ -132,15 +132,18 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         <main class="wrap">{children}</main>
         {/* Sticky: the feed scrolls for ever (see INFINITE_JS), so the bottom of the document is a place nobody arrives at. */}
         <footer class="foot">
-          {/* Two strips, each one line that scrolls sideways (style.css .footlinks), grouped under a small label so
-              thirty links read as five shelves. The motto is only on the first; the second starts flush with it. */}
-          <p class="footlinks">
+          {/* One row a stranger needs (about, contact, privacy, terms), then the shelves: a run of links under a
+              small label, so thirty links read as five groups. On a desktop every shelf shows and the bar is two
+              lines. On a phone a sticky bar is viewport the reader never gets back, so the .footextra shelves are
+              folded away behind "more" (FOOT_JS flips .open on the footer; style.css does the rest). */}
+          <p class="footlinks footcore">
             <strong>Nothing here is a secret. That's the point.</strong>
-            <span class="footgroup"><span class="footlabel">the site</span><a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/privacy" title="what the site keeps about you, and how to have it deleted">privacy</a> · <a href="/terms" title="the rules for using the site">terms</a> · <a href="/scan">request a scan</a></span>
-            <span class="footgroup"><span class="footlabel"><a href="/for-agents" title="how to hand SlopScore to an agent">for agents</a></span><a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a></span>
-            <span class="footgroup"><span class="footlabel">feeds</span><a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a></span>
+            <button type="button" class="foottoggle" aria-expanded="false">more</button>
+            <span class="footgroup"><span class="footlabel">the site</span><a href="/about">about</a> · <a href="/contact">contact</a> · <a href="/privacy" title="what the site keeps about you, and how to have it deleted">privacy</a> · <a href="/terms" title="the rules for using the site">terms</a><span class="footextra"> · <a href="/scan">request a scan</a></span></span>
+            <span class="footgroup footextra"><span class="footlabel"><a href="/for-agents" title="how to hand SlopScore to an agent">for agents</a></span><a href="/skill.md">skill.md</a> · <a href="/llms.txt">llms.txt</a> · <a href="/openapi.json">openapi</a> · <a href="/mcp">mcp</a> · <a href="/api/v1/vocab">vocab</a></span>
+            <span class="footgroup footextra"><span class="footlabel">feeds</span><a href="/feed.xml">rss</a> · <a href="/trawl.xml" title="the trawl's own feed: what the Cap'm dragged in">the hauls</a></span>
           </p>
-          <p class="footlinks">
+          <p class="footlinks footextra">
             <span class="footgroup"><span class="footlabel">what it's for</span><a href="/manifesto" title="what this place is for, in the owner's own words">manifesto</a> · <a href="/schemas" title="one disclosure panel per medium">the labels</a> · <a href="/disclosure">disclosure</a> · <a href="/spec">spec</a> · <a href="/campus" title="for courses, hackathons and student groups">campus</a> · <a href="/but-is-it-slop" title="seven questions, and every honest answer lands in the trough">is it slop?</a></span>
             <span class="footgroup"><span class="footlabel">the numbers</span><a href="/trends">trends</a> · <a href="/method" title="the rules behind every number here, frozen and versioned">how we count</a> · <a href="/report" title="one bulletin a week, counted not generated">the report</a> · <a href="/stats">stats</a> · <a href="/log">mod log</a> · <a href="/balcony">the balcony</a> · <a href="/tools">built with</a></span>
           </p>
@@ -150,6 +153,7 @@ export const Layout: FC<PropsWithChildren<{ meta: PageMeta; user: SessionUser | 
         {inlineScript(INFINITE_JS)}
         {inlineScript(CLIP_JS)}
         {inlineScript(CONFIRM_JS)}
+        {inlineScript(FOOT_JS)}
         {/* Whether anyone is looking. First, because the three below subscribe to it; defer keeps the order. */}
         <script src="/awake.js" defer></script>
         <script src="/schnitzel.js" defer></script>

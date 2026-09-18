@@ -221,12 +221,27 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
 .footlinks::-webkit-scrollbar { display: none; }
 /* The links are shelved: a run of links under a small italic label, the shelves a gap apart, so the eye lands
    on a group rather than a row of thirty. Still one line per strip, still scrolling sideways past the edge. */
-.footgroup { display: inline-block; margin-left: 16px; } .foot strong + .footgroup, .footlinks > .footgroup:first-child { margin-left: 0; }
+.footgroup { display: inline-block; margin-left: 16px; } .footlinks > .footgroup:first-of-type { margin-left: 0; }
 .footlabel { font-family: var(--serif); font-style: italic; color: var(--muted); margin-right: 6px; } .footlabel a { color: inherit; }
 /* A short window (phone in landscape, a split screen) has no room to give away: let it scroll off. */
 @media (max-height: 520px) { .foot { position: static; } }
 /* On a phone the bar is one scrollable line of links: the motto and the note would cost three of them. */
 @media (max-width: 600px) { .foot strong, .foot p.muted { display: none; } .foot { padding: 4px 10px; text-align: left; } }
+/* On a phone the bar is one row: the four links a stranger needs and a "more". A sticky bar is viewport the
+   reader never gets back, and two strips that scroll sideways hide most of their links with nothing to say so.
+   "more" (FOOT_JS) unfolds the shelves as wrapping rows with tap-sized links, capped so a long list scrolls
+   inside the bar rather than swallowing the screen. The inset keeps the bar above an iPhone's home indicator. */
+.foottoggle { display: none; font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+@media (max-width: 600px) {
+  .foot { padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .foottoggle { display: inline-block; float: right; min-height: 28px; padding: 0 4px 0 12px; }
+  .footextra, .footcore .footlabel { display: none; }
+  .foot.open { max-height: 70vh; overflow-y: auto; }
+  .foot.open .footextra, .foot.open .footcore .footlabel { display: inline; }
+  .foot.open .footlinks { white-space: normal; }
+  .foot.open .footgroup, .foot.open p.footextra { display: block; margin: 4px 0 0; }
+  .foot.open .foot a, .foot.open a { display: inline-block; padding: 6px 0; }
+}
 
 /* The agent strip: the one URL an agent needs, under the header, on every page. Desktop only — nobody runs
    a coding agent on a phone, and a line of monospace would eat the top of the first screen there. */

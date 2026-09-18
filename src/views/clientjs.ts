@@ -104,5 +104,17 @@ export const CONFIRM_JS = `(function(){
   });
 })();`;
 
+/** The footer's "more" on a phone: flips .open on the bar, and the shelves style.css hid come back as wrapping rows. */
+export const FOOT_JS = `(function(){
+  var b=document.querySelector('.foottoggle'); if(!b) return;
+  var f=b.closest('.foot'); if(!f) return;
+  b.addEventListener('click',function(){
+    var open=!f.classList.contains('open');
+    f.classList.toggle('open',open);
+    b.setAttribute('aria-expanded',open?'true':'false');
+    b.textContent=open?'less':'more';
+  });
+})();`;
+
 /** The hash set lib/csp.ts publishes. A script missing from this list is blocked by the browser. */
-export const INLINE_SCRIPTS = [INFINITE_JS, VOTE_JS, CLIP_JS, CONFIRM_JS, COUNTDOWN_JS];
+export const INLINE_SCRIPTS = [INFINITE_JS, VOTE_JS, CLIP_JS, CONFIRM_JS, COUNTDOWN_JS, FOOT_JS];

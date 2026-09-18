@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../env";
 import { Layout, SITE } from "../views/layout";
 import { Mascot, StepIcon, Stamp } from "../views/art";
+import { HowToClip } from "../views/howto";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 
 export const orphanage = new Hono<AppEnv>();
@@ -63,6 +64,7 @@ orphanage.get("/", (c) => {
           <li><StepIcon n={3} /><span><strong>Put it up for adoption.</strong> <em>Optional.</em> Log in and press <strong>Submit</strong> on the repo page. That's the launch: eligible for Slop of the Day and the weekly awards, and a <Stamp class="inline-stamp" title="Certified Slop" /> stamp if it wins.</span></li>
         </ol>
         <pre>{MINIMAL_EXAMPLE.trim()}</pre>
+        <HowToClip caption="Or skip the typing: tell the agent that wrote it to add a slopscore file per slopscore.org, and it commits this exact file." />
         <p class="muted">That's the whole file. Name, description, language, stars, and README come from GitHub. <a href="/spec">Full spec</a> · impatient? <a href="/scan">/scan</a> checks a repo right now and says in words why it was or wasn't taken in.</p>
         <p class="muted">Not sure yours qualifies? <a href="/but-is-it-slop">Seven questions</a> and the house will tell you, then hand you the file with your answers already in it.</p>
 

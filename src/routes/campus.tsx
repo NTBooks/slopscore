@@ -11,6 +11,7 @@ import { Layout } from "../views/layout";
 import { respond } from "../lib/negotiate";
 import { renderMarkdown } from "../lib/markdown";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
+import { HowToClip } from "../views/howto";
 
 export const campus = new Hono<AppEnv>();
 
@@ -31,13 +32,15 @@ It works whether submissions come through a hackathon platform, a form, or a rep
 
 ## How, in one paste
 
-Each team commits this at the root of their public repo:
+The short way: tell the agent that wrote the code, *"add a slopscore file per slopscore.org"*. It reads [${origin}/skill.md](${origin}/skill.md) and commits the file. The long way is the same six lines by hand, at the root of the public repo:
 
 \`\`\`
 ${EXAMPLE.trim()}
 \`\`\`
 
-The crawler finds it within the hour and lists the project in the bucket. Or hand [${origin}/skill.md](${origin}/skill.md) to the agent that wrote the code and it fills in the rest. Not sure what to put? [Seven questions](${origin}/but-is-it-slop) and it drafts the file for you.
+The crawler finds it within the hour and lists the project in the bucket. Not sure what to put? [Seven questions](${origin}/but-is-it-slop) and it drafts the file for you.
+
+<!--howto-->
 
 ## For the organiser
 
@@ -79,9 +82,9 @@ campus.get("/campus", (c) => {
       example: EXAMPLE,
       skill: `${d.origin}/skill.md`,
       contact: d.contact,
-      text: d.text,
+      text: d.text.replace("<!--howto-->\n\n", ""),
     }),
-    md: (d) => d.text,
+    md: (d) => d.text.replace("<!--howto-->", `![Tell your agent: add a slopscore file per slopscore.org. It commits one file.](${d.origin}/media/add-to-slopscore.gif)`),
     html: (d) => (
       <Layout
         meta={{
@@ -92,7 +95,11 @@ campus.get("/campus", (c) => {
         url={url}
       >
         <section class="wrap narrow orphanage" style="padding:0">
-          <div dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text) }} />
+          {(() => { const [before, after] = d.text.split("<!--howto-->"); return <>
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(before) }} />
+            <HowToClip />
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(after ?? "") }} />
+          </>; })()}
         </section>
       </Layout>
     ),

@@ -242,6 +242,9 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
 /* mobile */
 code { overflow-wrap: anywhere; }
 table.list { display: block; overflow-x: auto; white-space: nowrap; }
+/* The how-to clip (views/howto.tsx): the thirteen-second "tell your agent" loop, shown wherever the instructions are. */
+figure.howto { margin: 14px 0 18px; padding: 0; } figure.howto video, figure.howto img { display: block; width: 100%; max-width: 720px; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #111; }
+figure.howto figcaption { margin: 6px 0 0; font-size: 13px; color: var(--muted); } figure.howto figcaption em { color: var(--accent-text); font-style: normal; font-family: var(--mono, ui-monospace, monospace); }
 /* The labels directory (/schemas): prose in cells, so it wraps instead of scrolling; the mapping tables under it are short and wrap too. */
 table.list.schemas, .orphanage table.list { display: table; white-space: normal; } table.list.schemas td, .orphanage table.list td { vertical-align: top; font-size: 13px; padding: 6px; }
 table.list.schemas td:first-child { white-space: nowrap; } table.list.schemas td:last-child { white-space: nowrap; }

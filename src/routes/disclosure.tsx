@@ -13,6 +13,7 @@ import { respond } from "../lib/negotiate";
 import { renderMarkdown } from "../lib/markdown";
 import { MINIMAL_EXAMPLE } from "../lib/slopmd";
 import { SPEC_VERSION } from "../lib/vocab";
+import { HowToClip } from "../views/howto";
 
 export const disclosure = new Hono<AppEnv>();
 
@@ -58,6 +59,8 @@ ${MINIMAL_EXAMPLE.trim()}
 
 That is the whole thing. Name, description, topics, language, licence, stars and the README come from
 GitHub's API, so the file never repeats them. It holds only what GitHub cannot tell anyone.
+
+<!--howto-->
 
 ## What it declares
 
@@ -115,9 +118,9 @@ disclosure.get("/disclosure", (c) => {
       required: Object.fromEntries(REQUIRED),
       optional: Object.fromEntries(OPTIONAL),
       declared_not_detected: true,
-      text: d.text,
+      text: d.text.replace("<!--howto-->\n\n", ""),
     }),
-    md: (d) => d.text,
+    md: (d) => d.text.replace("<!--howto-->", `![Tell your agent: add a slopscore file per slopscore.org. It commits one file.](${d.origin}/media/add-to-slopscore.gif)`),
     html: (d) => (
       <Layout
         meta={{
@@ -128,7 +131,11 @@ disclosure.get("/disclosure", (c) => {
         url={url}
       >
         <section class="wrap narrow orphanage" style="padding:0">
-          <div dangerouslySetInnerHTML={{ __html: renderMarkdown(d.text) }} />
+          {(() => { const [before, after] = d.text.split("<!--howto-->"); return <>
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(before) }} />
+            <HowToClip caption="The agent can write it: tell the one that wrote the code to add a slopscore file per slopscore.org." />
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(after ?? "") }} />
+          </>; })()}
         </section>
       </Layout>
     ),

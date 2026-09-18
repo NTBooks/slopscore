@@ -44,7 +44,7 @@ Then books. Before this site existed I built the AI Nutrition Label for fiction:
 
 One panel per medium, all in one place, all free, all self-reported. Some of the ingredient lists already exist and I'm not going to rewrite them. Music has its five fields. Film has the Academy's form. The Linux kernel has a line per commit. Research has a contribution statement. What none of them have is the part a person reads in three seconds on the back of the box: the tier up top, the panel underneath. That's the piece I'm building, and I'll map each of theirs into it. [The directory is here.](${origin}/schemas)
 
-I'm a C2PA member, for what it's worth, and I'll say the quiet part: their format proves a file wasn't altered, and most platforms strip it on upload anyway. It's for tools. It was never the words on the box.
+My other company, Chainletter Labs, is a C2PA member, for what it's worth, and I'll say the quiet part: their format proves a file wasn't altered, and most platforms strip it on upload anyway. It's for tools. It was never the words on the box.
 
 Education and legal don't have a list yet. Was the lesson written or generated, and did anyone who knows the subject read it? Which drafts did a model touch, because a judge is going to ask anyway? I'll draft the ones I understand. For the rest I want people who work in those fields to write the first version and put it here, under a license anyone can copy.
 

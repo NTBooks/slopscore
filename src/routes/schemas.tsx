@@ -74,7 +74,7 @@ const rows = (origin: string): Row[] => [
   },
   {
     medium: "Provenance, any file",
-    exists: "[C2PA Content Credentials](https://c2pa.org): a signed manifest with an actions list and a generative-AI assertion. Proves a file was not altered since signing. Most upload pipelines strip it. SlopScore is a member.",
+    exists: "[C2PA Content Credentials](https://c2pa.org): a signed manifest with an actions list and a generative-AI assertion. Proves a file was not altered since signing. Most upload pipelines strip it. Chainletter Labs, the owner's other company, is a member.",
     panel: "Not a panel. The panel can ride inside a manifest as an assertion: C2PA proves, the panel explains.",
     status: "note",
   },

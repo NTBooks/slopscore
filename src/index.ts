@@ -18,6 +18,9 @@ import { orphanage } from "./routes/orphanage";
 import { agents } from "./routes/agents";
 import { disclosure } from "./routes/disclosure";
 import { quiz } from "./routes/quiz";
+import { manifesto } from "./routes/manifesto";
+import { schemas } from "./routes/schemas";
+import { campus } from "./routes/campus";
 import { flagOn, setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
@@ -79,6 +82,9 @@ app.route("/but-is-it-slop", quiz);
 app.route("/is-it-slop", quiz);
 app.route("/", agents);
 app.route("/", disclosure);
+app.route("/", manifesto);
+app.route("/", schemas);
+app.route("/", campus);
 app.route("/", pages);
 
 app.get("/robots.txt", (c) => {
@@ -152,6 +158,10 @@ ${sortOn("upcoming") ? `- ${origin}/upcoming    listed repos whose declared stat
 - ${origin}/method      how every number on this site is made: the sample, the filters, the judge, and the known biases. Versioned and frozen; reports stamp the version they were written under. Read this before quoting a figure
 - ${origin}/report      the Trawl Report: one bulletin a week, counted from the nightly snapshot, no model involved. /report is the latest and the archive, /report/{YYYY-Www} is one week, .json is the numbers it was written from, /report.xml is the feed${newsletter(c.env) ? ` and it is mailed weekly from ${newsletter(c.env)!.url}` : ""}
 - ${origin}/disclosure  what slopscore.md is as an AI-provenance disclosure, and what each field declares. Read this if the question is "how do I say a model wrote this repo" rather than "where do I post it"
+- ${origin}/manifesto   what the site is for: a self-reported disclosure panel on every kind of AI-made media, code first. The owner's own words
+- ${origin}/schemas     the directory of labels, one per medium: what already exists in that field, what the SlopScore panel for it is, and its status. CC BY
+- ${origin}/label/fiction/  the AI Nutrition Label for books: six tiers over twenty ingredients, printable. Vocab at ${origin}/api/v1/vocab/fiction
+- ${origin}/campus      for courses, hackathons and student groups: one bucket per event, one file per repo, a page that reads them
 - ${origin}/but-is-it-slop  a seven-question questionnaire for a human who is not sure whether their own repo counts. Ends with a slopscore.md drafted from the answers
 - ${origin}/for-agents  how to hand SlopScore to an agent: the skill, a rules snippet for CLAUDE.md / AGENTS.md, what needs a token and what doesn't
 - ${origin}/skill.md    the skill itself: everything an agent must do to list a repo, in one file. Valid as a drop-in SKILL.md. Read this one if you are an agent holding a commit bit.

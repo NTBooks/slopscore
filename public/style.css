@@ -238,6 +238,10 @@ table.list { border-collapse: collapse; width: 100%; font-size: 12px; } table.li
 /* mobile */
 code { overflow-wrap: anywhere; }
 table.list { display: block; overflow-x: auto; white-space: nowrap; }
+/* The labels directory (/schemas): prose in cells, so it wraps instead of scrolling; the mapping tables under it are short and wrap too. */
+table.list.schemas, .orphanage table.list { display: table; white-space: normal; } table.list.schemas td, .orphanage table.list td { vertical-align: top; font-size: 13px; padding: 6px; }
+table.list.schemas td:first-child { white-space: nowrap; } table.list.schemas td:last-child { white-space: nowrap; }
+@media (max-width: 600px) { table.list.schemas, table.list.schemas tr, table.list.schemas td { display: block; } table.list.schemas th { display: none; } table.list.schemas td { border: 0; padding: 2px 0; } table.list.schemas td:first-child { padding-top: 10px; border-top: 1px solid var(--line); } table.list.schemas td:last-child { padding-bottom: 10px; } }
 @media (max-width: 600px) {
   body { font-size: 14px; }
   .wrap { padding: 6px 10px; gap: 14px; }

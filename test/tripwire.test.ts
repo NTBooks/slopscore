@@ -86,7 +86,7 @@ describe("tripwire: what it must NOT catch", () => {
       "/", "/best", "/queue?status=rejected", "/b/cli?sort=top&t=week", "/u/NTBooks",
       "/r/owner/repo", "/r/owner/repo.json", "/api/v1/digest?since=1700000000",
       "/?page=1", "/?page=42", "/search?q=cli&page=3", "/badge/owner/repo.svg",
-      "/feed.xml", "/sitemap.xml", "/mcp", "/skill", "/spec",
+      "/feed.xml", "/sitemap.xml", "/mcp", "/skill", "/spec", "/manifesto", "/schemas", "/campus",
     ]) expect(kind(path), path).toBe(null);
   });
 

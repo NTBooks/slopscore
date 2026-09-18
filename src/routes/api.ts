@@ -9,6 +9,7 @@ import type { VulnSummary } from "../lib/osv";
 import { parseQuery } from "../lib/searchquery";
 import { UNTRUSTED_NOTE } from "../lib/untrusted";
 import { vocabJson, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
+import { fictionVocabJson } from "../lib/vocab-fiction";
 import { repoJson } from "./pages";
 
 export const api = new Hono<AppEnv>();
@@ -26,6 +27,8 @@ function paged(c: { req: { url: string } }, rows: RepoRow[], page: number, hasMo
 }
 
 api.get("/vocab", (c) => c.json(vocabJson()));
+// The fiction edition of the AI Nutrition Label as data (src/lib/vocab-fiction.ts); the directory is /schemas.
+api.get("/vocab/fiction", (c) => c.json(fictionVocabJson(new URL(c.req.url).origin)));
 
 api.get("/facets", async (c) => {
   const facet = c.req.query("facet");

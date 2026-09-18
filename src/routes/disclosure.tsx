@@ -98,6 +98,8 @@ delete the file and the listing goes with it on the next check. There is no acco
 - [${origin}/spec](${origin}/spec) — the full contract
 - [${origin}/skill.md](${origin}/skill.md) — hand this to the agent that wrote the code and it does the rest
 - [${origin}/scan](${origin}/scan) — check a repo now and get told in words what is wrong with the paperwork
+- [${origin}/manifesto](${origin}/manifesto) — why a label at all, and why this shape: the same panel, one medium at a time
+- [${origin}/schemas](${origin}/schemas) — the other media: what exists in each field and the panel for it
 `;
 
 disclosure.get("/disclosure", (c) => {

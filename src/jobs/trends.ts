@@ -20,6 +20,8 @@
 import type { Env } from "../env";
 import { cached, markDirty } from "../lib/cache";
 import { isoDate, isoWeek, now, weekStart } from "../lib/time";
+import { PUSHED_WITHIN_DAYS, TRAWL_GROUNDS } from "../lib/virtual";
+import { LICENCE_ORDER, LIFE_ORDER, LIFE_SQL, OWNER_ORDER, SEEN_STAR_ORDER, SIZE_ORDER, SIZE_SQL, licenceClass, ownerClass, seenStarBucket } from "../lib/seen";
 
 /** How long snapshots are kept. Long enough to watch a season turn, short enough that the table stays small. */
 export const TRENDS_KEEP_DAYS = 180;
@@ -116,11 +118,18 @@ export function netBucket(reason: string): string {
   if (r.startsWith("denylist")) return "tripped the denylist";
   if (r.includes("prompt pack") || r.includes("not vibe-coded software")) return "writing about vibe coding, not vibe-coded";
   if (r.includes("org-owned")) return "owned by an org, so nobody could claim or remove it";
+  if (r.includes("no vibe-coded signal")) return "no claim in its topics or description";
+  if (r.includes("fork, archived")) return "a fork, an archive or a template";
   if (r.includes("stars")) return "outside the star window";
   if (r.includes("pushed")) return "not touched in 90 days";
   if (r.includes("description")) return "no description to quote";
   if (r.includes("already")) return "already known here";
   return "something else";
+}
+
+/** The sea's sieve column in the funnel's words: what the trough's rules would have done with the repo. */
+export function sieveBucket(sieve: string): string {
+  return sieve === "candidate" ? "would reach the judge" : netBucket(sieve);
 }
 
 /** The gate that stopped a submission, in the words its own page uses (lib/scan.ts POLICY_LABELS). */
@@ -342,6 +351,65 @@ export async function snapshotTrends(env: Env, at = now()): Promise<{ date: stri
     out.push({ cohort, metric, period, key, n });
   }
 
+  // 6. The sea: every repo the searches returned in the last PUSHED_WITHIN_DAYS days, at any star count, under
+  //    any licence, from the search response alone (lib/seen.ts, jobs/seen.ts). Counted, never judged, never
+  //    listed. It is the population the trough is drawn from, and the one place the trough's own filters are
+  //    measured rather than assumed. A database from before the table existed has an empty sea, not an error.
+  const seaSince = at - PUSHED_WITHIN_DAYS * 86400;
+  const inSea = "FROM trawl_seen WHERE last_seen >= ?";
+  const sea = await db.batch<{ k: string | number | null; n: number }>([
+    db.prepare(`SELECT 'seen' AS k, count(*) AS n ${inSea}`).bind(seaSince),
+    db.prepare(`SELECT 'owners' AS k, count(DISTINCT substr(full_name, 1, instr(full_name, '/') - 1)) AS n ${inSea}`).bind(seaSince),
+    db.prepare(`SELECT 'new_30d' AS k, count(*) AS n ${inSea} AND first_seen >= ?`).bind(seaSince, at - 30 * 86400),
+    db.prepare(`SELECT stars AS k, count(*) AS n ${inSea} GROUP BY stars`).bind(seaSince),
+    db.prepare(`SELECT license AS k, count(*) AS n ${inSea} GROUP BY license`).bind(seaSince),
+    db.prepare(`SELECT owner_type AS k, count(*) AS n ${inSea} GROUP BY owner_type`).bind(seaSince),
+    db.prepare(`SELECT language AS k, count(*) AS n ${inSea} AND language IS NOT NULL GROUP BY language`).bind(seaSince),
+    db.prepare(`SELECT tool AS k, count(*) AS n ${inSea} AND tool IS NOT NULL GROUP BY tool`).bind(seaSince),
+    db.prepare(`SELECT sieve AS k, count(*) AS n ${inSea} GROUP BY sieve`).bind(seaSince),
+    db.prepare(`SELECT ground AS k, count(*) AS n ${inSea} GROUP BY ground`).bind(seaSince),
+    db.prepare(`SELECT signal AS k, count(*) AS n ${inSea} AND signal IS NOT NULL GROUP BY signal`).bind(seaSince),
+    db.prepare(`SELECT ${LIFE_SQL} AS k, count(*) AS n ${inSea} GROUP BY k`).bind(seaSince),
+    db.prepare(`SELECT ${SIZE_SQL} AS k, count(*) AS n ${inSea} GROUP BY k`).bind(seaSince),
+    db.prepare(`SELECT (created_at / 86400) AS k, count(*) AS n ${inSea} AND created_at >= ? GROUP BY k`).bind(seaSince, weekSince),
+  ]).catch(() => null);
+  const seenTotal = sea ? (sea[0]?.results?.[0]?.n ?? 0) : 0;
+  if (sea && seenTotal > 0) {
+    const rows = (i: number) => sea[i]?.results ?? [];
+    const fold = (items: { k: string | number | null; n: number }[], bucket: (k: string | number | null) => string | null) => {
+      const m = new Map<string, number>();
+      for (const r of items) { const b = bucket(r.k); if (b != null) m.set(b, (m.get(b) ?? 0) + r.n); }
+      return [...m].map(([key, n]) => ({ key, n }));
+    };
+    const put = (metric: string, list: { key: string; n: number }[], period = "") => { for (const t of list) out.push({ cohort: "seen", metric, period, key: t.key, n: t.n }); };
+    const stars = rows(3);
+    const licences = rows(4);
+    const sieves = rows(8);
+    put("totals", [
+      { key: "seen", n: seenTotal },
+      { key: "owners", n: rows(1)[0]?.n ?? 0 },
+      { key: "new_30d", n: rows(2)[0]?.n ?? 0 },
+      { key: "unstarred", n: stars.filter((r) => Number(r.k) === 0).reduce((s, r) => s + r.n, 0) },
+      { key: "unlicensed", n: licences.filter((r) => !r.k).reduce((s, r) => s + r.n, 0) },
+      { key: "candidates", n: sieves.filter((r) => r.k === "candidate").reduce((s, r) => s + r.n, 0) },
+    ]);
+    put("stars", fold(stars, (k) => seenStarBucket(Number(k))));
+    put("licence", fold(licences, (k) => licenceClass(k == null ? null : String(k))));
+    put("owner", fold(rows(5), (k) => ownerClass(k == null ? null : String(k))));
+    put("language", topN(fold(rows(6), (k) => String(k).toLowerCase())));
+    put("tool", fold(rows(7), (k) => String(k)));
+    put("sieve", fold(sieves, (k) => sieveBucket(String(k))));
+    put("ground", fold(rows(9), (k) => TRAWL_GROUNDS[Number(k)]?.name ?? "elsewhere"));
+    put("signal", fold(rows(10), (k) => String(k)));
+    put("life", fold(rows(11), (k) => String(k)));
+    put("size", fold(rows(12), (k) => String(k)));
+    // Born by ISO week: a flow of the world rather than of our walk, complete for every week inside the push
+    // window, since a repo created in it was pushed in it. Every week on the axis gets a row, zero included.
+    const born = new Map<string, number>(weeks.map((w) => [w, 0]));
+    for (const r of rows(13)) { const w = isoWeek(Number(r.k) * 86400); if (born.has(w)) born.set(w, born.get(w)! + r.n); }
+    for (const [w, n] of born) out.push({ cohort: "seen", metric: "born_w", period: w, key: "born", n });
+  }
+
   // Replace the day rather than appending to it, then drop snapshots nobody will chart again.
   await db.prepare("DELETE FROM trends_daily WHERE date = ?").bind(day).run();
   for (let i = 0; i < out.length; i += 100) {
@@ -361,6 +429,26 @@ export interface FacetChart { facet: ChartFacet; trawl: Bar[]; opted: Bar[] }
 export interface ToolMonth { period: string; total: number; parts: { key: string; n: number; share: number }[] }
 /** Two sides of one decision, plus the whole sample: the judged population is small, so the n travels with it. */
 export interface JudgedChart { all: Bar[]; listed: Bar[]; thrown_back: Bar[]; n_listed: number; n_thrown_back: number }
+/**
+ * The sea: what the searches return before any of the trough's rules are applied, counted from the search
+ * response alone. `totals` carries seen, owners, new_30d, unstarred, unlicensed and candidates (the number
+ * that would reach the judge under the trough's rules). Every bar chart's denominator is `totals.seen`.
+ */
+export interface SeaView {
+  totals: Record<string, number>;
+  stars: Bar[];
+  licence: Bar[];
+  owner: Bar[];
+  language: Bar[];
+  tool: Bar[];
+  sieve: Bar[];
+  ground: Bar[];
+  signal: Bar[];
+  life: Bar[];
+  size: Bar[];
+  /** Repos created per ISO week, over the weekly axis. A flow of the world, not of our walk. */
+  born_w: { period: string; n: number }[];
+}
 
 export interface TrendsView {
   date: string;
@@ -386,6 +474,8 @@ export interface TrendsView {
   turned_away: Bar[];
   stars: Record<Cohort, Bar[]>;
   age: Record<Cohort, Bar[]>;
+  /** Null on a snapshot with no sea in it: written before method v4, or before the first sounding. */
+  sea: SeaView | null;
 }
 
 /** Counted rows to drawable bars: sorted, and each one sized against the biggest in its own chart. */
@@ -402,7 +492,7 @@ export const AGE_ORDER = ["under a week old", "under a month", "one to three mon
 
 /** The whole dashboard in one query against the newest snapshot, served from cache between data versions. */
 export async function loadTrends(db: D1Database): Promise<TrendsView | null> {
-  return cached(db, "trends:v2", async () => {
+  return cached(db, "trends:v3", async () => {
     const latest = await db.prepare("SELECT max(date) AS d FROM trends_daily").first<{ d: string | null }>();
     if (!latest?.d) return null;
     const rows = (await db.prepare("SELECT cohort, metric, period, key, n, mean_score FROM trends_daily WHERE date = ?").bind(latest.d).all<TrendRow>()).results ?? [];
@@ -467,6 +557,18 @@ export function shapeTrends(date: string, rows: TrendRow[]): TrendsView {
   const listings = listingsOn("listings", months);
   const listings_w = listingsOn("listings_w", weeks);
 
+  const seaTotals = Object.fromEntries(pick("seen", "totals").map((r) => [r.key, r.n])) as Record<string, number>;
+  const seaBars = (metric: string, order?: string[]) => (order ? inOrder(bars(pick("seen", metric)), order) : bars(pick("seen", metric)));
+  const sea: SeaView | null = seaTotals.seen
+    ? {
+      totals: seaTotals,
+      stars: seaBars("stars", SEEN_STAR_ORDER), licence: seaBars("licence", LICENCE_ORDER), owner: seaBars("owner", OWNER_ORDER),
+      language: seaBars("language"), tool: seaBars("tool"), sieve: seaBars("sieve"), ground: seaBars("ground"), signal: seaBars("signal"),
+      life: seaBars("life", LIFE_ORDER), size: seaBars("size", SIZE_ORDER),
+      born_w: periodsOf("born_w").map((period) => ({ period, n: at("seen", "born_w", period) })),
+    }
+    : null;
+
   return {
     date, months, weeks, granularity: pickGrain(listings, listings_w), totals, facets, listings, listings_w, cloud,
     use: judged("use"), verdict: judged("verdict"),
@@ -476,5 +578,6 @@ export function shapeTrends(date: string, rows: TrendRow[]): TrendsView {
     turned_away: bars(pick("opted", "turned-away")),
     stars: { trawl: inOrder(bars(pick("trawl", "stars")), STAR_ORDER), opted: inOrder(bars(pick("opted", "stars")), STAR_ORDER) },
     age: { trawl: inOrder(bars(pick("trawl", "age")), AGE_ORDER), opted: inOrder(bars(pick("opted", "age")), AGE_ORDER) },
+    sea,
   };
 }

@@ -57,6 +57,8 @@ export interface Env {
   CRITICS_PER_DAY?: string;
   /** Trawl-judge calls per UTC day, across every run. Unset = JUDGE_PER_DAY in src/jobs/trawl.ts. The one number that bounds the trawl's model spend. */
   JUDGE_PER_DAY?: string;
+  /** The sounding's search calls per UTC day (src/jobs/seen.ts). Unset = SEEN_PER_DAY there. 0 pauses it without a deploy. */
+  SEEN_PER_DAY?: string;
   /** Truffle trawl: repos listed per day, and the opted-in listing count at which the trawl stops for good. */
   TRAWL_PER_DAY?: string;
   TRAWL_STOP_AT?: string;

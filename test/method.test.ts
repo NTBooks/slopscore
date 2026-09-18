@@ -11,8 +11,29 @@ describe("the tool dictionary on the method page", () => {
     expect(methodJson().tools.added).toEqual([]);
     expect(methodMd()).toContain("## The tools");
     expect(methodMd()).toContain("None yet. The scout proposes");
-    expect(CHANGES[0].version).toBe(3);
-    expect(CHANGES[0].what).toMatch(/does not bump the version/);
+    expect(CHANGES.find((c) => c.version === 3)?.what).toMatch(/does not bump the version/);
+  });
+});
+
+describe("the sea on the method page", () => {
+  it("is the fourth version, a third cohort, and a rule change the trough did not make", () => {
+    expect(METHOD_VERSION).toBe(4);
+    expect(CHANGES[0].what).toMatch(/trough's rules do not change/);
+    const md = methodMd();
+    expect(md).toContain("## Three samples, never mixed");
+    expect(md).toContain("- **Seen.**");
+    expect(md).toContain("## The sea");
+    expect(md).toContain("no star clause");
+    expect(md).toContain("Nothing in it is read, judged or listed");
+    // The sea's own biases sit beside the others, and the star floor is now called what it is.
+    expect(md).toContain("the floor is most of the population");
+    expect(md).toContain("**The sea is search-shaped too.**");
+    expect(md).toContain("**A sea row is a sighting, not a repo.**");
+    const j = methodJson();
+    expect(j.cohorts.seen).toMatch(/any star count/);
+    expect(j.sea).toMatchObject({ stars: "any", licenses: "any", owners: "any", read: false, judged: false, listed: false, named: false });
+    expect(j.sea.records.length).toBeGreaterThanOrEqual(6);
+    expect(j.known_biases.length).toBeGreaterThanOrEqual(8);
   });
   it("lists every addition with its date, who approved it, whether it widened a frozen tool, and a retirement", () => {
     const md = methodMd([META, KIRO]);

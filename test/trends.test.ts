@@ -190,6 +190,29 @@ describe("shapeTrends", () => {
     expect(d.stars.trawl.map((b) => b.key)).toEqual(["5 to 9", "100 to 499"]);
   });
 
+  it("carries the sea when a snapshot has one, in its own order, and says null when it does not", () => {
+    expect(shapeTrends("2026-09-18", []).sea).toBeNull();
+    const rows = [
+      row({ cohort: "seen", metric: "totals", key: "seen", n: 100 }),
+      row({ cohort: "seen", metric: "totals", key: "unstarred", n: 60 }),
+      row({ cohort: "seen", metric: "stars", key: "1 to 4", n: 30 }),
+      row({ cohort: "seen", metric: "stars", key: "no stars", n: 60 }),
+      row({ cohort: "seen", metric: "sieve", key: "would reach the judge", n: 10 }),
+      row({ cohort: "seen", metric: "born_w", period: "2026-W37", key: "born", n: 9 }),
+      row({ cohort: "seen", metric: "born_w", period: "2026-W36", key: "born", n: 4 }),
+    ];
+    const v = shapeTrends("2026-09-18", rows);
+    expect(v.sea?.totals).toEqual({ seen: 100, unstarred: 60 });
+    // Zero stars leads however small it is: the axis is the bucket order, not the size.
+    expect(v.sea?.stars.map((b) => b.key)).toEqual(["no stars", "1 to 4"]);
+    expect(v.sea?.born_w).toEqual([{ period: "2026-W36", n: 4 }, { period: "2026-W37", n: 9 }]);
+    // The sea's weeks never leak into the listings axis.
+    expect(v.weeks).toEqual([]);
+    expect(trendsMd(v)).toContain("## The sea");
+    expect(trendsMd(v)).toContain("60% have no stars");
+    expect(trendsMd(shapeTrends("2026-09-18", []))).not.toContain("## The sea");
+  });
+
   it("keeps the funnels apart", () => {
     expect(d.net[0].key).toBe("a list, guide or template");
     expect(d.turned_away.map((b) => b.key)).toEqual(["contract"]);

@@ -24,6 +24,7 @@ import { SITE } from "./views/layout";
 import { sweep } from "./jobs/sweep";
 import { scanQueue } from "./jobs/scan";
 import { recrawl } from "./jobs/recrawl";
+import { soundSea } from "./jobs/seen";
 import { awards } from "./jobs/awards";
 import { trawl, trawlOne, trawlDaily, releaseBacklog, autoTrawl, claimTrawlRequest, HOURLY_TRAWL } from "./jobs/trawl";
 import { runCritics } from "./jobs/critics";
@@ -287,7 +288,13 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
         };
         break;
       }
-      case "*/10 * * * *": result = await step(env, "recrawl", () => recrawl(env)); break;
+      // The recrawl tick also carries the sounding (jobs/seen.ts): the one tick that never shares a minute
+      // with the hourly trawl at :07 or a chase at :15, :25, :35..., so the two never contend for GitHub's
+      // thirty search calls a minute. Recrawl first: it lands changes to listings, and the count can wait.
+      case "*/10 * * * *": result = {
+        recrawl: await step(env, "recrawl", () => recrawl(env)),
+        seen: await step(env, "seen", () => soundSea(env)),
+      }; break;
       case "5 0 * * *": result = await dailyRound(env); break;
       // manual only: &release=N moves N backlog picks into the queue; &repo=owner/name[&reason=...] hand-picks one; &n=N runs the keyword search
       case "trawl": result = opts.release ? await releaseBacklog(env, opts.release) : opts.auto ? await autoTrawl(env, opts.auto) : opts.repo ? await trawlOne(env, opts.repo, opts.reason) : await trawl(env, opts.n); break;
@@ -295,6 +302,8 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
       case "critics": result = await runCritics(env, { n: opts.n, dry: opts.dry }); break;
       // manual: recount the dashboard now rather than waiting for 00:05. Idempotent: it replaces today's rows.
       case "trends": result = await snapshotTrends(env); break;
+      // manual: one sounding now, &n=N search calls (default SEEN_CALLS). Idempotent: sightings upsert.
+      case "seen": result = await soundSea(env, { calls: opts.n }); break;
       // manual: count the sightings into candidates now. Idempotent: it refreshes counts and never touches a status.
       case "scout": result = await scout(env); break;
       // manual: write the week's bulletin now. &force=1 overwrites the week rather than declining it, which is

@@ -399,7 +399,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 
 /* ---- /trends: charts drawn with divs, because a chart library is 90kB of JavaScript to say "python is popular" ---- */
 /* One palette for every stacked chart. Seven is enough: a series with more bands than that is a table, not a chart. */
-:root { --c1: #e8669a; --c2: #7a6cd6; --c3: #c98a3a; --c4: #2a9d84; --c5: #b5533c; --c6: #5f86c9; --c7: #9a8f7a; --trawl: var(--accent); --opted: var(--c2); }
+:root { --c1: #e8669a; --c2: #7a6cd6; --c3: #c98a3a; --c4: #2a9d84; --c5: #b5533c; --c6: #5f86c9; --c7: #9a8f7a; --trawl: var(--accent); --opted: var(--c2); --seen: var(--c4); }
 @media (prefers-color-scheme: dark) { :root { --c1: #ff8fb5; --c2: #9d93ff; --c3: #e0ab63; --c4: #4fc9a6; --c5: #e0846a; --c6: #7ea7ec; --c7: #b8ac95; } }
 .c1 { background: var(--c1); } .c2 { background: var(--c2); } .c3 { background: var(--c3); } .c4 { background: var(--c4); }
 .c5 { background: var(--c5); } .c6 { background: var(--c6); } .c7 { background: var(--c7); }
@@ -464,7 +464,7 @@ table.list { display: block; overflow-x: auto; white-space: nowrap; }
 
 /* ---- charts.tsx: the figures /trends and /report share. Marks in SVG, every word and number in HTML. ---- */
 /* The two cohorts wear the same two colours on every chart that compares them: pink is the net's sample, purple filed the paperwork. */
-.swatch.trawl, .seg.trawl { background: var(--trawl); } .swatch.opted, .seg.opted { background: var(--opted); }
+.swatch.trawl, .seg.trawl { background: var(--trawl); } .swatch.opted, .seg.opted { background: var(--opted); } .swatch.seen, .seg.seen { background: var(--seen); }
 .fig { margin: 8px 0 18px; }
 .fig figcaption { margin-top: 6px; }
 .fig.pair { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 8px 24px; align-items: start; }
@@ -524,7 +524,7 @@ details.note[open] summary { margin-bottom: 4px; }
 
 /* Bars: thinner, rounded, and coloured by cohort where two cohorts are compared. */
 .bartrack { height: 9px; border-radius: 4px; } .bartrack i { border-radius: 4px; }
-.bars.trawl .bartrack i { background: var(--trawl); } .bars.opted .bartrack i { background: var(--opted); }
+.bars.trawl .bartrack i { background: var(--trawl); } .bars.opted .bartrack i { background: var(--opted); } .bars.seen .bartrack i { background: var(--seen); }
 /* Columns: the surface shows through a 2px gap between segments, and the top of the stack is rounded. */
 .colstack { gap: 2px; background: transparent; border-radius: 0; overflow: visible; }
 .colstack .seg { border-radius: 1px; }

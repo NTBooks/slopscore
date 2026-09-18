@@ -2,7 +2,7 @@
 // every word and number (views/charts.tsx), no script tag, no chart library, no fetch. It prints, it works with
 // JS off, and it costs one D1 query.
 import type { FC } from "hono/jsx";
-import { COHORTS, COHORT_LABEL, FACET_TITLE, TEMPLATED_ON_TRAWL, pickGrain, type Bar, type Cohort, type FacetChart, type JudgedChart, type ToolMonth, type TrendsView } from "../jobs/trends";
+import { COHORTS, COHORT_LABEL, FACET_TITLE, TEMPLATED_ON_TRAWL, pickGrain, type Bar, type Cohort, type FacetChart, type JudgedChart, type SeaView, type ToolMonth, type TrendsView } from "../jobs/trends";
 import { LISTABLE_CODES } from "../lib/method";
 import { MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS } from "../lib/virtual";
 import { Columns, Donut, Fig, Kpi, Kpis, Legend, OTHER_CLASS, donutSlices, pct, slotClass, type ColumnSpec, type Slice } from "./charts";
@@ -16,7 +16,7 @@ const COHORT_SUB: Record<Cohort, string> = { trawl: "the net's sample", opted: "
 
 /** One horizontal bar chart. `of` is the denominator the share is quoted against, when there is a sensible one;
  *  `tone` is the cohort the bars belong to, so a trawled column is always pink and an opted-in one always purple. */
-export const Bars: FC<{ rows: Bar[]; of?: number; limit?: number; empty?: string; wide?: boolean; counts?: boolean; tone?: Cohort }> = ({ rows, of, limit = 10, empty, wide, counts, tone }) => {
+export const Bars: FC<{ rows: Bar[]; of?: number; limit?: number; empty?: string; wide?: boolean; counts?: boolean; tone?: Cohort | "seen" }> = ({ rows, of, limit = 10, empty, wide, counts, tone }) => {
   if (!rows.length) return <p class="muted small">{empty ?? "Nothing here yet."}</p>;
   return (
     <div class={`bars${wide ? " wide" : ""}${counts ? " withn" : ""}${tone ? ` ${tone}` : ""}`}>
@@ -123,6 +123,60 @@ const SoloChart: FC<{ chart: FacetChart; of?: number }> = ({ chart, of }) => (
   </div>
 );
 
+/**
+ * The sea: everything the searches return before the trawl's rules touch it, counted from the search
+ * response alone (method v4). Drawn in its own colour and never beside a cohort column: its denominator is
+ * every sighting, not every listing, and a bar here is not comparable to the same bar in the trough.
+ */
+const Sea: FC<{ s: SeaView }> = ({ s }) => {
+  const n = s.totals.seen ?? 0;
+  const share = (k: string) => pct(n ? (s.totals[k] ?? 0) / n : 0);
+  const bornTotal = s.born_w.reduce((a, w) => a + w.n, 0);
+  const Half: FC<{ title: string; sub?: string; rows: Bar[]; limit?: number; empty?: string }> = ({ title, sub, rows, limit, empty }) => (
+    <div>
+      <div class="cohead">{title}{sub ? <span class="muted"> · {sub}</span> : null}</div>
+      <Bars rows={rows} of={n} limit={limit} tone="seen" empty={empty} />
+    </div>
+  );
+  return (
+    <>
+      <h3 id="sea">The sea: everything the searches return</h3>
+      <p class="muted small">Every repo the trawl's searches returned in the last {PUSHED_WITHIN_DAYS} days, <strong>before any of the trawl's rules</strong>: no star floor, no licence filter, no owner filter. Counted from GitHub's search response and nothing else. No README is read, no model is asked, nothing here is listed, and nothing here is named. It is the water the trawled column is drawn from, and the one place the trawl's own filters are measured rather than assumed (<a href="/method">method v4</a>).</p>
+      <Kpis>
+        <Kpi label="seen in 90 days" value={n} sub={`${(s.totals.owners ?? 0).toLocaleString()} owners · ${(s.totals.new_30d ?? 0).toLocaleString()} first seen in the last 30`} />
+        <Kpi label="no stars at all" value={share("unstarred")} sub={`${(s.totals.unstarred ?? 0).toLocaleString()} repos`} />
+        <Kpi label="no licence" value={share("unlicensed")} sub={`${(s.totals.unlicensed ?? 0).toLocaleString()} repos`} />
+        <Kpi label="would reach the judge" value={share("candidates")} sub="under the trawl's rules as they stood that day" />
+      </Kpis>
+      {bornTotal ? (
+        <Fig caption={<>Repos created per week, over everything seen. A flow of the world rather than of our walk: complete for every week inside the {PUSHED_WITHIN_DAYS}-day push window, since a repo created in it was pushed in it.</>}>
+          <Columns cols={s.born_w.map((w): ColumnSpec => ({ period: w.period, total: w.n, parts: [{ key: "created", n: w.n, cls: "seen" }] }))} />
+        </Fig>
+      ) : null}
+      <div class="cohorts">
+        <Half title="stars" rows={s.stars} limit={7} />
+        <Half title="licence" rows={s.licence} />
+      </div>
+      <div class="cohorts">
+        <Half title="what the trawl's rules would do" sub="the first rule that stops it" rows={s.sieve} />
+        <Half title="how long it lived" sub="created to last push" rows={s.life} />
+      </div>
+      <div class="cohorts">
+        <Half title="languages" rows={s.language} />
+        <Half title="size" rows={s.size} />
+      </div>
+      <div class="cohorts">
+        <Half title="which tool the description credits" sub="weaker than a README's sentence" rows={s.tool} empty="No description names a tool yet." />
+        <Half title="which water it came up in" rows={s.ground} />
+      </div>
+      <div class="cohorts">
+        <Half title="the shape of the claim" rows={s.signal} />
+        <Half title="owner" rows={s.owner} />
+      </div>
+    </>
+  );
+};
+
 /** The colour a tool wears, by its place in the key order; the fold bucket is always grey. */
 const toolClass = (keys: string[], key: string) => (key === "other" ? OTHER_CLASS : slotClass(keys.indexOf(key)));
 
@@ -167,6 +221,7 @@ export const Trends: FC<{ d: TrendsView }> = ({ d }) => {
   const anyTools = d.tools.months.some((m) => m.total) || toolsW.months.some((m) => m.total);
 
   const jump: [string, string, boolean][] = [
+    ["#sea", "the sea", Boolean(d.sea)],
     ["#haul", "the haul", judgedTotal > 0],
     ["#intake", "intake", true],
     ["#tools", "tools", anyTools],
@@ -197,10 +252,12 @@ export const Trends: FC<{ d: TrendsView }> = ({ d }) => {
         <summary>Read this first, or you will read the charts wrong</summary>
         <p class="small"><strong>Trawled</strong> repos never asked to be here. The Cap'm found them because their owner said in public, in the past tense, that a model wrote the thing — then a cheap classifier checked it was software rather than a blog post about software. Nothing else was selected for, so as a sample of <em>publicly self-declared AI-written software</em> it is about as close to random as this gets. It is <em>not</em> a sample of AI-written software: most of that is never labelled, and the label is the only thing we can see.</p>
         <p class="small"><strong>Opted-in</strong> repos committed a <a href="/spec">slopscore.md</a>. That is a person choosing to file paperwork about their own work, which is self-selection with a capital S. Their column tells you about people who volunteer, and it is the only column that can answer a question the maker had to answer themselves.</p>
-        <p class="small">Two more ropes on the sample: the trawl only looks at repos with {STAR_WINDOW} stars, pushed in the last {PUSHED_WITHIN_DAYS} days, under a licence permissive enough to quote from. So the ends of the star chart are a rule of ours, not a fact about the world.</p>
+        <p class="small">Two more ropes on the sample: the trawl only looks at repos with {STAR_WINDOW} stars, pushed in the last {PUSHED_WITHIN_DAYS} days, under a licence permissive enough to quote from. So the ends of the star chart are a rule of ours, not a fact about the world.{d.sea ? <> <strong>The sea</strong>, first below, is the same searches with those ropes taken off: every repo they return, at any star count and under any licence, counted from the search response alone and never listed. It is where the ropes are measured.</> : null}</p>
         <p class="small">Two of the charts below — what the software is <em>for</em>, and what kind of thing it is — are a <strong>model's</strong> labels rather than a maker's, picked off a fixed list by the classifier the trawl already runs (<a href="/about">how that works</a>). They are the only numbers here that are somebody's opinion, they are marked where they appear, and they are the only way to ask that question of a sample nobody volunteered for. Everything else on this page is counted, not judged.</p>
         <p class="small">All of that, and the biases we know about, written down in one frozen and versioned place: <a href="/method">how we count</a>. The same numbers once a week, as a document you can cite after this snapshot has been pruned: <a href="/report">the Trawl Report</a>.</p>
       </details>
+
+      {d.sea ? <Sea s={d.sea} /> : null}
 
       {judgedTotal ? (
         <>
@@ -301,6 +358,7 @@ export function trendsMd(d: TrendsView): string {
     "# Trends", "",
     `Snapshot ${d.date}. Recounted once a night from data the site already holds. No model is called to build this page; the two "what people are building" charts below count labels the trawl's classifier applied at pick time, and are the only numbers here that are a judgement rather than a count.`, "",
     "## The sample", "",
+    ...(d.sea ? ["- **seen**: every repo the same searches return, at any star count and under any licence, counted from the search response alone. Never read, judged or listed. The water the trawled cohort is drawn from."] : []),
     `- **trawled**: found by us because the owner said in public that a model wrote it. Close to random within that label; ${MIN_STARS}-${MAX_STARS} stars, pushed within ${PUSHED_WITHIN_DAYS} days, permissive licence.`,
     "- **opted in**: committed a slopscore.md. Self-selected, and the only cohort that can answer a question a person had to answer.", "",
     "Method, frozen and versioned: /method. The weekly bulletin counted from these same snapshots: /report.", "",
@@ -311,6 +369,23 @@ export function trendsMd(d: TrendsView): string {
     `| launched by owner | — | ${o.submitted ?? 0} |`,
     `| mean stars | ${t.mean_stars ?? 0} | ${o.mean_stars ?? 0} |`,
     `| mean score | ${t.mean_score ?? 0} | ${o.mean_score ?? 0} |`, "",
+    ...(d.sea ? (() => {
+      const s = d.sea;
+      const n = s.totals.seen ?? 0;
+      const share = (k: string) => pct(n ? (s.totals[k] ?? 0) / n : 0);
+      return [
+        "## The sea", "",
+        `${n} repos seen in the last ${PUSHED_WITHIN_DAYS} days by the same searches with no star clause, counted from the search response alone (method v4). ${share("unstarred")} have no stars, ${share("unlicensed")} no licence, ${share("candidates")} would reach the judge under the trawl's rules. ${s.totals.owners ?? 0} owners; ${s.totals.new_30d ?? 0} first seen in the last 30 days.`, "",
+        "Stars:", ...table(s.stars, n), "",
+        "Licence:", ...table(s.licence, n), "",
+        "What the trawl's rules would do (first rule that stops it):", ...table(s.sieve, n), "",
+        "How long it lived, created to last push:", ...table(s.life, n), "",
+        "Languages:", ...table(s.language, n), "",
+        "Which tool the description credits (weaker than a README's sentence):", ...table(s.tool, n), "",
+        "Which water it came up in:", ...table(s.ground, n), "",
+        "Created per week:", ...s.born_w.map((w) => `- ${w.period}: ${w.n}`), "",
+      ];
+    })() : []),
     "## Listings by month", "",
     ...d.listings.map((m) => `- ${m.period}: ${m.total} (${m.trawl} trawled, ${m.opted} opted in)`), "",
     ...(weekly.length ? ["## Listings by week", "", ...weekly.map((m) => `- ${m.period}: ${m.total} (${m.trawl} trawled, ${m.opted} opted in)`), ""] : []),

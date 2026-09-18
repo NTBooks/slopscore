@@ -13,6 +13,7 @@ import { CrawlClockBox } from "../views/crawlclock";
 import { sweep } from "../jobs/sweep";
 import { scanQueue } from "../jobs/scan";
 import { recrawl } from "../jobs/recrawl";
+import { soundSea } from "../jobs/seen";
 import { getState, setState } from "../jobs/stats";
 import { retireTrawled, relistTrawled } from "../lib/virtual";
 import { addToBacklog, releaseBacklog, trawlDaily, HOURLY_TRAWL, type CuratedInput } from "../jobs/trawl";
@@ -602,6 +603,12 @@ const RUN: Record<Job, (env: AppEnv["Bindings"]) => Promise<string>> = {
     const r = await trawlDaily(env, HOURLY_TRAWL);
     if (r.note) return `Trawl: ${r.note}.`;
     return `Trawl landed ${r.queued.length}${r.skipped.length ? `, skipped ${r.skipped.length}` : ""}${r.chase ? `; ${r.chase}` : ""}.`;
+  },
+  seen: async (env) => {
+    // One sounding, exactly what the ten-minute tick would do: leased, capped against the day, no model.
+    const r = await soundSea(env);
+    if (r.note && !r.searched) return `Sounding: ${r.note}.`;
+    return `Sounding made ${r.searched} search call(s) and wrote ${r.seen} sighting(s)${r.note ? `; ${r.note}` : ""}.`;
   },
 };
 

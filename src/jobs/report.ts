@@ -34,7 +34,8 @@ import { pingIndexNow } from "../lib/indexnow";
 import { escapeHtml, renderMarkdown } from "../lib/markdown";
 import { isoDate, isoWeek, now } from "../lib/time";
 import { METHOD_VERSION, LISTABLE_CODES } from "../lib/method";
-import { TRAWL_GROUNDS } from "../lib/virtual";
+import { PUSHED_WITHIN_DAYS, TRAWL_GROUNDS } from "../lib/virtual";
+import { SEEN_STAR_ORDER } from "../lib/seen";
 import { COHORT_LABEL, type Cohort, type TrendRow } from "./trends";
 import { STATIC_TOOLS, allTools, loadToolRows } from "../lib/tools";
 
@@ -119,6 +120,24 @@ export const newcomers = (rows: Move[], limit = MOVERS): Move[] => rows.filter((
  */
 export interface Section { cohort: Cohort; total: number; was_total: number | null; rows: Move[] }
 
+/**
+ * The sea (method v4): everything the searches return before the trough's rules, counted from the search
+ * response alone. `first` is its own flag, because the sea can be a week old on a site whose trough is not:
+ * the first bulletin after v4 has a trough to compare and no sea to compare it with.
+ */
+export interface SeaReport {
+  seen: number;
+  was_seen: number | null;
+  owners: number;
+  unstarred: number;
+  unlicensed: number;
+  candidates: number;
+  first: boolean;
+  sieve: Move[];
+  stars: Move[];
+  languages: Move[];
+}
+
 export interface ReportView {
   slug: string;
   /** Snapshot the report was written from, and the one it compared against. */
@@ -134,6 +153,8 @@ export interface ReportView {
   net: Section;
   /** Every tool key the credit was counted over that night, frozen with the numbers. Absent on bulletins written before v3. */
   registry?: string[];
+  /** The searches' whole population, before any rule. Absent on a snapshot without a sea in it (before v4, or before the first sounding). */
+  sea?: SeaReport;
 }
 
 /** Pure: two days of snapshot rows in, a report out. The SQL around it is deliberately dumb. */
@@ -170,6 +191,22 @@ export function shapeReport(slug: string, date: string, since: string | null, no
   const wasSeen = first ? null : verdictPrev.reduce((s, r) => s + r.n, 0);
   const software = codes.filter((r) => (LISTABLE_CODES as readonly string[]).includes(r.key)).reduce((s, r) => s + r.n, 0);
 
+  // The sea has its own "first": a snapshot from before v4 has a trough to set this week against and no sea.
+  const seaTotals = (rows: TrendRow[]) => Object.fromEntries(pick(rows, "seen", "totals").map((r) => [r.key, r.n])) as Record<string, number>;
+  const seaNow = seaTotals(nowRows);
+  const seaWas = seaTotals(prev);
+  const seaFirst = first || !seaWas.seen;
+  const seaPrev = seaFirst ? [] : prev;
+  const sea: SeaReport | undefined = seaNow.seen
+    ? {
+      seen: seaNow.seen, was_seen: seaFirst ? null : seaWas.seen, owners: seaNow.owners ?? 0,
+      unstarred: seaNow.unstarred ?? 0, unlicensed: seaNow.unlicensed ?? 0, candidates: seaNow.candidates ?? 0, first: seaFirst,
+      sieve: movers(pick(nowRows, "seen", "sieve"), pick(seaPrev, "seen", "sieve")),
+      stars: movers(pick(nowRows, "seen", "stars"), pick(seaPrev, "seen", "stars")),
+      languages: movers(pick(nowRows, "seen", "language"), pick(seaPrev, "seen", "language")),
+    }
+    : undefined;
+
   return {
     slug, date, since: first ? null : since, method: METHOD_VERSION, first,
     totals: {
@@ -187,6 +224,7 @@ export function shapeReport(slug: string, date: string, since: string | null, no
     // No opted-in equivalent exists: only the trawl evaluates and rejects, so this one never falls back.
     net: over("trawl", "net"),
     registry,
+    sea,
   };
 }
 
@@ -242,6 +280,27 @@ export function reportMd(r: ReportView): string {
     "",
   );
   push(`> The Cap'm counts what came up in the net and what went back over the side. Read [how we count](/method) before you quote any of it, the tool numbers most of all: they measure how loudly a tool's users say its name, not what anybody uses.`, "");
+
+  // The sea comes first because it is the denominator of everything after it. It is only printed when the
+  // snapshot has one: a bulletin from before v4 does not grow a section it was never written with.
+  if (r.sea) {
+    const s = r.sea;
+    const share = (n: number) => pct(s.seen ? n / s.seen : 0);
+    push("## The sea", "");
+    push(
+      `${s.seen.toLocaleString()} repos seen in the last ${PUSHED_WITHIN_DAYS} days that say in public an AI tool wrote them${thisWeek(s.was_seen == null ? null : s.seen - s.was_seen)}, from ${s.owners.toLocaleString()} owners. Counted from GitHub's search results alone: no star floor, no licence filter, no README read, no model asked, and nothing listed. This is the water the trough below is drawn from.`,
+      "",
+      `- **${share(s.unstarred)}** have no stars at all`,
+      `- **${share(s.unlicensed)}** carry no licence`,
+      `- **${share(s.candidates)}** would reach the judge under the trough's rules`,
+      "",
+    );
+    const stars = SEEN_STAR_ORDER.map((k) => s.stars.find((m) => m.key === k)).filter((m): m is Move => Boolean(m));
+    if (stars.length) push(`By stars: ${stars.map((m) => `${m.key} ${pct(m.share)}`).join(", ")}.`, "");
+    const stopped = s.sieve.filter((m) => m.key !== "would reach the judge");
+    if (stopped.length) push("What stops the rest, by the first rule that stopped it:", "", ...stopped.slice(0, 8).map((m) => `- ${line(m, s.first)}`), "");
+    push(`The sea is the trough's own searches with the ropes taken off, so it inherits [bias 1 and bias 2](/method) whole: still repos whose owners said so, still found by searches named after tools. What it takes off is the star floor and the licence filter, and the three lines above are how much of the population those two rules hold back.${noise(s.seen, s.first)}`, "");
+  }
 
   push("## The trough", "");
   push(
@@ -311,6 +370,7 @@ export function reportMd(r: ReportView): string {
     `- Counted under method v${r.method}, frozen and versioned at [/method](/method). When a rule changes the version goes up and the change is dated; nothing is edited in place.`,
     "- This site measures software whose author **says in public** that an AI tool wrote it. It does not measure AI-written software, and no number here can.",
     ...(r.registry ? [`- Tool credit was counted over the ${r.registry.length} tools the dictionary held that night: ${r.registry.join(", ")}. A tool not on that list was not looked for. [Which tools were added, and when](/method).`] : []),
+    ...(r.sea ? ["- The sea is counted from GitHub search results alone. Nothing in it is read, judged, listed or named, and its facts are as of the last time the sounding passed. [How it is sounded](/method)."] : []),
     `- The numbers behind every sentence above: [\`/report/${r.slug}.json\`](/report/${r.slug}.json), frozen with the bulletin and still there after the nightly snapshot they came from has been pruned.`,
     "- Spotted an error? [Say so](/contact). Corrections run in the next bulletin; nothing is edited in quietly.",
   );

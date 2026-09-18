@@ -27,6 +27,55 @@ const snapshot = (k = 1): TrendRow[] => [
   row({ cohort: "thrown-back", metric: "verdict", key: "list-or-template", n: 30 * k }),
 ];
 
+/** The sea, scaled the same way. */
+const sea = (k = 1): TrendRow[] => [
+  row({ cohort: "seen", metric: "totals", key: "seen", n: 1000 * k }),
+  row({ cohort: "seen", metric: "totals", key: "owners", n: 900 * k }),
+  row({ cohort: "seen", metric: "totals", key: "unstarred", n: 700 * k }),
+  row({ cohort: "seen", metric: "totals", key: "unlicensed", n: 500 * k }),
+  row({ cohort: "seen", metric: "totals", key: "candidates", n: 100 * k }),
+  row({ cohort: "seen", metric: "sieve", key: "outside the star window", n: 700 * k }),
+  row({ cohort: "seen", metric: "sieve", key: "a licence we cannot quote from", n: 200 * k }),
+  row({ cohort: "seen", metric: "sieve", key: "would reach the judge", n: 100 * k }),
+  row({ cohort: "seen", metric: "stars", key: "1 to 4", n: 300 * k }),
+  row({ cohort: "seen", metric: "stars", key: "no stars", n: 700 * k }),
+];
+
+describe("the sea in the bulletin", () => {
+  it("opens the bulletin when the snapshot has one, and is absent when it does not", () => {
+    const v = shapeReport("2026-W38", "2026-09-21", "2026-09-14", [...snapshot(), ...sea()], [...snapshot(0.5), ...sea(0.5)]);
+    const md = reportMd(v);
+    expect(md).toContain("## The sea");
+    expect(md.indexOf("## The sea")).toBeLessThan(md.indexOf("## The trough"));
+    expect(md).toContain("1,000 repos seen in the last 90 days");
+    expect(md).toContain("+500 this week");
+    expect(md).toContain("**70%** have no stars at all");
+    expect(md).toContain("**50%** carry no licence");
+    expect(md).toContain("**10%** would reach the judge");
+    // Stars in their own order, zero first; the sieve without the candidates, which are a headline above.
+    expect(md).toContain("By stars: no stars 70%, 1 to 4 30%.");
+    expect(md).toContain("- **outside the star window** — 700 (70%), flat");
+    expect(md).not.toContain("- **would reach the judge**");
+    expect(md).toContain("Nothing in it is read, judged, listed or named");
+    expect(v.sea).toMatchObject({ seen: 1000, was_seen: 500, unstarred: 700, first: false });
+    const without = reportMd(shapeReport("2026-W38", "2026-09-21", null, snapshot(), []));
+    expect(without).not.toContain("## The sea");
+    expect(without).not.toContain("sounded");
+  });
+
+  it("treats a week whose predecessor had no sea as the sea's first week, whatever the trough's week is", () => {
+    const v = shapeReport("2026-W38", "2026-09-21", "2026-09-14", [...snapshot(), ...sea()], snapshot(0.5));
+    expect(v.first).toBe(false);
+    expect(v.sea?.first).toBe(true);
+    expect(v.sea?.was_seen).toBeNull();
+    const md = reportMd(v);
+    const seaText = md.slice(md.indexOf("## The sea"), md.indexOf("## The trough"));
+    expect(seaText).not.toContain("new this week");
+    expect(seaText).not.toContain("this week,");
+    expect(seaText).not.toContain("too thin to lean on"); // n=1000 clears the noise floor
+  });
+});
+
 describe("which week a report belongs to", () => {
   it("names the ISO week, not the day the job ran", () => {
     // 2026-01-01 is a Thursday, so it belongs to week 1 of 2026.

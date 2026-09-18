@@ -15,7 +15,7 @@ import { flagOn } from "./flags";
 /** The crawler jobs. Manually runnable from the mod console, so this list also drives the "run now" buttons.
  *  The trawl is one of them since it got a cron of its own: a slice is small, leased, and budgeted, so a button
  *  can do no more harm than the hour would. */
-export const JOBS = ["sweep", "scan", "recrawl", "trawl"] as const;
+export const JOBS = ["sweep", "scan", "recrawl", "trawl", "seen"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
 export const DAILY_JOBS = ["awards", "critics", "trends", "scout", "tripwire", "report", "takedowns"] as const;
 
@@ -31,6 +31,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   recrawl: { label: "next recrawl", does: "re-checks listed repos for pushes" },
   awards: { label: "next awards", does: "picks the day's truffles" },
   trawl: { label: "next trawl", does: "lands a few of the Cap'm's finds" },
+  seen: { label: "next sounding", does: "counts every repo the searches return, at any star count, from the search response alone" },
   critics: { label: "next critics turn", does: "one of the cast reads a listing or two and votes" },
   trends: { label: "next trends count", does: "counts the corpus for /trends" },
   scout: { label: "next scout report", does: "counts the tool names the trawl did not know, for a moderator to approve" },
@@ -45,7 +46,7 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
 export const CRON_JOBS: Record<string, AnyJob[]> = {
   "*/15 * * * *": ["sweep"],
   "*/5 * * * *": ["scan"],
-  "*/10 * * * *": ["recrawl"],
+  "*/10 * * * *": ["recrawl", "seen"],
   "7 * * * *": ["trawl"],
   "5 0 * * *": [...DAILY_JOBS],
 };

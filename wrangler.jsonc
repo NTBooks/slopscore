@@ -78,6 +78,8 @@
         "CRITICS_MODEL": "anthropic/claude-haiku-4.5",
         // Enough to exercise the lane, not enough to run a second trawl on the OpenRouter bill.
         "TRAWL_PER_DAY": "5",
+        // The sounding costs no model, only search calls and rows; a handful a day proves the walk here.
+        "SEEN_PER_DAY": "24",
         "TRAWL_STOP_AT": "300",
         "TAKEDOWN_AUTO_PER_DAY": "20",
         // Where the weekly bulletin is mailed from — a newsletter somebody else operates, so the site keeps

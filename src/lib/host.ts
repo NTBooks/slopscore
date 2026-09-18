@@ -11,6 +11,51 @@ export function isPreviewHost(hostname: string): boolean {
   return hostname.endsWith(".workers.dev") || hostname.startsWith("test.");
 }
 
+/**
+ * The door on a copy of the site.
+ *
+ * robots.txt and a noindex header ask crawlers to stay out of the test host; a password makes them. A copy
+ * that answers 200 is a second slopscore.org with the same titles and staler rows, and a crawler that finds
+ * a link to it (the README carries one) can list the URL without reading the page, since robots.txt forbids
+ * the read that would show it the noindex. A 401 is a page that does not exist as far as an index is
+ * concerned, and it is the one answer every engine treats that way.
+ *
+ * PREVIEW_PASSWORD is a secret on the test environment; the username is not checked. Unset, the copy is
+ * shut outright rather than open: a preview deploy nobody remembered to give a password to is exactly the
+ * copy that must not leak. Home and local dev never see this.
+ *
+ * Through the door without the password: a request that already carries a valid site session (the caller
+ * of previewChallenge says so: an agent with a device-flow token is not a crawler), the Stripe webhook (Stripe
+ * signs its own requests and cannot be handed a password), and robots.txt, which keeps telling crawlers no.
+ * Static assets are served by the platform before the worker runs and stay open; a stylesheet has no
+ * search result to compete with.
+ */
+export function previewChallenge(request: Request, env: { PREVIEW_PASSWORD?: string }, opts: { signedIn?: boolean } = {}): Response | null {
+  const url = new URL(request.url);
+  if (!isPreviewHost(url.hostname)) return null;
+  if (opts.signedIn) return null;
+  if (url.pathname === "/robots.txt" || url.pathname === "/webhooks/stripe") return null;
+  const headers: Record<string, string> = { "cache-control": "no-store", "content-type": "text/plain; charset=utf-8" };
+  const want = (env.PREVIEW_PASSWORD ?? "").trim();
+  if (!want) return new Response("This copy of the site is shut: it has no PREVIEW_PASSWORD. The site is at https://slopscore.org.\n", { status: 403, headers });
+  const auth = request.headers.get("authorization") ?? "";
+  if (auth.toLowerCase().startsWith("basic ")) {
+    let given = "";
+    try { given = atob(auth.slice(6).trim()); } catch { /* not base64: not the password */ }
+    if (sameString(given.slice(given.indexOf(":") + 1), want)) return null;
+  }
+  headers["www-authenticate"] = 'Basic realm="SlopScore test copy", charset="UTF-8"';
+  return new Response("A copy of the site, not the site. The one to read is https://slopscore.org.\n", { status: 401, headers });
+}
+
+/** Equal without a length or content short-circuit, so a wrong password costs the same as a nearly right one. */
+function sameString(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a), y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
+}
+
 /** Hosts that are always themselves: dev, preview deploys, and the test environment's own domain. */
 function isLocal(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || isPreviewHost(hostname);

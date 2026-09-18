@@ -60,3 +60,47 @@ describe("one canonical address per page", () => {
     expect(canonicalSearch(new URL("https://slopscore.org/balcony?critic=schnitzel.bot&page=2"))).toBe("?critic=schnitzel.bot");
   });
 });
+
+describe("the test host is behind a password, so it has no pages for an index to find", () => {
+  const testEnv = { ...(env as object), PREVIEW_PASSWORD: "hunter2" } as typeof env;
+  const knock = (u: string, headers: Record<string, string> = {}) => worker.fetch(new Request(u, { redirect: "manual", headers }), testEnv, ctx);
+  const basic = (user: string, pass: string) => ({ authorization: `Basic ${btoa(`${user}:${pass}`)}` });
+
+  it("challenges a bare request with 401, no caching, and the noindex header on the refusal itself", async () => {
+    const r = await knock("https://test.slopscore.org/");
+    expect(r.status).toBe(401);
+    expect(r.headers.get("www-authenticate")).toContain("Basic");
+    expect(r.headers.get("cache-control")).toBe("no-store");
+    expect(r.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("lets the password through, whatever the username, and refuses a near miss", async () => {
+    expect((await knock("https://test.slopscore.org/spec", basic("anyone", "hunter2"))).status).not.toBe(401);
+    expect((await knock("https://test.slopscore.org/spec", basic("", "hunter2"))).status).not.toBe(401);
+    expect((await knock("https://test.slopscore.org/spec", basic("anyone", "hunter"))).status).toBe(401);
+    expect((await knock("https://test.slopscore.org/spec", basic("anyone", "hunter22"))).status).toBe(401);
+    expect((await knock("https://test.slopscore.org/spec", { authorization: "Basic not-base64!" })).status).toBe(401);
+  });
+
+  it("is shut, not open, when nobody set a password", async () => {
+    const r = await hit("https://test.slopscore.org/");
+    expect(r.status).toBe(403);
+    expect(r.headers.get("www-authenticate")).toBeNull();
+    expect((await hit("https://slopscore.workers.dev/")).status).toBe(403);
+  });
+
+  it("keeps robots.txt and the Stripe webhook outside the door", async () => {
+    expect((await knock("https://test.slopscore.org/robots.txt")).status).toBe(200);
+    expect((await hit("https://test.slopscore.org/robots.txt")).status).toBe(200);
+    const r = await knock("https://test.slopscore.org/webhooks/stripe");
+    expect([401, 403]).not.toContain(r.status);
+  });
+
+  it("never asks home or local dev for a password", async () => {
+    for (const u of ["https://slopscore.org/spec", "http://localhost:8787/spec"]) {
+      const r = await worker.fetch(new Request(u, { redirect: "manual" }), testEnv, ctx);
+      expect(r.status, u).not.toBe(401);
+      expect(r.headers.get("www-authenticate"), u).toBeNull();
+    }
+  });
+});

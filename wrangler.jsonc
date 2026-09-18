@@ -59,7 +59,9 @@
         "SITE_URL": "https://test.slopscore.org",
         "PRIMARY_HOST": "test.slopscore.org",
         // Off here, on in production: this is a copy of the site with its own database, and it must never put
-        // strangers' repos into search beside the real listings. robots.txt refuses crawlers on test hosts too.
+        // strangers' repos into search beside the real listings. robots.txt refuses crawlers on test hosts too,
+        // and the whole host sits behind HTTP Basic Auth: the PREVIEW_PASSWORD secret (src/lib/host.ts). With no
+        // password set the host answers 403, so a copy is shut by default rather than open.
         "TRAWL_INDEX": "off",
         // A handle is a person. Repo pages follow TRAWL_INDEX; /u/{login} for somebody who never opted
         // in answers to this one, and it stays off. Opting in on any repo indexes that owner regardless.

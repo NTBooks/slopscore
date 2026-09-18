@@ -34,6 +34,18 @@ stopped moving.
 Because everything redirects, the OAuth callback, the session cookie and the canonical URL only ever exist on
 one hostname, which is what makes the arrangement boring.
 
+## The test host is behind a password
+
+test.slopscore.org is a full copy of the site with its own database, and a copy that answers 200 is a second
+slopscore.org with the same titles and staler rows. robots.txt says `Disallow: /` there and every response carries
+`x-robots-tag: noindex`, but a crawler that obeys the first never reads the second, and a URL it is forbidden to
+read can still be listed if something links to it. So the host also asks for HTTP Basic Auth on every request
+(`previewChallenge` in `src/lib/host.ts`, pinned by `test/app.test.ts`): a 401 is the one answer every engine
+treats as "no page here". The password is the `PREVIEW_PASSWORD` secret on `--env test`; the username is ignored;
+unset, the host answers 403 to everything, so a preview nobody gave a password to is shut, not open. Any
+`*.workers.dev` hostname gets the same treatment. Let through without the password: `robots.txt`, the Stripe
+webhook (Stripe cannot be handed a password), and any request that already carries a valid site session.
+
 ## Search Console: nothing to do
 
 - **Keep the existing slopscore.org property.** It is home and it holds all the history.

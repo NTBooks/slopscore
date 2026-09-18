@@ -4,6 +4,8 @@ export interface Env {
   ASSETS: Fetcher;
   SITE_NAME: string;
   SITE_URL?: string;
+  /** Secret. The password on the test host and preview deploys (src/lib/host.ts). Unset there = shut, not open. Home never reads it. */
+  PREVIEW_PASSWORD?: string;
   /** The one hostname every absolute URL we emit uses. Other domains we answer on are spoken about as this one (src/lib/host.ts). */
   PRIMARY_HOST?: string;
   /** "on" puts trawled listings in search and the sitemap; anything else keeps them readable but unindexed (src/lib/virtual.ts). */

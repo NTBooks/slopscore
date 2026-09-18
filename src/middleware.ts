@@ -8,7 +8,7 @@ import { setFlags, flagOn } from "./lib/flags";
 import { csp } from "./lib/csp";
 import { classify, doorExempt, isShut, record, BLOCK_SECONDS } from "./lib/tripwire";
 import { ipHash } from "./lib/trust";
-import { isPreviewHost } from "./lib/host";
+import { isPreviewHost, previewChallenge } from "./lib/host";
 
 /** Loads the session user (cookie or bearer) into c.var.user. Never blocks. */
 export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
@@ -34,6 +34,15 @@ export const loadUser: MiddlewareHandler<AppEnv> = async (c, next) => {
     }
   }
   await next();
+};
+
+/**
+ * The password on the test host (lib/host.ts). Runs after loadUser so a request that already proved itself
+ * with a site session walks through, and inside `secure` so the refusal carries the noindex header too.
+ */
+export const previewGate: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const shut = previewChallenge(c.req.raw, c.env, { signedIn: Boolean(c.get("user")) });
+  return shut ?? next();
 };
 
 /** For POST handlers: requires a session; enforces CSRF for cookie sessions (bearer requests are exempt). */

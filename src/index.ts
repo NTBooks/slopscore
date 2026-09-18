@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./env";
-import { loadUser, secure, tripwire } from "./middleware";
+import { loadUser, previewGate, secure, tripwire } from "./middleware";
 import { rewriteFormat } from "./lib/negotiate";
 import { homeUrl, isPreviewHost, siteOrigin, SECONDARY_REDIRECT } from "./lib/host";
 import { pages } from "./routes/pages";
@@ -61,6 +61,7 @@ app.use("*", async (c, next) => {
 
 app.use("*", secure);
 app.use("*", loadUser);
+app.use("*", previewGate);
 app.use("*", tripwire);
 app.route("/auth", auth);
 app.route("/api/v1", api);

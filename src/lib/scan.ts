@@ -373,6 +373,16 @@ export const REMOVED_REASON_LABELS: Record<string, string> = {
 };
 export function removedReasonLabel(reason: string | null | undefined): string { return (reason && REMOVED_REASON_LABELS[reason]) || reason || "unknown"; }
 
+/** The owner took it back: pressed Remove, set `unlisted`, or deleted slopscore.md. */
+export const OWNER_REMOVED_REASONS = ["owner-request", "marker-removed"] as const;
+
+/** A listing that leaves no public page: the owner withdrew it, or it was trawled (never asked to be here) and has
+ *  been removed or hidden by a takedown. Votes, comments and awards go with it. The owner and moderators still see it. */
+export function withdrawn(r: { source: string; status: string; queue_reason: string | null; removed_reason: string | null }): boolean {
+  if (r.status === "delisted" && (OWNER_REMOVED_REASONS as readonly string[]).includes(r.removed_reason ?? "")) return true;
+  return r.source === "trawl" && (r.status === "delisted" || (r.status === "hidden" && r.queue_reason === "takedown"));
+}
+
 /** Remove a listing the crawler can no longer stand behind. Every removal lands in the public log, so a moderator
  *  reading "1 delisted" can find out which one and why without opening the database. */
 export async function delist(db: D1Database, id: number, reason: string, label?: string): Promise<void> {

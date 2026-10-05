@@ -6,7 +6,7 @@ import { feed, getRepo, repoTags, comments, castVote, addComment, rateLimit, cur
 import { parseQuery } from "../lib/searchquery";
 import { repoJson } from "./pages";
 import { GitHub } from "../lib/github";
-import { scanRepo } from "../lib/scan";
+import { scanRepo, withdrawn } from "../lib/scan";
 import { renderMarkdown } from "../lib/markdown";
 import { ipHash, criticVoteRefusal } from "../lib/trust";
 import { adminLogins } from "../env";
@@ -93,6 +93,7 @@ async function callTool(c: Context<AppEnv>, name: string, a: Record<string, unkn
     case "get_repo": {
       const r = await getRepo(db, s("owner"), s("repo"));
       if (!r) return fail(`Not listed. If it has a slopscore.md, call ping_repo.`);
+      if (withdrawn(r)) return fail(`Removed.`);
       const [tags, cs] = await Promise.all([repoTags(db, r.id), comments(db, r.id)]);
       return text({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null, _note: UNTRUSTED_NOTE, comments: cs.map((x) => ({ id: x.id, user: x.login, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
     }

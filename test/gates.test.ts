@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { denylistGate, extractLinks } from "../src/lib/denylist";
 import { riskScore } from "../src/lib/risk";
 import { findSecrets, judgeGuard, estimateGuardNeurons } from "../src/lib/content";
-import { nextInterval, removedReasonLabel } from "../src/lib/scan";
+import { nextInterval, removedReasonLabel, withdrawn } from "../src/lib/scan";
 import { isoWeek } from "../src/jobs/awards";
 import type { GhRepo } from "../src/lib/github";
 
@@ -181,5 +181,23 @@ describe("feed sorts behind flags", async () => {
     expect(parseSort(undefined, "new")).toBe("new");
     expect(parseSort("top")).toBe("top");
     setFlags(undefined); // module state is shared: hand the suite back everything switched on
+  });
+});
+
+describe("withdrawn listings leave no page", () => {
+  const row = (source: string, status: string, removed_reason: string | null = null, queue_reason: string | null = null) => ({ source, status, removed_reason, queue_reason });
+  it("hides a submitted listing its owner took back, by Remove, unlisted, or deleting slopscore.md", () => {
+    expect(withdrawn(row("marker", "delisted", "owner-request"))).toBe(true);
+    expect(withdrawn(row("marker", "delisted", "marker-removed"))).toBe(true);
+  });
+  it("keeps the tombstone for a submitted listing someone else removed, so the reason stays answerable", () => {
+    expect(withdrawn(row("marker", "delisted", "admin"))).toBe(false);
+    expect(withdrawn(row("marker", "delisted", "dmca"))).toBe(false);
+    expect(withdrawn(row("marker", "listed"))).toBe(false);
+  });
+  it("hides any removed trawled listing, and one hidden by a takedown", () => {
+    expect(withdrawn(row("trawl", "delisted", "admin"))).toBe(true);
+    expect(withdrawn(row("trawl", "hidden", null, "takedown"))).toBe(true);
+    expect(withdrawn(row("trawl", "hidden", null, "reports"))).toBe(false);
   });
 });

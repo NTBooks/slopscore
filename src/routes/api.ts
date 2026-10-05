@@ -8,6 +8,7 @@ import type { SlopMeta } from "../lib/slopmd";
 import type { VulnSummary } from "../lib/osv";
 import { parseQuery } from "../lib/searchquery";
 import { UNTRUSTED_NOTE } from "../lib/untrusted";
+import { withdrawn } from "../lib/scan";
 import { vocabJson, DECLARED_FACETS, DETECTED_FACETS } from "../lib/vocab";
 import { fictionVocabJson } from "../lib/vocab-fiction";
 import { repoJson } from "./pages";
@@ -48,13 +49,14 @@ api.get("/repos", async (c) => {
 api.get("/repos/:owner/:name", async (c) => {
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
   if (!r) return c.json({ error: "not listed", ping: `/ping/${c.req.param("owner")}/${c.req.param("name")}` }, 404);
+  if (withdrawn(r)) return c.json({ error: "removed" }, 404);
   const tags = await repoTags(c.env.DB, r.id);
   return c.json({ ...repoJson(r), tags, body_md: r.body_md, scan: r.scan ? JSON.parse(r.scan) : null, _note: UNTRUSTED_NOTE });
 });
 
 api.get("/repos/:owner/:name/comments", async (c) => {
   const r = await getRepo(c.env.DB, c.req.param("owner"), c.req.param("name"));
-  if (!r) return c.json({ error: "not listed" }, 404);
+  if (!r || withdrawn(r)) return c.json({ error: "not listed" }, 404);
   const cs = await comments(c.env.DB, r.id);
   return c.json({ repo: r.full_name, _note: UNTRUSTED_NOTE, comments: cs.map((x) => ({ id: x.id, parent_id: x.parent_id, user: x.login, maker: x.user_id === r.owner_id, body_md: x.deleted_at ? null : x.body_md, up: x.up, down: x.down, created_at: x.created_at })) });
 });

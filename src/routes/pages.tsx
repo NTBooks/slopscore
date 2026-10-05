@@ -40,7 +40,7 @@ import { requireUser, body, wantsJson } from "../middleware";
 import { renderMarkdown, escapeHtml } from "../lib/markdown";
 import { allBuckets } from "../lib/db";
 import { GitHub } from "../lib/github";
-import { scanRepo } from "../lib/scan";
+import { scanRepo, withdrawn } from "../lib/scan";
 import { checkOne } from "../jobs/recrawl";
 import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
@@ -179,7 +179,7 @@ async function feedPage(c: Context<AppEnv>, opts: {
     railData(c.env.DB),
   ]);
   const votes = user ? await userVotesFor(c.env.DB, user.id, rows.map((r) => r.id)) : new Map<number, number>();
-  const winner = opts.showHero ? await c.env.DB.prepare("SELECT r.*, a.period FROM awards a JOIN repos r ON r.id = a.repo_id WHERE a.kind = 'day' AND a.rank = 1 ORDER BY a.period DESC LIMIT 1").first<RepoRow & { period: string }>() : null;
+  const winner = opts.showHero ? await c.env.DB.prepare("SELECT r.*, a.period FROM awards a JOIN repos r ON r.id = a.repo_id WHERE a.kind = 'day' AND a.rank = 1 AND r.status = 'listed' ORDER BY a.period DESC LIMIT 1").first<RepoRow & { period: string }>() : null;
   return respond(c, { rows, page, hasMore, votes, winner }, {
     json: (d) => ({ ...feedJson(d.rows, d.page, d.hasMore), title: opts.title, extra: opts.extra }),
     md: (d) => feedMd(opts.heading, d.rows, d.page, d.hasMore, opts.intro),
@@ -485,7 +485,7 @@ pages.get("/best", async (c) => {
   const period = c.req.query("period");
   const user = c.get("user"); const url = new URL(c.req.url);
   const rows = await c.env.DB.prepare(
-    `SELECT r.*, a.period, a.rank FROM awards a JOIN repos r ON r.id = a.repo_id WHERE a.kind = ? ${period ? "AND a.period = ?" : ""} ORDER BY a.period DESC, a.rank ASC LIMIT 100`,
+    `SELECT r.*, a.period, a.rank FROM awards a JOIN repos r ON r.id = a.repo_id WHERE a.kind = ? AND r.status = 'listed' ${period ? "AND a.period = ?" : ""} ORDER BY a.period DESC, a.rank ASC LIMIT 100`,
   ).bind(...(period ? [kind, period] : [kind])).all<RepoRow & { period: string; rank: number }>().then((r) => r.results ?? []);
   const votes = user ? await userVotesFor(c.env.DB, user.id, rows.map((r) => r.id)) : new Map<number, number>();
   const rail = await railData(c.env.DB);
@@ -870,11 +870,13 @@ pages.get("/r/:owner/:name", async (c) => {
       html: (d) => <Layout meta={{ title: "Not listed — SlopScore", noindex: true }} user={user} url={url}><section class="wrap narrow" style="padding:0"><h2>Not listed</h2><p>No listing for <code>{d.owner}/{d.name}</code>. If the repo has a <code>slopscore.md</code>, <a href={`/scan?repo=${d.owner}/${d.name}`}>request a scan</a> (or <a href={`/ping/${d.owner}/${d.name}`}>ping it</a>). Otherwise, <a href="/spec">here's the spec</a>.</p></section></Layout>,
     }, 404);
   }
-  if (r.source === "trawl" && (r.status === "delisted" || (r.status === "hidden" && r.queue_reason === "takedown")) && !isOwnerOf(r, user?.login, user?.id) && !user?.isAdmin) {
-    // A removed trawled listing leaves no tombstone: it never asked to be here. The owner still sees the page (and Refresh),
-    // and so does a moderator, who needs the removal reason to answer for it.
-    // A listing hidden by a takedown request reads the same from outside: it is gone, and the deletion follows.
-    const note = "was listed by the Cap'm's trawl and has been removed, by its owner or on their behalf. We kept only the name, so the trawl never brings it back.";
+  if (withdrawn(r) && !isOwnerOf(r, user?.login, user?.id) && !user?.isAdmin) {
+    // A withdrawn listing leaves no tombstone: a trawled one never asked to be here, and an owner who took theirs
+    // back asked not to be. The owner still sees the page (and Restore), and so does a moderator, who needs the
+    // removal reason to answer for it. A listing hidden by a takedown request reads the same from outside.
+    const note = r.source === "trawl"
+      ? "was listed by the Cap'm's trawl and has been removed, by its owner or on their behalf. We kept only the name, so the trawl never brings it back."
+      : "was withdrawn by its owner.";
     return respond(c, { full_name: r.full_name }, {
       json: (d) => ({ error: "removed", full_name: d.full_name, note: `${d.full_name} ${note}` }),
       md: (d) => `# Removed\n\n${d.full_name} ${note}`,
@@ -929,7 +931,8 @@ async function freshen(env: AppEnv["Bindings"], r: RepoRow): Promise<void> {
 // ---- badge: embeddable SVG; every README view on GitHub fetches it, which doubles as a visit signal ----
 pages.get("/badge/:owner/:name", async (c) => {
   const name = c.req.param("name").replace(/\.svg$/, "");
-  const r = await getRepo(c.env.DB, c.req.param("owner"), name);
+  const found = await getRepo(c.env.DB, c.req.param("owner"), name);
+  const r = found && !withdrawn(found) ? found : null;   // a withdrawn listing reads "not listed", not "delisted"
   const award = c.req.query("award") && r ? await c.env.DB.prepare("SELECT kind, period, rank FROM awards WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1").bind(r.id).first<{ kind: string; period: string; rank: number }>() : null;
   if (r) c.executionCtx.waitUntil(freshen(c.env, r));
   const label = "SlopScore";

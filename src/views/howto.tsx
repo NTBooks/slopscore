@@ -5,7 +5,7 @@
 // A muted looping video, not the gif: the mp4 is a tenth of the gif's size at the same frame. The gif is
 // the fallback for anything that will not play video, and the poster is the frame with the file on it.
 
-export const HOWTO_ALT = "Tell your agent: add a slopscore file per slopscore.org. It commits one file, slopscore.md, with six lines of disclosures in it. That's the whole job.";
+export const HOWTO_ALT = "Tell your agent: add a slopscore file per slopscore.org. It commits one file, slopscore.md, with six lines of disclosures in it, and pings slopscore.org to say it's there. That's the whole job.";
 
 export function HowToClip(props: { caption?: string } = {}) {
   return (
@@ -14,7 +14,7 @@ export function HowToClip(props: { caption?: string } = {}) {
         <source src="/media/add-to-slopscore.mp4" type="video/mp4" />
         <img src="/media/add-to-slopscore.gif" alt={HOWTO_ALT} width="720" height="405" loading="lazy" />
       </video>
-      <figcaption>{props.caption ?? <>Tell your agent: <em>add a slopscore file per slopscore.org.</em> It commits one file. That's the whole job.</>}</figcaption>
+      <figcaption>{props.caption ?? <>Tell your agent: <em>add a slopscore file per slopscore.org.</em> It commits one file and pings us. That's the whole job.</>}</figcaption>
     </figure>
   );
 }

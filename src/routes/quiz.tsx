@@ -75,7 +75,7 @@ function Verdict(p: { answers: Answers; origin: string }) {
 
       <div class="doorstep">
         <h2>Your <code>slopscore.md</code>, already written</h2>
-        <p>This is the file, filled in from the seven answers above. Put it in the root of the public repo and Schnitzel picks it up, usually within the hour. No form, no account, no app to install.</p>
+        <p>This is the file, filled in from the seven answers above. Put it in the root of the public repo, then open <code>slopscore.org/ping/OWNER/REPO</code> so Schnitzel knows it is there. No form, no account, no app to install.</p>
         <div class="copybox">
           <textarea readonly rows={draft.trim().split("\n").length} spellcheck={false} aria-label="Your draft slopscore.md">{draft.trim()}</textarea>
           <button class="btn secondary" type="button" data-copy>copy</button>

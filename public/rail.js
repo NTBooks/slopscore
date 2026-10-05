@@ -21,11 +21,29 @@
 (function () {
   'use strict';
 
+  // ---- the song ----
+  // Under the pig sits a link to the house song. On a desktop, where the rail stands beside the page, the
+  // link becomes the player. Phones keep the link: the rail is at the foot of the page there, and a
+  // third-party frame is a poor thing to make every phone fetch for a box most readers never scroll to.
+  // The frame is sandboxed to running its own player and opening its own links in a new tab: it cannot
+  // navigate this page or submit anything on it. If the frame never arrives the link is still there.
+  var mq = window.matchMedia;
+  var song = document.querySelector('.rail .song[data-song]');
+  if (song && mq && mq('(min-width: 881px)').matches) {
+    var f = document.createElement('iframe');
+    f.src = 'https://suno.com/embed/' + song.dataset.song;
+    f.title = song.textContent.replace(/^\S+\s*/, '');
+    f.loading = 'lazy';
+    f.referrerPolicy = 'strict-origin-when-cross-origin';
+    f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    song.replaceWith(f);
+    f.className = 'song';
+  }
+
   var chat = document.getElementById('balconychat');
   var chart = document.getElementById('seachart');
   if (!chat && !chart) return;                        // most pages have no rail
 
-  var mq = window.matchMedia;
   var still = mq && mq('(prefers-reduced-motion: reduce)').matches;
   var num = function (v) { var n = Number(v); return isFinite(n) ? n : 0; };
 

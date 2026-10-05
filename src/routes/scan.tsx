@@ -86,7 +86,7 @@ function Page(p: { c: Context<AppEnv>; verdict?: Verdict | null; input?: string 
     <Layout meta={{ title: "Request a scan — SlopScore", description: "Ask the crawler to check a public GitHub repo now, and learn exactly why it was or was not queued." }} user={user} url={url}>
       <section class="wrap narrow" style="padding:0">
         <h2>Request a scan</h2>
-        <p>The crawler normally finds every public repo with a <code>slopscore.md</code> on its own through GitHub code search. When that is slow or broken, this is the manual way: paste a public repo and the same scan runs right now, then tells you in words what happened and why. Same rules, same gates, same queue. Anyone logged in can ask; you do not have to own the repo.</p>
+        <p>GitHub's code search indexes only a fraction of repos, so the crawler cannot be counted on to find a <code>slopscore.md</code> by itself. This is how a repo gets in: paste a public repo and the same scan runs right now, then tells you in words what happened and why. Same rules, same gates, same queue. Anyone logged in can ask; you do not have to own the repo.</p>
         {user ? (
           <form method="post" action="/scan" class="commentform">
             <input type="hidden" name="csrf" value={user.csrf} />

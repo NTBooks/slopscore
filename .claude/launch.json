@@ -70,6 +70,24 @@
       "port": 8837
     },
     {
+      "name": "bunnyroar-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--prefix",
+        "E:/bunnyroar",
+        "wrangler",
+        "dev",
+        "-c",
+        "E:/bunnyroar/wrangler.jsonc",
+        "--persist-to",
+        "E:/bunnyroar/.wrangler/state",
+        "--port",
+        "8857",
+        "--test-scheduled"
+      ],
+      "port": 8857
+    },
+    {
       "name": "slopscore-dev-8847",
       "runtimeExecutable": "npx",
       "runtimeArgs": [

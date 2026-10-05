@@ -136,7 +136,7 @@ app.get("/llms.txt", (c) => {
 
 ${SITE.manifesto}
 
-SlopScore is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md). A crawler finds it, validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
+SlopScore is a public leaderboard for AI-generated software. A repo opts in by committing a \`slopscore.md\` file (spec: ${origin}/spec.md) and fetching ${origin}/ping/OWNER/REPO (no auth). The site then validates the disclosures, runs content gates, and lists it. GitHub-authenticated humans and agents vote, comment, and report.
 
 ## URLs
 - ${origin}/            the feed. ?sort=${visibleSorts().filter((s) => s !== "upcoming").join("|")}&t=day|week|month|year|all&page=N

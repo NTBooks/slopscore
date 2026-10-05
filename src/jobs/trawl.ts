@@ -14,7 +14,7 @@
 import { GitHub, type GhRepo } from "../lib/github";
 import type { Env } from "../env";
 import { loadDenyRows } from "../lib/denylist";
-import { pickCandidates, trawlQueries, trawlQueriesUnwindowed, trawlQueryList, cheapReject, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, registry, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, TRAWL_QUERIES, type Pick, type Registry } from "../lib/virtual";
+import { pickCandidates, trawlQueries, trawlQueriesUnwindowed, trawlQueryList, readmeQueriesUnwindowed, README_QUERIES, cheapReject, curatedCheck, curatedPick, cleanReason, claimSnippet, autoReason, registry, QUERIES_PER_RUN, MIN_STARS, MAX_STARS, PUSHED_WITHIN_DAYS, TRAWL_QUERIES, type Pick, type Registry } from "../lib/virtual";
 import { allTools, extractSightings, loadToolRows, type Sighting } from "../lib/tools";
 import { judgeCandidate } from "../lib/judge";
 import { markDirty } from "../lib/cache";
@@ -27,6 +27,8 @@ const MAX_PAGES = 3; // repository search allows 30 calls a minute; 6 queries x 
 export const PAGES_PER_QUERY = 4;
 /** Search calls one run may spend. Repository search allows 30 a minute and a run is the best part of a minute. */
 export const SEARCH_CALLS = 26;
+/** Of QUERIES_PER_RUN, how many go to README_QUERIES every run, whatever the grounds are doing. */
+export const README_SLOTS = 4;
 /** Judge calls one run may spend, as a multiple of what it is allowed to keep. The budget caps repos kept, not
  *  repos read, and the judge is the one step that costs money. A run that spends this says so in its note. */
 export const JUDGE_PER_KEPT = 3;
@@ -278,13 +280,18 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   // The registry as it stands this hour: the frozen tools plus every approved one. Built once per run, so the
   // claim regex is compiled once and not per README.
   const reg = registry(allTools(toolRows));
-  const queries = trawlQueriesUnwindowed(toolRows);
-  // The bare searches, for keying per-query state: a registry search is keyed by its text rather than its
-  // index, so approving or retiring a tool can never re-bind another search's window to it.
-  const bare = trawlQueryList(toolRows);
+  // The grounds, the registry's searches, then the README searches (README_QUERIES: the auto-trawl's alone).
+  const queries = [...trawlQueriesUnwindowed(toolRows), ...readmeQueriesUnwindowed()];
+  // The bare searches, for keying per-query state: a registry or README search is keyed by its text rather
+  // than its index, so approving or retiring a tool can never re-bind another search's window to it.
+  const bare = [...trawlQueryList(toolRows), ...README_QUERIES];
   const key = (kind: "fresh" | "win" | "yield", qi: number) => (qi < TRAWL_QUERIES.length ? `trawl:${kind}:${qi}` : `trawl:${kind}:q:${bare[qi]}`);
-  await setState(db, "trawl:nq", String(queries.length));
-  const start = Number((await getState(db, "trawl:cursor")) ?? 0) % queries.length;
+  // The grounds and the registry rotate as before; the README searches get slots of their own below. trawl:nq
+  // counts only the first part, because it is what the rail's chart divides the cursor by.
+  const nGround = queries.length - README_QUERIES.length;
+  await setState(db, "trawl:nq", String(nGround));
+  const cursor = Number((await getState(db, "trawl:cursor")) ?? 0);
+  const start = cursor % nGround;
   const maxJudged = Math.max(MIN_JUDGE_CALLS, budget * JUDGE_PER_KEPT);
   const skips: { full_name: string; why: string; code?: string | null; domain?: string | null }[] = [];
   const sightings: SightingAt[] = [];
@@ -293,10 +300,24 @@ export async function autoTrawl(env: Env, n: number): Promise<{ queued: string[]
   // Which searches are worth the run. The rotation used to give a search matching 2,340 repos and one matching
   // none the same turn, so a run could spend every call it had on empty water and land nothing — which is
   // exactly what happened on the night this was written. Empty ones are skipped until EMPTY_RETRY has passed.
+  const grounds: number[] = [];
+  for (let k = 0; k < nGround && grounds.length < QUERIES_PER_RUN - README_SLOTS; k++) {
+    const qi = (start + k) % nGround;
+    if (worthWorking(await getState(db, key("yield", qi)), t)) grounds.push(qi);
+  }
+  // README searches are where owners actually say what built the thing, so they are never crowded out by
+  // grounds that still have a trickle: README_SLOTS of every run are theirs, rotating with the cursor, and
+  // they alternate with the grounds, README first, because the search budget runs out long before the list
+  // does (a test run spent all SEARCH_CALLS on five grounds and never reached a README search).
+  const readmes: number[] = [];
+  for (let k = 0; k < README_QUERIES.length && readmes.length < README_SLOTS; k++) {
+    const qi = nGround + ((cursor + k) % README_QUERIES.length);
+    if (worthWorking(await getState(db, key("yield", qi)), t)) readmes.push(qi);
+  }
   const work: number[] = [];
-  for (let k = 0; k < queries.length && work.length < QUERIES_PER_RUN; k++) {
-    const qi = (start + k) % queries.length;
-    if (worthWorking(await getState(db, key("yield", qi)), t)) work.push(qi);
+  for (let i = 0; i < Math.max(grounds.length, readmes.length); i++) {
+    if (i < readmes.length) work.push(readmes[i]);
+    if (i < grounds.length) work.push(grounds[i]);
   }
 
   // The judge's daily ceiling, across every run of the day. Per-run floors bound one run and nothing

@@ -11,7 +11,7 @@ import {
   parseWindow, formatWindow, openWindow, narrowWindow, afterPage, deepQuery, freshQuery,
   WINDOW_SPAN, WINDOW_MIN, WINDOW_MAX, RESULT_CAP, SPARSE, JUDGE_PER_DAY, judgeCap, HOURLY_TRAWL,
 } from "../src/jobs/trawl";
-import { cheapReject, registry } from "../src/lib/virtual";
+import { cheapReject, registry, README_QUERIES, readmeQueriesUnwindowed } from "../src/lib/virtual";
 import { allTools, type ToolRow } from "../src/lib/tools";
 
 const KIRO_ROW: ToolRow = { key: "kiro", name: "Kiro", aliases: ["kiro"], claim_topics: ["built-with-kiro"], topics: ["kiro", "built-with-kiro"], phrases: ['"built with kiro" in:description'], note: null, approved_by: "NTBooks", approved_at: 1, retired_at: null };
@@ -441,5 +441,18 @@ describe("a handle is a person: owner indexing is its own switch", () => {
     const env: { TRAWL_INDEX?: string; TRAWL_OWNER_INDEX?: string } = { TRAWL_INDEX: "on" };
     expect(trawlIndexed(env)).toBe(true);
     expect(trawlOwnerIndexed(env)).toBe(false);
+  });
+});
+
+describe("README_QUERIES", () => {
+  it("every phrase is one the claim check accepts, so a match can pass it", () => {
+    for (const q of README_QUERIES) {
+      const phrase = /"([^"]+)"/.exec(q)?.[1] ?? "";
+      expect(claimSnippet(`This project was ${phrase} over a weekend.`), q).not.toBeNull();
+    }
+  });
+  it("stays out of the grounds the sounding and /method measure", () => {
+    for (const q of README_QUERIES) expect(TRAWL_QUERIES).not.toContain(q);
+    expect(readmeQueriesUnwindowed()).toHaveLength(README_QUERIES.length);
   });
 });

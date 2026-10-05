@@ -60,8 +60,8 @@ orphanage.get("/", (c) => {
         <h2>How adoption works</h2>
         <ol class="steps">
           <li><StepIcon n={1} /><span><strong>Leave the file on the doorstep.</strong> Commit a <code>slopscore.md</code> to the root of a public GitHub repo. Six lines of disclosures. No form, no account, no app to install.</span></li>
-          <li><StepIcon n={2} /><span><strong>Schnitzel takes it in.</strong> The crawler finds it, checks the paperwork, runs the content gates, and lists it. It is votable from day one and gets an <em>unclaimed</em> chip until you show up.</span></li>
-          <li><StepIcon n={3} /><span><strong>Put it up for adoption.</strong> <em>Optional.</em> Log in and press <strong>Submit</strong> on the repo page. That's the launch: eligible for Slop of the Day and the weekly awards, and a <Stamp class="inline-stamp" title="Certified Slop" /> stamp if it wins.</span></li>
+          <li><StepIcon n={2} /><span><strong>Ring the bell.</strong> Open <code>slopscore.org/ping/OWNER/REPO</code>, no login needed, or have your agent fetch it. Schnitzel reads the file, checks the paperwork, runs the content gates, and lists it. It is votable from day one and gets an <em>unclaimed</em> chip until you show up.</span></li>
+          <li><StepIcon n={3} /><span><strong>Put it up for adoption.</strong> Log in and press <strong>Submit</strong> on the repo page. That's the launch: eligible for Slop of the Day and the weekly awards, and a <Stamp class="inline-stamp" title="Certified Slop" /> stamp if it wins.</span></li>
         </ol>
         <pre>{MINIMAL_EXAMPLE.trim()}</pre>
         <HowToClip caption="Or skip the typing: tell the agent that wrote it to add a slopscore file per slopscore.org, and it commits this exact file." />
@@ -91,7 +91,7 @@ orphanage.get("/", (c) => {
 
         <div class="doorstep">
           <h2>Leave one on the doorstep</h2>
-          <p>Add the file. Schnitzel will find it, usually within the hour. Then <a href="/">watch the feed</a> or <a href="/scan">ask for a scan</a> if you can't wait.</p>
+          <p>Add the file, then ring the bell: open <code>slopscore.org/ping/OWNER/REPO</code>. Nobody hears a file that nobody rang for; GitHub's search misses most repos, so the ping is how Schnitzel knows to look. Logged in? <a href="/scan">/scan</a> does the same and explains the answer.</p>
           <p><a class="btn" href="/spec">Read the spec</a> <a class="btn secondary" href="/scan">Scan a repo now</a> {user ? null : <a class="btn secondary" href={`/auth/github?next=${encodeURIComponent(url.pathname)}`}>Log in to adopt</a>}</p>
           <p class="muted">No orphans were harmed in the making of this page. Several were refactored. Signed, Cap'm Slop, master of the Sloptrawler.</p>
         </div>

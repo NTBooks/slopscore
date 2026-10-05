@@ -33,6 +33,13 @@ const IMG = ["'self'", "data:", "https://github.com", "https://*.githubuserconte
 const BEACON_SRC = "https://static.cloudflareinsights.com";
 const BEACON_REPORT = "https://cloudflareinsights.com";
 
+/**
+ * The one frame the site embeds: the Suno player for the house song, under the pig in the rail (views/rail.tsx,
+ * swapped in by rail.js on desktop). Everything else stays framed out. The frame is cross-origin and sandboxed
+ * on the element, so this admits a player and nothing that can reach the page around it.
+ */
+const SONG_FRAME = "https://suno.com";
+
 let cached: string | null = null;
 
 async function sha256(s: string): Promise<string> {
@@ -56,7 +63,7 @@ export async function csp(): Promise<string> {
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "frame-src 'none'",
+    `frame-src ${SONG_FRAME}`,
     "frame-ancestors 'none'",
     "upgrade-insecure-requests",
   ].join("; ");

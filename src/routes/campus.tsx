@@ -38,7 +38,7 @@ The short way: tell the agent that wrote the code, *"add a slopscore file per sl
 ${EXAMPLE.trim()}
 \`\`\`
 
-The crawler finds it within the hour and lists the project in the bucket. Not sure what to put? [Seven questions](${origin}/but-is-it-slop) and it drafts the file for you.
+Then open \`${origin}/ping/OWNER/REPO\` (no login) and the project is scanned and listed in the bucket on the spot. Skip that and it may never be found: GitHub's search misses most repos. Not sure what to put? [Seven questions](${origin}/but-is-it-slop) and it drafts the file for you.
 
 <!--howto-->
 

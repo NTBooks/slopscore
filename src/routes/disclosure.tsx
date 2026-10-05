@@ -95,7 +95,7 @@ that wrote the code. It knows the answers better than the human does.
 The file is a file. It does something useful sitting in a repo that nobody ever crawls: it tells the next
 person who opens the project what they are looking at, in a shape their tools can read.
 
-If you also want the leaderboard, we find the file on our own and list the repo. If you stop wanting it,
+If you also want the leaderboard, open ${origin}/ping/OWNER/REPO once after committing it and we list the repo. If you stop wanting it,
 delete the file and the listing goes with it on the next check. There is no account in between.
 
 - [${origin}/spec](${origin}/spec) — the full contract

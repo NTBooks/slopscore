@@ -19,16 +19,27 @@ export interface RailData {
   sea?: SeaData | null;
 }
 
+/** The house song on Suno. The id is what the embed player takes; the url is the share page for everyone else. */
+export const SONG = {
+  id: "c79910fe-fe4e-4e16-82ee-917cb8c414f4",
+  url: "https://suno.com/s/eqxUyFggfzcufHcr",
+  title: "Show It, Ship It",
+  by: "the house song",
+};
+
 /** `chat` is the reader's own window into data.chat, sliced per request by the route (chatFor). */
 export const Rail: FC<{ data: RailData; chat?: ChatWindow | null }> = ({ data, chat }) => (
   <aside class="rail">
     <div class="box">
       <figure class="mascot"><Mascot size={180} /><figcaption>Schnitzel · b. 2026-09-10</figcaption></figure>
+      {/* The house song, which says in two minutes what the three steps below say in three lines. A link here;
+          on a desktop rail.js swaps it for the player, so phones never load a third-party frame. */}
+      <p class="song muted" data-song={SONG.id}>♫ <a href={SONG.url} rel="noopener">{SONG.title}</a> · {SONG.by}</p>
       <h3>Three steps to get your slop graded</h3>
       <ol class="steps">
         <li><StepIcon n={1} /><span>Commit a <code>slopscore.md</code> to the root of a public GitHub repo.</span></li>
-        <li><StepIcon n={2} /><span>Get sniffed out. The crawler finds it, checks the paperwork, and lists it. Votes count from day one.</span></li>
-        <li><StepIcon n={3} /><span><em>Optional.</em> Log in and press <strong>Submit</strong> on your repo page to launch it and compete for Slop of the Day.</span></li>
+        <li><StepIcon n={2} /><span>Ring the bell: open <code>slopscore.org/ping/OWNER/REPO</code> (no login). The crawler reads the file, checks the paperwork, and lists it. Votes count from day one.</span></li>
+        <li><StepIcon n={3} /><span><strong>Launch it.</strong> Log in and press <strong>Submit</strong> on your repo page. That enters it for Slop of the Day.</span></li>
       </ol>
       <pre>{MINIMAL_EXAMPLE.trim()}</pre>
       <p class="muted">That's the whole file. Everything else comes from GitHub. <a href="/spec">Full spec</a> · impatient? <code>curl /ping/you/repo</code></p>

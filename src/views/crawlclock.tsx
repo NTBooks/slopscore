@@ -85,9 +85,9 @@ export const CrawlClockBox = ({ clock, user, back }: { clock: CrawlClock; user: 
     ) : null}
     <p class="muted small">
       {clock.jobs.some((j) => j.cron)
-        ? "A new repo needs the sweep to find it, then a scan tick to inspect it. "
+        ? "A new repo is found by a ping or a scan request; the sweep is a backstop. "
         : "The schedule shows up after the first cron tick on this deploy. "}
-      The sweep only sees what GitHub's code search has indexed, which can trail a push. <a href="/scan">Request a scan</a> to skip the wait.
+      The sweep only sees what GitHub's code search has indexed, and that is a small fraction of repos. <a href="/scan">Request a scan</a> or GET /ping/owner/repo.
     </p>
     {inlineScript(COUNTDOWN_JS)}
   </div>

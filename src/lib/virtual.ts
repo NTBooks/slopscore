@@ -168,11 +168,44 @@ export function groundOfQuery(i: number, total = TRAWL_QUERIES.length): number {
  *  costs one call and moves on, so reaching further down the list is close to free. */
 export const QUERIES_PER_RUN = 9;
 
+/**
+ * README searches, for the auto-trawl only. Owners say what built a project in the README, not in topics or the
+ * one-line description, so the grounds above ran dry within a week while these match thousands of repos a quarter.
+ * They stay out of TRAWL_GROUNDS on purpose: the sounding (jobs/seen.ts), /method and /trends measure the grounds,
+ * and adding these would change what those numbers mean. They run after the registry's searches, where the
+ * trawl keys its state by query text, so adding or removing one never moves another search's window.
+ * Every phrase here is one claimSnippet accepts, so a match can pass the claim check.
+ */
+export const README_QUERIES: string[] = [
+  '"vibe coded" in:readme',
+  '"vibecoded" in:readme',
+  '"built with claude" in:readme',
+  '"written by claude" in:readme',
+  '"generated with claude code" in:readme',
+  '"made with claude" in:readme',
+  '"built with cursor" in:readme',
+  '"built with codex" in:readme',
+  '"built with chatgpt" in:readme',
+  '"written by chatgpt" in:readme',
+  '"built with gemini" in:readme',
+  '"built with lovable" in:readme',
+  '"built with v0" in:readme',
+  '"100% ai generated" in:readme',
+  '"entirely ai-generated" in:readme',
+  '"written entirely by ai" in:readme',
+];
+
 /** The same searches without a pushed clause: the auto-trawl supplies its own date window, because asking
  *  by date is what stops it re-reading water it has already worked (src/jobs/trawl.ts). */
 export function trawlQueriesUnwindowed(rows: ToolRow[] = []): string[] {
   const base = `fork:false archived:false template:false is:public stars:${MIN_STARS}..${MAX_STARS}`;
   return trawlQueryList(rows).map((q) => `${q} ${base}`);
+}
+
+/** README_QUERIES with the same filters as trawlQueriesUnwindowed. */
+export function readmeQueriesUnwindowed(): string[] {
+  const base = `fork:false archived:false template:false is:public stars:${MIN_STARS}..${MAX_STARS}`;
+  return README_QUERIES.map((q) => `${q} ${base}`);
 }
 
 /**

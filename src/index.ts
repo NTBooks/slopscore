@@ -38,6 +38,7 @@ import { scout } from "./jobs/scout";
 import { newsletter, writeReport } from "./jobs/report";
 import { recordCron, noteRun, everySeconds, type AnyJob } from "./lib/crawlclock";
 import { lookout } from "./jobs/lookout";
+import { doorbell } from "./jobs/doorbell";
 import { sweepTripwire } from "./lib/tripwire";
 import { settleTakedowns } from "./lib/virtual";
 import { indexNowKey } from "./lib/indexnow";
@@ -299,6 +300,8 @@ export async function runCron(cron: string, env: AppEnv["Bindings"], opts: { n?:
         result = {
           scan: await step(env, "scan", () => scanQueue(env, opts.n ?? undefined)),
           trawl: asked == null ? "none asked for" : await step(env, "trawl", () => trawlDaily(env, asked)),
+          // After the scan, so an opt-in that a ping or the sweep just landed rings with its verdict already in.
+          doorbell: await step(env, "doorbell", () => doorbell(env)),
         };
         break;
       }

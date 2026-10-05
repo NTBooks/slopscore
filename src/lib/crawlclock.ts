@@ -19,11 +19,15 @@ export const JOBS = ["sweep", "scan", "recrawl", "trawl", "seen"] as const;
 /** The 00:05 UTC tick. Watched the same way, but with no button: they are cheap to wait for and dear to spam. */
 export const DAILY_JOBS = ["awards", "critics", "trends", "scout", "tripwire", "report", "takedowns"] as const;
 
+/** Rides a tick but is no crawler: watched like the rest (so the lookout notices a broken doorbell), no button. */
+export const WATCH_JOBS = ["doorbell"] as const;
+
 export type Job = (typeof JOBS)[number];
 export type DailyJob = (typeof DAILY_JOBS)[number];
-export type AnyJob = Job | DailyJob;
+export type WatchJob = (typeof WATCH_JOBS)[number];
+export type AnyJob = Job | DailyJob | WatchJob;
 
-export const ALL_JOBS: readonly AnyJob[] = [...JOBS, ...DAILY_JOBS];
+export const ALL_JOBS: readonly AnyJob[] = [...JOBS, ...DAILY_JOBS, ...WATCH_JOBS];
 
 export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   sweep: { label: "next sweep", does: "searches GitHub for new slopscore.md files" },
@@ -40,12 +44,13 @@ export const JOB_INFO: Record<AnyJob, { label: string; does: string }> = {
   // and does nothing is still a job that ran, so it is watched like the rest rather than left unaccounted for.
   report: { label: "next report check", does: "writes the weekly Trawl Report when a week is owed one" },
   takedowns: { label: "next takedown settle", does: "deletes for good the listings whose takedown grace has passed" },
+  doorbell: { label: "next doorbell", does: "mails the owner about opt-ins, launches, removals and takedown requests" },
 };
 
 /** Which jobs each cron drives. Mirrors the switch in runCron (src/index.ts). */
 export const CRON_JOBS: Record<string, AnyJob[]> = {
   "*/15 * * * *": ["sweep"],
-  "*/5 * * * *": ["scan"],
+  "*/5 * * * *": ["scan", "doorbell"],
   "*/10 * * * *": ["recrawl", "seen"],
   "7 * * * *": ["trawl"],
   "5 0 * * *": [...DAILY_JOBS],

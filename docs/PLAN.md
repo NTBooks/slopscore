@@ -165,7 +165,7 @@ E:\slopscore\
 | `GET /stats` | public dashboard: neurons used / budget today, scans and deferrals, queue depth, oldest queued item, 30-day history from `stats_daily`, D1 read/write estimates. Banner when queue is growing faster than it drains ("upgrade time") |
 | `GET /mod`, `POST /mod/:reportId/:action`, `POST /mod/repo/:id/:action`, `POST /mod/denylist` | admins only. Report actions: `dismiss`, `hide`, `hide_images`, `delist`, `ban_user`, `delete_comment`, `restore`. Queue actions: `approve` (quarantined → listed), `reject` (with reason), `rescan`, `delist`. `report_to_github` is a prefilled link to `github.com/contact/report-content`, not a POST; GitHub removing the repo delists it on the next recrawl. Denylist: add/remove a term |
 | `GET /api/v1/repos|repos/:o/:r|repos/:o/:r/comments|search|tags|me` | JSON, cursor pagination, `Link` headers |
-| `GET /badge/:owner/:repo.svg` | embeddable score badge (generated, cached 10 min); `?award=1` variant renders "#1 Slop of the Day · 2026-09-10" if the repo holds one |
+| `GET /badge/:owner/:repo.svg` | embeddable score badge (generated, cached 10 min); shows the best award the repo holds ("#1 slop of the day · 2026-09-10"), else "certified slop" with the score once it is above zero; `?award=0` drops the award |
 | `GET /best?kind=day\|week&period=` | award archive: winners per period, same feed renderer; `/best` defaults to yesterday's top 5 |
 | `GET /tools` | "built with" leaderboard: every `built_with` value with listing count, mean score, best repo; group-by over `repo_tags`, cached 1 h; also `/api/v1/leaderboard?facet=built_with` |
 | `/mcp`, `/llms.txt`, `/openapi.json`, `/feed.xml`, `/sitemap.xml`, `/robots.txt` | agent + discovery surface |

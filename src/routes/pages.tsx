@@ -41,6 +41,7 @@ import { renderMarkdown, escapeHtml } from "../lib/markdown";
 import { allBuckets } from "../lib/db";
 import { GitHub } from "../lib/github";
 import { scanRepo, withdrawn } from "../lib/scan";
+import { badgeValue } from "../lib/badge";
 import { checkOne } from "../jobs/recrawl";
 import { runCron } from "../index";
 import { isOwnerOf } from "./owner";
@@ -933,10 +934,11 @@ pages.get("/badge/:owner/:name", async (c) => {
   const name = c.req.param("name").replace(/\.svg$/, "");
   const found = await getRepo(c.env.DB, c.req.param("owner"), name);
   const r = found && !withdrawn(found) ? found : null;   // a withdrawn listing reads "not listed", not "delisted"
-  const award = c.req.query("award") && r ? await c.env.DB.prepare("SELECT kind, period, rank FROM awards WHERE repo_id = ? ORDER BY created_at DESC LIMIT 1").bind(r.id).first<{ kind: string; period: string; rank: number }>() : null;
+  // The best award it holds, shown by default: that is the news worth carrying on a README. ?award=0 opts out.
+  const award = c.req.query("award") !== "0" && r?.status === "listed" ? await c.env.DB.prepare("SELECT kind, period, rank FROM awards WHERE repo_id = ? ORDER BY rank ASC, created_at DESC LIMIT 1").bind(r.id).first<{ kind: string; period: string; rank: number }>() : null;
   if (r) c.executionCtx.waitUntil(freshen(c.env, r));
   const label = "SlopScore";
-  const value = !r ? "not listed" : r.status !== "listed" ? r.status : award ? `#${award.rank} slop of the ${award.kind} · ${award.period}` : `certified slop · ${r.score}`;
+  const value = badgeValue(r, award);
   const color = !r ? "#9a9a9a" : r.status === "listed" ? "#e8669a" : r.status === "rejected" ? "#c0392b" : "#b8860b";
   const lw = 8 + label.length * 6.6, vw = 10 + value.length * 6.3;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(lw + vw)}" height="20" role="img" aria-label="${label}: ${value}">

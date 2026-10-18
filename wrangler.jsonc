@@ -114,6 +114,9 @@
       "vars": {
         "SITE_NAME": "SlopScore",
         "SITE_URL": "https://slopscore.org",
+        // "on" shuts the site: every page is Schnitzel and a thank-you, and the crons run nothing
+        // (src/routes/closed.tsx). Delete it, or set "off", and deploy to reopen. The database is untouched.
+        "CLOSED": "on",
         // The one hostname every absolute URL we emit uses. Set to slopscupper.com to finish the move.
         "PRIMARY_HOST": "slopscore.org",
         // "on" lets trawled listings into search, the sitemap and IndexNow. These are public repos on a public

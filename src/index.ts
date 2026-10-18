@@ -22,6 +22,7 @@ import { manifesto } from "./routes/manifesto";
 import { schemas } from "./routes/schemas";
 import { campus } from "./routes/campus";
 import { legal } from "./routes/legal";
+import { closedGate, isClosed } from "./routes/closed";
 import { flagOn, setFlags } from "./lib/flags";
 import { sortOn, visibleSorts } from "./lib/db";
 import { SITE } from "./views/layout";
@@ -65,6 +66,7 @@ app.use("*", async (c, next) => {
 });
 
 app.use("*", secure);
+app.use("*", closedGate);
 app.use("*", loadUser);
 app.use("*", previewGate);
 app.use("*", tripwire);
@@ -343,6 +345,8 @@ export default {
     return app.fetch(rewriteFormat(request), env, ctx);
   },
   async scheduled(event: ScheduledEvent, env: AppEnv["Bindings"], ctx: ExecutionContext) {
+    // A closed site runs nothing: no trawl, no scans, no critics, no mail (src/routes/closed.tsx).
+    if (isClosed(env)) return console.log(JSON.stringify({ cron: event.cron, result: "closed" }));
     ctx.waitUntil(runCron(event.cron, env));
   },
 };

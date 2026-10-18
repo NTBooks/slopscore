@@ -144,3 +144,37 @@ describe("the legal pages: every claim on them is a claim about this code, so th
     expect(home).toContain('href="/terms"');
   });
 });
+
+describe("a closed site", () => {
+  const shut = { ...env, CLOSED: "on" } as typeof env;
+  const visit = (u: string) => worker.fetch(new Request(u, { redirect: "manual" }), shut, ctx);
+
+  it("answers every page with the pig and the thank-you, as a temporary outage", async () => {
+    for (const u of ["https://slopscore.org/", "https://slopscore.org/r/a/b", "https://slopscore.org/queue"]) {
+      const r = await visit(u);
+      expect(r.status, u).toBe(503);
+      expect(r.headers.get("retry-after")).toBeTruthy();
+      expect(r.headers.get("content-security-policy")).toBeTruthy();
+      const body = await r.text();
+      expect(body).toContain("Thanks for the slopsperiment.");
+      expect(body).toContain('<figure class="mascot"><img src="/mascot.svg"');
+      expect(body).toContain('src="/schnitzel.js"');
+    }
+  });
+
+  it("answers the API in JSON", async () => {
+    const r = await visit("https://slopscore.org/api/v1/repos");
+    expect(r.status).toBe(503);
+    expect(await r.json()).toMatchObject({ closed: true });
+  });
+
+  it("still sends other domains home first", async () => {
+    expect((await visit("https://slopscupper.com/")).status).toBe(302);
+  });
+
+  it("runs no scheduled job", async () => {
+    let waited = 0;
+    await worker.scheduled({ cron: "7 * * * *" } as ScheduledEvent, shut, { ...ctx, waitUntil() { waited++; } } as ExecutionContext);
+    expect(waited).toBe(0);
+  });
+});

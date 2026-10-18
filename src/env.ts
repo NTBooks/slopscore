@@ -8,6 +8,8 @@ export interface Env {
   PREVIEW_PASSWORD?: string;
   /** The one hostname every absolute URL we emit uses. Other domains we answer on are spoken about as this one (src/lib/host.ts). */
   PRIMARY_HOST?: string;
+  /** "on" shuts the site: every route answers the thank-you page and the crons do nothing (src/routes/closed.tsx). */
+  CLOSED?: string;
   /** "on" puts trawled listings in search and the sitemap; anything else keeps them readable but unindexed (src/lib/virtual.ts). */
   TRAWL_INDEX?: string;
   /** "on" also indexes /u/{login} for owners who never opted in. Separate from TRAWL_INDEX and off by default: a handle is a person. */

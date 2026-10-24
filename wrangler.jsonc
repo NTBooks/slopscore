@@ -57,6 +57,8 @@
       "vars": {
         "SITE_NAME": "SlopScore (test)",
         "SITE_URL": "https://test.slopscore.org",
+        // Closed with production (src/routes/closed.tsx): no crons run, every page is the thank-you.
+        "CLOSED": "on",
         "PRIMARY_HOST": "test.slopscore.org",
         // Off here, on in production: this is a copy of the site with its own database, and it must never put
         // strangers' repos into search beside the real listings. robots.txt refuses crawlers on test hosts too,
